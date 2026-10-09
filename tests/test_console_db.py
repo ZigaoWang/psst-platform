@@ -149,3 +149,18 @@ def test_an_editor_corrects_a_place_link_and_its_guide_is_revised(database, city
         task = conn.execute("SELECT input FROM psst.tasks WHERE type = 'revise'").fetchone()
     assert place == {"wikidata_id": "Q900003", "coord_ref": "Q900003"}
     assert "from Q900001 to Q900003" in task["input"]["problems"][0]
+
+
+def test_an_editor_mark_joins_the_golden_set(database, session, city):
+    revision = write_and_check(database, city)
+    with database.connect("admin") as conn:
+        conn.execute("SET psst.in_transition = 'on'")
+        item = conn.execute("""UPDATE psst.items SET published_revision = current_revision, state = 'published'
+                               WHERE current_revision = %s RETURNING id""", (revision,)).fetchone()["id"]
+    with pytest.raises(psycopg.errors.InvalidParameterValue):
+        console(database, "SELECT psst.console_mark_story(%s, %s, 'fine', 'a reason')", session, item)
+    console(database, "SELECT psst.console_mark_story(%s, %s, 'weak', 'ends after the hook')", session, item)
+    console(database, "SELECT psst.console_mark_story(%s, %s, 'good', 'on reflection, it holds')", session, item)
+    with database.connect("admin") as conn:
+        rows = conn.execute("SELECT mark, reason FROM psst.golden_stories WHERE item_id = %s", (item,)).fetchall()
+    assert [(r["mark"], r["reason"]) for r in rows] == [("good", "on reflection, it holds")]

@@ -10,6 +10,7 @@
 		['/cities', 'Cities'],
 		['/places', 'Places'],
 		['/checks', 'Checks'],
+		['/quality', 'Quality'],
 		['/tasks', 'Tasks'],
 		['/runs', 'Runs'],
 		['/publish', 'Publish'],

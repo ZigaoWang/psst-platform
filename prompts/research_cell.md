@@ -21,8 +21,10 @@ already in or around it (`data.places_nearby`, with their stories' headlines).
 3. **For each place, give angles.** An angle is one surprising, specific, checkable thing to tell, in a sentence or
    two, with its category and the URLs of sources to start from (records first where you found them). Read enough
    (`uv run psst fetch`) to be confident the angle is real; the writer finds the records and quotes them, so an
-   encyclopedia or press source is a fine starting point here. An angle that is true of every place of its kind, or
-   is the first line of the encyclopedia article, is not an angle. Aim for every place in the leads that has a real
+   encyclopedia or press source is a fine starting point here. Read the first paragraph of the place's encyclopedia
+   article: an angle whose surprise is already there fails the standard's test 3 and will be given back, and so will
+   one that is true of every place of its kind. List a record among the sources (a listing, a survey, an old
+   newspaper, an official history) whenever one exists; an angle only blogs repeat rarely survives writing. Aim for every place in the leads that has a real
    story: in a dense city center that is usually 8 to 20 places a pass.
 4. **Name new places precisely.** One physical thing someone can point at, with its Wikidata item (`wikidata`) or
    OpenStreetMap element (`osm`), never a district or a whole street network. Give the name people use on the

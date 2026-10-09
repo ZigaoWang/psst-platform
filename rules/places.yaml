@@ -36,3 +36,47 @@ duplicate_name_similarity: 0.4
 min_ordinary_share: 0.5
 # Leads known in at least this many Wikipedia editions are covered in the cell's first pass.
 well_known_sitelinks: 20
+
+# Areas: boundary data quirks and preferences (design.md, section 10).
+areas:
+  nearest_neighborhood_meters: 1500
+  # Per country and level, the boundary source preferred when both have one.
+  preferred_source:
+    CN: {district: osm, neighborhood: osm}
+    HK: {neighborhood: osm}
+  # Boundaries never used for assignment, each with the reason.
+  excluded_areas:
+    1158894067: Who's On First files the River Thames as a London neighbourhood.
+    85792207: Who's On First labels a patch of Kensal Town in West London as West Tilbury, a village in Essex.
+
+# Names (never machine translated): Wikidata label codes per language kept, in order of preference, and the
+# language of street signs per country (countries with several are left out, so no local name is guessed).
+name_languages:
+  en: [en]
+  zh-Hans: [zh-hans, zh-cn, zh-sg, zh-my, zh]
+  zh-Hant: [zh-hant, zh-tw, zh-hk]
+  ja: [ja]
+  ko: [ko]
+  fr: [fr]
+  de: [de]
+  es: [es]
+  it: [it]
+  pt: [pt, pt-br]
+  ru: [ru]
+  ms: [ms]
+  ta: [ta]
+  th: [th]
+  vi: [vi]
+osm_name_keys:
+  zh-Hans: ["name:zh-Hans", "name:zh"]
+  zh-Hant: ["name:zh-Hant"]
+sign_language:
+  GB: en
+  CN: zh-Hans
+  HK: zh-Hant
+  MY: ms
+# Local-language Wikipedia searched for leads, per country.
+local_wikipedia:
+  CN: zh
+  HK: zh
+  MY: ms

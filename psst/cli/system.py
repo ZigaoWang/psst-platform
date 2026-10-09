@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 
 from psst.core import db
 from psst.services.system_worker import SystemWorker
+
+from .runs import start
 
 
 def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -24,11 +25,8 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
 def _worker() -> SystemWorker:
     info = db.conninfo("system")
     with db.open_connection(info) as conn:
-        row = conn.execute("SELECT * FROM psst.start_run('system', %s, NULL, 'system worker')",
-                           (os.environ.get("USER") or "system",)).fetchone()
-        conn.commit()
-    assert row
-    return SystemWorker(lambda: db.open_connection(info), row["token"])
+        token = start(conn, "system", "system worker")
+    return SystemWorker(lambda: db.open_connection(info), token)
 
 
 def run_work(args: argparse.Namespace) -> int:

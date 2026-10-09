@@ -14,6 +14,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from psst.checks import runner
+from psst.places import resolve
 
 log = logging.getLogger("psst.system")
 Connection = psycopg.Connection[dict[str, Any]]
@@ -26,12 +27,16 @@ class SystemWorker:
         self.token = token
         self.handlers: dict[str, Callable[[Connection, dict[str, Any]], dict[str, Any]]] = {
             "tool_check": self.tool_check,
+            "resolve_places": self.resolve_places,
         }
         self._audits_planned = 0.0
 
     def tool_check(self, conn: Connection, task: dict[str, Any]) -> dict[str, Any]:
         result = runner.run(conn, self.token, task["revision_id"], task["id"])
         return {"pass": result.ok, "refusals": len(result.report.refusals)}
+
+    def resolve_places(self, conn: Connection, task: dict[str, Any]) -> dict[str, Any]:
+        return resolve.resolve(conn, self.token, list(task["input"].get("places") or []))
 
     def step(self) -> bool:
         """Do one task, if one is waiting. Returns whether there was one."""
@@ -42,8 +47,9 @@ class SystemWorker:
                 return False
             try:
                 result = self.handlers[task["type"]](conn, task)
-                conn.execute("SELECT psst.submit_task(%s, %s, %s)", (self.token, task["id"],
-                                                                    Jsonb(result)))
+                # A tool check settles a revision (submit_task advances it); other system tasks just close.
+                finish = "submit_task" if task["type"] == "tool_check" else "finish_system_task"
+                conn.execute(f"SELECT psst.{finish}(%s, %s, %s)", (self.token, task["id"], Jsonb(result)))
                 conn.commit()
                 log.info("%s %s done", task["type"], task["id"])
             except Exception as error:  # one bad task must not stop the worker

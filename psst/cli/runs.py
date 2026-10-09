@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import argparse
 import os
+from typing import Any
+
+import psycopg
 
 from psst.core import config, db
 
@@ -46,3 +49,12 @@ def end_run(args: argparse.Namespace) -> int:
 
 def token() -> str:
     return config.require("PSST_RUN_TOKEN")
+
+
+def start(conn: psycopg.Connection[dict[str, Any]], kind: str, notes: str) -> str:
+    """Start a run of `kind` for a command that works on its own (system, publisher) and return its token."""
+    row = conn.execute("SELECT * FROM psst.start_run(%s, %s, NULL, %s)",
+                       (kind, os.environ.get("USER") or kind, notes)).fetchone()
+    conn.commit()
+    assert row
+    return str(row["token"])

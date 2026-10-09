@@ -73,6 +73,8 @@ def schema(task_type: str, item_type: str | None = None) -> dict[str, Any]:
         return writing(item_type)
     if task_type == "translate":
         return translation()
+    if task_type == "research_cell":
+        return research()
     raise KeyError(f"no result schema for {task_type}")
 
 
@@ -81,3 +83,37 @@ def translation() -> dict[str, Any]:
             "properties": {"language": {"enum": rules.load().type("translation")["languages"]},
                            "body": {"type": "object"}, "translation_of": {"type": "string", "pattern": "^rv_"},
                            "reason": NOTE}}
+
+
+def research() -> dict[str, Any]:
+    spec = rules.load()
+    angle = {"type": "object", "additionalProperties": False, "required": ["angle", "category", "sources"],
+             "properties": {"angle": {"type": "string", "minLength": 20, "maxLength": 500},
+                            "category": {"enum": spec.type("story")["categories"]},
+                            "sources": {"type": "array", "minItems": 1, "items": {"type": "string",
+                                                                                  "pattern": "^https://"}}}}
+    new_place = {"type": "object", "additionalProperties": False, "required": ["name", "kind", "size", "ordinary",
+                                                                              "angles"],
+                 "anyOf": [{"required": ["wikidata"]}, {"required": ["osm"]}],
+                 "properties": {"wikidata": {"type": "string", "pattern": "^Q[1-9][0-9]*$"},
+                                "osm": {"type": "string", "pattern": "^(node|way|relation)/[1-9][0-9]*$"},
+                                "name": {"type": "string", "minLength": 2, "maxLength": 120},
+                                "local_name": {"type": "object", "additionalProperties": False,
+                                               "required": ["lang", "name"],
+                                               "properties": {"lang": {"type": "string"}, "name": {"type": "string"}}},
+                                "kind": {"enum": list(spec.places["kinds"])},
+                                "size": {"enum": list(spec.places["sizes"])},
+                                "ordinary": {"type": "boolean"},
+                                "angles": {"type": "array", "items": angle}}}
+    existing = {"type": "object", "additionalProperties": False, "required": ["existing", "ordinary", "angles"],
+                "properties": {"existing": {"type": "string", "pattern": "^pl_"}, "ordinary": {"type": "boolean"},
+                               "angles": {"type": "array", "minItems": 1, "items": angle}}}
+    lead = {"type": "object", "additionalProperties": False, "required": ["lead", "status"],
+            "properties": {"lead": {"type": "string", "pattern": "^ld_"},
+                           "status": {"enum": ["added", "known", "skipped", "later"]},
+                           "place": {"type": "integer", "minimum": 0},
+                           "existing": {"type": "string", "pattern": "^pl_"},
+                           "reason": {"type": "string", "minLength": 5, "maxLength": 300}}}
+    return {"type": "object", "additionalProperties": False, "required": ["places", "leads", "notes"],
+            "properties": {"places": {"type": "array", "items": {"oneOf": [new_place, existing]}},
+                           "leads": {"type": "array", "items": lead}, "notes": NOTE}}

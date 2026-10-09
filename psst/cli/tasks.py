@@ -10,9 +10,10 @@ from typing import Any
 import jsonschema
 from psycopg.types.json import Jsonb
 
+from psst import rules
 from psst.checks import runner
 from psst.core import config, db
-from psst.evidence import encyclopedia
+from psst.evidence import encyclopedia, wikidata
 from psst.tasks import files
 
 from . import fetching
@@ -49,6 +50,18 @@ def _lead(place: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
 
+def _key_facts(place: dict[str, Any]) -> dict[str, Any] | None:
+    """The key facts the place's Wikidata item gives, to fetch and quote (the fetch service saves the same lines)."""
+    if not place.get("wikidata_id"):
+        return None
+    try:
+        item, values = wikidata.fetch(place["wikidata_id"])
+    except (LookupError, ConnectionError):
+        return None
+    return {"url": f"https://www.wikidata.org/wiki/{place['wikidata_id']}",
+            "lines": wikidata.render(place["wikidata_id"], item, values, place["kind"], place["size"]).splitlines()}
+
+
 def lease_next(args: argparse.Namespace) -> int:
     with db.connect("worker") as conn:
         city = None
@@ -61,7 +74,7 @@ def lease_next(args: argparse.Namespace) -> int:
         if task is None:
             print("no task waiting")
             return 3
-        document = files.build(conn, task, _lead)
+        document = files.build(conn, task, _lead, _key_facts)
     args.out.mkdir(parents=True, exist_ok=True)
     path = args.out / f"{task['id']}.json"
     path.write_text(json.dumps(document, ensure_ascii=False, indent=2, default=str))
@@ -79,12 +92,41 @@ def problems(document: dict[str, Any], result: dict[str, Any]) -> list[str]:
     if kind in ("escalate", "audit"):
         found += [f"claim {v['claim']}: decide; 'unclear' isn't an option here"
                   for v in result.get("verdicts", []) if v["verdict"] == "unclear"]
+    if kind == "research_cell":
+        found += research_problems(document["data"], result)
     item_type = WRITING.get(kind) or (document["data"].get("type") if kind == "revise" else None)
     if item_type and item_type != "translation":
         place = (document["data"].get("place") or {}).get("id")
         with db.connect("worker") as conn:
             check = runner.preflight(conn, item_type, place, result)
         found += check.report.refusals
+    return found
+
+
+def research_problems(brief: dict[str, Any], result: dict[str, Any]) -> list[str]:
+    """What the database can't judge from a research result alone: every lead accounted for, the best-known leads
+    covered in the first pass, and enough ordinary places (content.md, section 1.3)."""
+    found: list[str] = []
+    places = result["places"]
+    given = {lead["lead"]: lead for lead in result["leads"]}
+    for lead in brief["leads"]:
+        decision = given.get(lead["lead"])
+        if decision is None:
+            found.append(f"lead {lead['lead']} ({lead['name']}) isn't accounted for")
+        elif decision["status"] == "later" and lead["well_known"]:
+            found.append(f"lead {lead['lead']} ({lead['name']}) is well known; cover it in this pass")
+    for lead_id, decision in given.items():
+        status = decision["status"]
+        if status in ("skipped", "later") and not decision.get("reason"):
+            found.append(f"lead {lead_id}: say why it is {status}")
+        if status == "added" and not (isinstance(decision.get("place"), int) and decision["place"] < len(places)):
+            found.append(f"lead {lead_id}: 'place' is the index of the place it became")
+        if status == "known" and not decision.get("existing"):
+            found.append(f"lead {lead_id}: 'existing' is the place it already is")
+    with_angles = [p for p in places if p["angles"]]
+    share = rules.load().places["min_ordinary_share"]
+    if len(with_angles) >= 4 and sum(p["ordinary"] for p in with_angles) < share * len(with_angles):
+        found.append(f"fewer than {share:.0%} of the places with story angles are ordinary places; look for them")
     return found
 
 
@@ -95,9 +137,11 @@ def submit_result(args: argparse.Namespace) -> int:
     if found:
         print("Not submitted. Fix these and submit again:\n" + "\n".join(f"- {p}" for p in found))
         return 1
-    result = result | {"rulebook": document["rulebook"]}
+    function = "submit_research" if document["type"] == "research_cell" else "submit_task"
+    if function == "submit_task":
+        result = result | {"rulebook": document["rulebook"]}
     with db.connect("worker") as conn:
-        outcome = conn.execute("SELECT psst.submit_task(%s, %s, %s, %s) AS r",
+        outcome = conn.execute(f"SELECT psst.{function}(%s, %s, %s, %s) AS r",
                                (token(), document["task"], Jsonb(result), document["prompt_version"])).fetchone()
     assert outcome
     print(json.dumps(outcome["r"], ensure_ascii=False))

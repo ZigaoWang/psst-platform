@@ -20,8 +20,9 @@ Connection = psycopg.Connection[dict[str, Any]]
 CONTEXT_CHARS = 500
 FULL_SNAPSHOT_CHARS = 60_000
 
-# What a writer, checker, or auditor is told about the place: who and where, never the stories' verdicts.
-LeadFinder = Callable[[dict[str, Any]], dict[str, Any] | None]
+# Lookups that need the network, passed in by the command line (and left out in tests): the place's
+# encyclopedia lead, and the key facts its Wikidata item gives.
+Lookup = Callable[[dict[str, Any]], dict[str, Any] | None]
 
 
 def place_summary(conn: Connection, place_id: str | None) -> dict[str, Any] | None:
@@ -96,7 +97,8 @@ def other_items(conn: Connection, place_id: str | None, exclude_item: str | None
         ORDER BY i.position""", (place_id, exclude_item))]
 
 
-def build(conn: Connection, task: dict[str, Any], lead: LeadFinder | None = None) -> dict[str, Any]:
+def build(conn: Connection, task: dict[str, Any], lead: Lookup | None = None,
+          key_facts: Lookup | None = None) -> dict[str, Any]:
     """The task file for a leased task."""
     rulebook = rules.load()
     kind = task["type"]
@@ -139,6 +141,11 @@ def build(conn: Connection, task: dict[str, Any], lead: LeadFinder | None = None
         item_type = kind.removeprefix("write_")
         data |= {"brief": task["input"], "other_stories": other_items(conn, task["place_id"], None),
                  "rules": rulebook.type(item_type)}
+        if kind == "write_guide" and data["place"]:
+            data |= {"wikidata": key_facts(data["place"]) if key_facts else None,
+                     "encyclopedia_lead": lead(data["place"]) if lead else None}
+    elif kind == "research_cell":
+        data = research_brief(conn, task["input"]["cell"])
     elif kind == "revise":
         assert revision
         data |= {"type": item_type, "body": revision["body"],
@@ -162,6 +169,39 @@ def build(conn: Connection, task: dict[str, Any], lead: LeadFinder | None = None
         "prompt": prompt.text, "prompt_version": prompt.version, "rulebook": rulebook.version,
         "data": data, "result_schema": results.schema(kind, item_type),
     }
+
+
+def research_brief(conn: Connection, cell: str) -> dict[str, Any]:
+    """Everything a researcher needs for one cell: where it is, its leads (best known first), and the places
+    already in it and around it, so nothing is added twice."""
+    import h3
+
+    from psst.places import cells
+
+    spec = rules.load().places
+    south, west, north, east = cells.bounds(cell)
+    around = [cell] + [c for c in h3.grid_disk(cell, 1) if c != cell]
+    leads = [dict(r) | {"well_known": (r["fame"] or 0) >= spec["well_known_sitelinks"]} for r in conn.execute("""
+        SELECT id AS lead, name, origin, wikidata_id AS wikidata, osm_ref AS osm, url, what, fame, status
+        FROM psst.leads WHERE cell = %s AND status IN ('open', 'later')
+        ORDER BY fame DESC NULLS LAST, name""", (cell,))]
+    places = [dict(r) for r in conn.execute("""
+        SELECT p.id, p.kind, p.h3_r7 = %s AS in_cell, p.wikidata_id AS wikidata, p.osm_ref AS osm,
+               (SELECT name FROM psst.place_names n WHERE n.place_id = p.id AND n.role = 'display') AS name,
+               coalesce((SELECT jsonb_agg(r.body ->> 'headline') FROM psst.items i
+                         JOIN psst.revisions r ON r.id = i.current_revision
+                         WHERE i.place_id = p.id AND i.type = 'story' AND i.state <> 'retired'), '[]') AS stories
+        FROM psst.places p WHERE p.h3_r7 = ANY(%s) AND p.state IN ('active', 'pending')
+        ORDER BY p.h3_r7 = %s DESC, p.id""", (cell, around, cell))]
+    neighborhoods = [r["name"] for r in conn.execute("""
+        SELECT DISTINCT a.name FROM psst.areas a JOIN psst.research_cells c ON c.cell = %s
+        WHERE a.level = 'neighborhood' AND ST_Intersects(a.geom, c.geom) ORDER BY a.name""", (cell,))]
+    return {"cell": cell, "bounds": {"south": south, "west": west, "north": north, "east": east},
+            "neighborhoods": neighborhoods, "leads": leads, "places_nearby": places,
+            "rules": {"kinds": spec["kinds"], "sizes": spec["sizes"],
+                      "categories": rules.load().type("story")["categories"],
+                      "min_ordinary_share": spec["min_ordinary_share"],
+                      "well_known_sitelinks": spec["well_known_sitelinks"]}}
 
 
 def earlier_verdicts(conn: Connection, revision_id: str) -> list[dict[str, Any]]:

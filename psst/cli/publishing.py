@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from typing import Any
 
-import psycopg
 from psycopg.types.json import Jsonb
 
 from psst.core import config, db
 from psst.publish.channels import Channels
 from psst.publish.run import PublishError, publish, rollback
+
+from .runs import start
 
 WORK = config.ROOT / "work" / "publish"
 
@@ -35,17 +35,10 @@ def channels() -> Channels:
     return Channels(config.require("PSST_PUBLISH_ROOT"), None if host == "local" else host)
 
 
-def _start(conn: psycopg.Connection[dict[str, Any]]) -> str:
-    row = conn.execute("SELECT * FROM psst.start_run('publisher', %s)",
-                       (os.environ.get("USER") or "publisher",)).fetchone()
-    conn.commit()
-    assert row
-    return str(row["token"])
-
 
 def run_publish(args: argparse.Namespace) -> int:
     with db.open_connection(db.conninfo("publisher")) as conn:
-        token = _start(conn)
+        token = start(conn, "publisher", "publishing")
         try:
             outcome = publish(conn, token, channels(), config.require("PSST_PUBLIC_URL"), WORK,
                               only_staging=args.only_staging, allow_shrink=args.allow_shrink)
@@ -62,7 +55,7 @@ def run_publish(args: argparse.Namespace) -> int:
 
 def run_rollback(args: argparse.Namespace) -> int:
     with db.open_connection(db.conninfo("publisher")) as conn:
-        before, after = rollback(conn, _start(conn), channels(), args.to)
+        before, after = rollback(conn, start(conn, "publisher", "publishing"), channels(), args.to)
     print(f"production moved from {before} back to {after}")
     return 0
 
@@ -75,7 +68,7 @@ def run_prune(args: argparse.Namespace) -> int:
 def run_requests(args: argparse.Namespace) -> int:
     """Leases the waiting publish or rollback request, if any, carries it out, and records the outcome."""
     with db.open_connection(db.conninfo("publisher")) as conn:
-        token = _start(conn)
+        token = start(conn, "publisher", "publishing")
         task = conn.execute("SELECT * FROM psst.lease_task(%s, %s)", (token, ["publish", "rollback"])).fetchone()
         conn.commit()
         if task is None:

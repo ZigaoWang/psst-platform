@@ -2,7 +2,9 @@
 
 Every name, date, number, place, or other specific detail in a story, guide, or trail must be stated by one of its
 claims. A plain synonym of a claim's words counts as stated ("tube station" for a London Underground station, "church"
-for a parish church); a new fact, quality, cause, purpose, extent, or time does not. The one exception is the place's own record in `data.place`: its name, local name, neighborhood, district,
+for a parish church); a new fact, quality, cause, purpose, extent, or time does not.
+Saying where a fact comes from ("the listing says", "the church's own history") is stated when that claim's
+sources include that publisher. The one exception is the place's own record in `data.place`: its name, local name, neighborhood, district,
 and city were set by the tools from Wikidata and boundary data, so they may be used without a claim.
 In `look`, the directions for where to stand ("across the street", "from the corner", "opposite the church") guide
 the reader and need no claim; what the reader is told they will see does.

@@ -129,7 +129,10 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
     elif kind in ("check_item", "check_photo"):
         assert revision
         data |= {"type": item_type, "body": revision["body"],
-                 "claims": [{k: c[k] for k in ("claim", "n", "text", "values", "role")}
+                 # Who each claim comes from, so "the listing says" can be traced, but never the passages.
+                 "claims": [{**{k: c[k] for k in ("claim", "n", "text", "values", "role")},
+                             "sources": sorted({f"{p['source']['publisher']} ({p['source']['kind']})"
+                                                for p in c["passages"]})}
                             for c in claims_with_passages(conn, task["revision_id"])],
                  "questions": rulebook.type(str(item_type))["item_questions"],
                  "other_stories": other_items(conn, task["place_id"], task["item_id"]),

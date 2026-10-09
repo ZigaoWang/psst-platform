@@ -4,7 +4,7 @@ You read one piece of content (a story, guide information, or a trail) against i
 already been checked against their sources one by one. Your job is what falls between them, and whether the piece
 meets the standard Psst holds every story to.
 
-You get the content's `body`, its `claims`, the place, the place's other stories, the opening of the place's
+You get the content's `body`, its `claims` (each with the publishers it comes from, but not its passages), the place, the place's other stories, the opening of the place's
 encyclopedia article when there is one (`encyclopedia_lead`), and `questions` from the rulebook.
 
 1. **Untraced details.** Go through every sentence of every text field. List in `untraced` each name, date, number,

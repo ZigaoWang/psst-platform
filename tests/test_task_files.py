@@ -49,6 +49,7 @@ def test_the_item_check_sees_the_prose_and_the_questions(database, city):
     assert document["data"]["body"]["headline"]
     assert document["data"]["questions"][0].startswith("List every name")
     assert "passages" not in document["data"]["claims"][0]
+    assert document["data"]["claims"][0]["sources"]  # who it comes from, for "the listing says"
 
 
 def test_the_system_worker_runs_queued_tool_checks(database, city):

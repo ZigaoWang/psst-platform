@@ -25,7 +25,7 @@ Services (systemd, user `psst-platform`): `psst-platform-fetch` (the fetch servi
 Workers and editors reach the database and the fetch service through SSH. Create `~/.config/psst-platform/env` from `.env.example` with `PSST_SSH_HOST` and the worker password from the server's `env/worker.env`. System, publisher, and schema-owner commands run on the server:
 
 ```
-ssh <host> 'cd /www/wwwroot/psst-platform/app && set -a && . ../env/system.env && .venv/bin/psst research queue --city london --cells 10'
+ssh <host> 'cd /www/wwwroot/psst-platform/app && set -a && . /www/wwwroot/psst-platform/env/system.env && .venv/bin/psst research queue --city london --cells 10'
 ```
 
 Console accounts: `psst console add-account <name>` with the schema owner's environment (`env/admin.env`); the password is printed once.

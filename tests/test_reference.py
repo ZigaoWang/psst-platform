@@ -31,8 +31,10 @@ INSERT INTO psst.admin_areas VALUES
     (1, 'wof', 'country', 'country', 'Testland', 'gb', NULL,
      ST_GeomFromText('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))', 4326), false, 12000, 'CC0', NULL, NULL),
     (2, 'wof', 'locality', 'city', 'Testville', 'gb', 1,
-     ST_GeomFromText('POLYGON((0.1 0.1, 0.5 0.1, 0.5 0.5, 0.1 0.5, 0.1 0.1))', 4326), false, 600, 'CC0', 'Q1', NULL);
-INSERT INTO psst.admin_area_names VALUES (2, 'zh-Hans', '测试城');
+     ST_GeomFromText('POLYGON((0.1 0.1, 0.5 0.1, 0.5 0.5, 0.1 0.5, 0.1 0.1))', 4326), false, 600, 'CC0', 'Q1', NULL),
+    (3, 'wof', 'neighbourhood', 'neighborhood', '', 'gb', 2, ST_SetSRID(ST_MakePoint(0.2, 0.2), 4326), true, NULL,
+     'CC0', NULL, NULL);
+INSERT INTO psst.admin_area_names VALUES (2, 'zh-Hans', '测试城'), (3, 'zh-Hans', '无名');
 INSERT INTO psst.tags VALUES ('tg_aaaaaaaa', 'Lost rivers', 'theme', NULL);
 INSERT INTO psst.tag_labels VALUES ('lost rivers', 'tg_aaaaaaaa', 'Lost rivers', true);
 INSERT INTO psst.demand VALUES ('851f1d4bfffffff', '2026-10-01', 3);

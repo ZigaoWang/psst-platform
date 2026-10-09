@@ -16,8 +16,10 @@ COPIES = [
     ("areas", "id, source, placetype, level, name, country_code, parent_id, geom, area_km2, license, wikidata_id, "
               "osm_admin_level",
      "SELECT id, source, placetype, level, name, upper(country_code), parent_id, geom, area_km2, license, "
-     "wikidata_id, osm_admin_level FROM psst.admin_areas"),
-    ("area_names", "area_id, lang, name", "SELECT area_id, lang, name FROM psst.admin_area_names"),
+     "wikidata_id, osm_admin_level FROM psst.admin_areas WHERE btrim(name) <> ''"),
+    ("area_names", "area_id, lang, name",
+     "SELECT n.area_id, n.lang, n.name FROM psst.admin_area_names n JOIN psst.admin_areas a ON a.id = n.area_id "
+     "WHERE btrim(a.name) <> '' AND btrim(n.name) <> ''"),
     ("tags", "id, canonical_name, type, wikidata_id", "SELECT id, canonical_name, type, wikidata_id FROM psst.tags"),
     ("tag_labels", "normalized, tag_id, label, is_canonical",
      "SELECT normalized, tag_id, label, is_canonical FROM psst.tag_labels"),

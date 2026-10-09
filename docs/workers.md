@@ -23,7 +23,7 @@ Each task type is routed to one model (`routing.<type>` in the console's setting
 
 Commands run from the repository root, with the worker settings in `~/.config/psst-platform/env`.
 
-1. Start the run once, and keep its token (one run per worker; a second run's token doesn't hold the first run's tasks): `uv run psst run start --model <model id> --notes "<city> <role>"`. It prints a token; put `PSST_RUN_TOKEN=<token>` in front of every later command, since shell state does not carry over.
+1. Start the run once, and keep its token to yourself: one run per worker, never in a shared file, never one another run printed. If you save it, use a file named after your own run id, `work/<run id>.token`, and delete it at the end. `uv run psst run start --model <model id> --notes "<city> <role>"`. It prints a token; put `PSST_RUN_TOKEN=<token>` in front of every later command, since shell state does not carry over.
 2. Take a task: `uv run psst task next --type <type> [--type <type>] --city <city>`. It writes the task file to `work/tasks/` and prints its path, or says nothing is waiting.
 3. Read the task file. `prompt` is the instructions, `data` everything the task needs, `result_schema` the shape of the answer.
 4. Write the result to `work/results/<task id>.json` and submit it: `uv run psst task submit <task file> <result file>`. It checks the result first and lists anything to fix; fix it and submit again. The reply's `next` says what happens to the item: `wait` (other checks are still to come), `accept`, `revise`, or `escalate`; none of them needs anything more from this run. If it says the task is no longer yours, another check has already moved the item on: go to the next task.

@@ -91,3 +91,29 @@ def test_rollback_points_production_at_the_version_before(database, city, site):
         conn.autocommit = False
         assert rollback(conn, token, site["channels"]) == (second.version, first.version)
     assert production_city(site)[0]["contentVersion"] == first.version
+
+
+def test_a_checked_translation_is_published_with_its_story(database, city, site):
+    from tests.flow import HAIKU, SONNET, Worker
+    story, _ = ready(database, city)
+    audit_everything(database)
+    run_publish(database, site)
+    with database.connect("admin") as conn:
+        item = conn.execute("SELECT item_id FROM psst.revisions WHERE id = %s", (story,)).fetchone()["item_id"]
+        conn.execute("SELECT psst.enqueue(%s, 'translate', 'translate:test', '{}', %s, %s, %s, %s)",
+                     (city["admin"], sample.CITY_ID, city["place"], item, story))
+    translator = Worker(database, SONNET)
+    translated = translator.submit(translator.lease("translate"), {
+        "language": "zh-Hans", "reason": "translated", "rulebook": sample.RULEBOOK,
+        "body": {"headline": "曾为全镇供水的图书馆", "short": "米尔巷的图书馆建于1871年，原本为全镇抽水。",
+                 "long": "阿达·索恩设计了这座泵站。1952年水泵停用后，议会保留了建筑并改为图书馆。",
+                 "look": "站在米尔巷对面，看阅览室上方高高的烟囱。"}})["revision"]
+    Worker(database, kind="system").tool_check()
+    checker = Worker(database, HAIKU)
+    checker.submit(checker.lease("check_translation"), {"verdict": "pass", "note": "every claim carried",
+                                                        "untraced": [], "answers": [], "back_translation": "..."})
+    assert item_state(database, translated) == "accepted"
+    audit_everything(database)
+    run_publish(database, site)
+    fact = production_city(site)[1]["places"][0]["facts"][0]
+    assert fact["translations"]["zh-Hans"]["headline"] == "曾为全镇供水的图书馆"

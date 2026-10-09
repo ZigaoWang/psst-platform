@@ -23,10 +23,10 @@ Each task type is routed to one model (`routing.<type>` in the console's setting
 
 Commands run from the repository root, with the worker settings in `~/.config/psst-platform/env`.
 
-1. Start the run once: `uv run psst run start --model <model id> --notes "<city> <role>"`. It prints a token; put `PSST_RUN_TOKEN=<token>` in front of every later command, since shell state does not carry over.
+1. Start the run once, and keep its token (one run per worker; a second run's token doesn't hold the first run's tasks): `uv run psst run start --model <model id> --notes "<city> <role>"`. It prints a token; put `PSST_RUN_TOKEN=<token>` in front of every later command, since shell state does not carry over.
 2. Take a task: `uv run psst task next --type <type> [--type <type>] --city <city>`. It writes the task file to `work/tasks/` and prints its path, or says nothing is waiting.
 3. Read the task file. `prompt` is the instructions, `data` everything the task needs, `result_schema` the shape of the answer.
-4. Write the result to `work/results/<task id>.json` and submit it: `uv run psst task submit <task file> <result file>`. It checks the result first and lists anything to fix; fix it and submit again. If it says the task is no longer yours, another check has already moved the item on: go to the next task.
+4. Write the result to `work/results/<task id>.json` and submit it: `uv run psst task submit <task file> <result file>`. It checks the result first and lists anything to fix; fix it and submit again. The reply's `next` says what happens to the item: `wait` (other checks are still to come), `accept`, `revise`, or `escalate`; none of them needs anything more from this run. If it says the task is no longer yours, another check has already moved the item on: go to the next task.
 5. If the task can't be done properly, give it back with the reason: `uv run psst task return <task file> --problem "<why>"`. It goes to a different run; after three returns it waits for an editor.
 6. Stop at the run's task count or when nothing is waiting, then end the run: `uv run psst run end --notes "<one line>"`. Ending a run gives back any task it still holds.
 

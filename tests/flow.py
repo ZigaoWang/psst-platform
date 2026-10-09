@@ -128,7 +128,7 @@ def review(database, decide=approve, reviewer=None):
     reviewer = reviewer or Worker(database, SONNET)
     task = reviewer.lease("review")
     assert task, "no review queued"
-    decisions = [{"revision": r} | decide(r) for r in task["input"]["revisions"]]
+    decisions = [{"revision": r, "fix": None} | decide(r) for r in task["input"]["revisions"]]
     return reviewer.submit(task, {"decisions": decisions, "notes": "reviewed the batch", "rulebook": sample.RULEBOOK})
 
 

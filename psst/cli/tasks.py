@@ -195,6 +195,8 @@ def review_problems(data: dict[str, Any], result: dict[str, Any]) -> list[str]:
              for r in items if r not in decided]
     found += [f"{r} isn't in this review" for r in decided if r not in items]
     found += [f"{r} is decided twice" for r in set(decided) if decided.count(r) > 1]
+    found += [f"{d['revision']}: only a good mark names a cut in fix; a weak or bad reason says what is wrong"
+              for d in result["decisions"] if d["fix"] is not None and d["mark"] != "good"]
     return found
 
 

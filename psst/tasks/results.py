@@ -127,10 +127,11 @@ def research() -> dict[str, Any]:
 
 
 def review() -> dict[str, Any]:
-    """One mark per item, good, weak, or bad, with the reason."""
-    decision = {"type": "object", "additionalProperties": False, "required": ["revision", "mark", "reason"],
+    """One mark per item, good, weak, or bad, with the reason, and for a good item the cut it needs, if any."""
+    decision = {"type": "object", "additionalProperties": False, "required": ["revision", "mark", "reason", "fix"],
                 "properties": {"revision": {"type": "string", "pattern": "^rv_"},
-                               "mark": {"enum": ["good", "weak", "bad"]}, "reason": NOTE}}
+                               "mark": {"enum": ["good", "weak", "bad"]}, "reason": NOTE,
+                               "fix": {"anyOf": [NOTE, {"type": "null"}]}}}
     return {"type": "object", "additionalProperties": False, "required": ["decisions", "notes"],
             "properties": {"decisions": {"type": "array", "items": decision}, "notes": NOTE}}
 

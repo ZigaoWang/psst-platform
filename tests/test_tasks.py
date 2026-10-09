@@ -64,7 +64,8 @@ def test_a_review_decides_every_item_of_the_submission(database, city):
     assert len(task["input"]["revisions"]) == 3  # two stories and the guide, reviewed together
     with pytest.raises(psycopg.errors.InvalidParameterValue, match="decide every item"):
         reviewer.submit(task, {"decisions": [{"revision": task["input"]["revisions"][0], "mark": "good",
-                                              "reason": "checked"}], "notes": "partial", "rulebook": sample.RULEBOOK})
+                                              "reason": "checked", "fix": None}],
+                                "notes": "partial", "rulebook": sample.RULEBOOK})
 
 
 def test_a_weak_story_gets_one_revision_and_a_second_weak_mark_retires_it(database, city):
@@ -81,6 +82,23 @@ def test_a_weak_story_gets_one_revision_and_a_second_weak_mark_retires_it(databa
     review(database, lambda r: {"mark": "weak", "reason": "still not surprising"})
     assert item_state(database, second) == "retired"
     assert Worker(database, SONNET).lease("revise") is None
+
+
+def test_a_good_story_needing_a_cut_gets_one_revision_for_it(database, city):
+    story, _ = research(database, city)
+    tool_checks(database)
+    review(database, lambda r: {"mark": "good", "reason": "a fresh, checkable twist",
+                                "fix": "cut the last sentence, a guess"} if r == story else {"mark": "good",
+                                                                                              "reason": "fine"})
+    assert item_state(database, story) == "draft"
+    assert Worker(database, SONNET).lease("revise")["input"]["problems"] == ["cut the last sentence, a guess"]
+
+
+def test_only_a_good_mark_names_a_cut():
+    from psst.cli.tasks import review_problems
+    data = {"items": [{"revision": "rv_1", "place": None}]}
+    result = {"decisions": [{"revision": "rv_1", "mark": "weak", "reason": "thin", "fix": "cut the end"}]}
+    assert any("only a good mark names a cut" in p for p in review_problems(data, result))
 
 
 def test_a_bad_story_is_dropped(database, city):

@@ -27,6 +27,9 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     queue.add_argument("--city", required=True)
     queue.add_argument("--cells", type=int, default=10)
     queue.set_defaults(run=queue_cells)
+    sweep = commands.add_parser("sweep", help="sweep leads again for cells")
+    sweep.add_argument("--cell", action="append", required=True, dest="cells")
+    sweep.set_defaults(run=sweep_cells)
     imported = commands.add_parser("import-reference",
                                    help="copy boundaries, tags, demand, and the previous place list (once)")
     imported.add_argument("--from", dest="source", required=True,
@@ -57,4 +60,10 @@ def import_reference(args: argparse.Namespace) -> int:
     with psycopg.connect(args.source) as old, psycopg.connect(db.conninfo("admin")) as new:
         counts = reference.import_reference(old, new)
     print(json.dumps(counts, indent=2))
+    return 0
+
+
+def sweep_cells(args: argparse.Namespace) -> int:
+    with db.open_connection(db.conninfo("system")) as conn:
+        print(json.dumps(research.sweep_cells(conn, start(conn, "system", "lead sweep"), args.cells), indent=2))
     return 0

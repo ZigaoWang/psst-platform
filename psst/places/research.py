@@ -88,3 +88,19 @@ def queue(conn: Connection, token: str, slug: str, count: int) -> dict[str, Any]
     row = conn.execute("SELECT psst.queue_research(%s, %s) AS n", (token, Jsonb(entries))).fetchone()
     conn.commit()
     return {"queued": int(row["n"]) if row else 0, "problems": problems}
+
+
+def sweep_cells(conn: Connection, token: str, cell_ids: list[str]) -> dict[str, Any]:
+    """Sweep leads again for cells, recording new ones and skipping what isn't a place."""
+    problems: list[str] = []
+    for cell in cell_ids:
+        country = conn.execute("""
+            SELECT c.country_code FROM psst.research_cells r JOIN psst.cities c ON c.id = r.city_id
+            WHERE r.cell = %s""", (cell,)).fetchone()
+        if country is None:
+            raise LookupError(f"{cell} isn't a planned research cell")
+        found, issues = leads.sweep(conn, cell, country["country_code"])
+        problems += [f"{cell}: {issue}" for issue in issues]
+        conn.execute("SELECT psst.record_leads(%s, %s, %s)", (token, cell, Jsonb(found)))
+        conn.commit()
+    return {"swept": len(cell_ids), "problems": problems}

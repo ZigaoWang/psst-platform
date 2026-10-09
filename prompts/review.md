@@ -22,6 +22,11 @@ Decide between good and weak by the fix the story needs:
 - If the fix needs something added or settled (the how, the why, what happened next, a surprise moved up from under
   background, two accounts reconciled or one labeled disputed), the story is `weak`; say what to add or settle.
 
+Check the first sentence of the long as closely as the short's: a long that opens on biography or background, with
+the surprise further down, needs the surprise moved up, so the story is weak however good its short is. Two sources
+that disagree on a fact, set side by side ("one places him on the left, another on the right") with neither chosen nor
+the point called disputed, need settling too.
+
 A well-known name or place can be good when the story gives it a fresh, specific twist.
 
 - `good`: one physical thing, a real surprise (ideally in the first sentence), something a reader can see or check on

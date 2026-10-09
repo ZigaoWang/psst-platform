@@ -7,6 +7,7 @@ never the prose; the translation check gets the translation and the English clai
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 import psycopg
@@ -20,9 +21,18 @@ Connection = psycopg.Connection[dict[str, Any]]
 CONTEXT_CHARS = 500
 FULL_SNAPSHOT_CHARS = 60_000
 
-# Lookups that need the network, passed in by the command line (and left out in tests): the place's
-# encyclopedia lead, and the key facts its Wikidata item gives.
-Lookup = Callable[[dict[str, Any]], dict[str, Any] | None]
+Lookup = Callable[[dict[str, Any]], Any]
+
+
+@dataclass
+class Lookups:
+    """What a task file needs from the network, passed in by the command line and left out in tests: the place's
+    encyclopedia lead, the key facts its Wikidata item gives, photo candidates with local previews to look at, and
+    a local copy of a photo under check."""
+    lead: Lookup | None = None
+    key_facts: Lookup | None = None
+    photo_candidates: Lookup | None = None
+    photo_file: Lookup | None = None
 
 
 def place_summary(conn: Connection, place_id: str | None) -> dict[str, Any] | None:
@@ -97,9 +107,9 @@ def other_items(conn: Connection, place_id: str | None, exclude_item: str | None
         ORDER BY i.position""", (place_id, exclude_item))]
 
 
-def build(conn: Connection, task: dict[str, Any], lead: Lookup | None = None,
-          key_facts: Lookup | None = None) -> dict[str, Any]:
+def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None) -> dict[str, Any]:
     """The task file for a leased task."""
+    lookups = lookups or Lookups()
     rulebook = rules.load()
     kind = task["type"]
     data: dict[str, Any] = {"place": place_summary(conn, task["place_id"])}
@@ -123,7 +133,9 @@ def build(conn: Connection, task: dict[str, Any], lead: Lookup | None = None,
                             for c in claims_with_passages(conn, task["revision_id"])],
                  "questions": rulebook.type(str(item_type))["item_questions"],
                  "other_stories": other_items(conn, task["place_id"], task["item_id"]),
-                 "encyclopedia_lead": lead(data["place"]) if lead and data["place"] else None}
+                 "encyclopedia_lead": lookups.lead(data["place"]) if lookups.lead and data["place"] else None}
+        if kind == "check_photo":
+            data["photo_file"] = lookups.photo_file(revision["body"]) if lookups.photo_file else None
     elif kind == "check_translation":
         assert revision
         source = revision_of(conn, revision["translation_of"])
@@ -142,10 +154,19 @@ def build(conn: Connection, task: dict[str, Any], lead: Lookup | None = None,
         data |= {"brief": task["input"], "other_stories": other_items(conn, task["place_id"], None),
                  "rules": rulebook.type(item_type)}
         if kind == "write_guide" and data["place"]:
-            data |= {"wikidata": key_facts(data["place"]) if key_facts else None,
-                     "encyclopedia_lead": lead(data["place"]) if lead else None}
+            data |= {"wikidata": lookups.key_facts(data["place"]) if lookups.key_facts else None,
+                     "encyclopedia_lead": lookups.lead(data["place"]) if lookups.lead else None}
     elif kind == "research_cell":
         data = research_brief(conn, task["input"]["cell"])
+    elif kind == "find_photos":
+        existing = [{"item": r["id"], "kind": r["body"]["kind"], "alt": r["body"]["alt"], "state": r["state"]}
+                    for r in conn.execute("""
+            SELECT i.id, i.state, r.body FROM psst.items i JOIN psst.revisions r ON r.id = i.current_revision
+            WHERE i.place_id = %s AND i.type = 'photo' AND i.state <> 'retired'""", (task["place_id"],))]
+        data |= {"existing_photos": existing, "stories": other_items(conn, task["place_id"], None),
+                 "candidates": lookups.photo_candidates({**(data["place"] or {}), "task": task["id"]})
+                 if lookups.photo_candidates and data["place"] else [],
+                 "rules": rulebook.type("photo")}
     elif kind == "revise":
         assert revision
         data |= {"type": item_type, "body": revision["body"],

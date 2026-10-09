@@ -14,6 +14,7 @@ from psst import rules
 from psst.checks import runner
 from psst.core import config, db
 from psst.evidence import encyclopedia, wikidata
+from psst.photos import commons, importing
 from psst.tasks import files
 
 from . import fetching
@@ -62,6 +63,36 @@ def _key_facts(place: dict[str, Any]) -> dict[str, Any] | None:
             "lines": wikidata.render(place["wikidata_id"], item, values, place["kind"], place["size"]).splitlines()}
 
 
+def _photo_candidates(place: dict[str, Any]) -> list[dict[str, Any]]:
+    """Free photos from Commons that may show the place, each with a local preview to look at."""
+    folder = WORK.parent / "images" / place["task"]
+    folder.mkdir(parents=True, exist_ok=True)
+    found = commons.candidates(place["lat"], place["lon"], place.get("wikidata_id"))
+    for index, candidate in enumerate(found):
+        if candidate.get("preview"):
+            try:
+                path = folder / f"{index:02d}.jpg"
+                path.write_bytes(importing.download(candidate["preview"]))
+                candidate["preview_file"] = str(path)
+            except (OSError, ValueError):
+                candidate["preview_file"] = None
+    return found
+
+
+def _photo_file(body: dict[str, Any]) -> str | None:
+    """A local copy of the photo under check, as readers will see it."""
+    base = config.get("PSST_PUBLIC_URL")
+    if not base:
+        return None
+    path = WORK.parent / "images" / body["thumb"]["file"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.write_bytes(importing.download(f"{base.rstrip('/')}/images/{body['full']['file']}"))
+    except (OSError, ValueError):
+        return None
+    return str(path)
+
+
 def lease_next(args: argparse.Namespace) -> int:
     with db.connect("worker") as conn:
         city = None
@@ -74,7 +105,7 @@ def lease_next(args: argparse.Namespace) -> int:
         if task is None:
             print("no task waiting")
             return 3
-        document = files.build(conn, task, _lead, _key_facts)
+        document = files.build(conn, task, files.Lookups(_lead, _key_facts, _photo_candidates, _photo_file))
     args.out.mkdir(parents=True, exist_ok=True)
     path = args.out / f"{task['id']}.json"
     path.write_text(json.dumps(document, ensure_ascii=False, indent=2, default=str))
@@ -94,6 +125,10 @@ def problems(document: dict[str, Any], result: dict[str, Any]) -> list[str]:
                   for v in result.get("verdicts", []) if v["verdict"] == "unclear"]
     if kind == "research_cell":
         found += research_problems(document["data"], result)
+    if kind == "find_photos":
+        room = rules.load().type("photo")["max_per_place"] - len(document["data"]["existing_photos"])
+        if len(result["choices"]) > room:
+            found.append(f"the place has room for {max(room, 0)} more photos")
     item_type = WRITING.get(kind) or (document["data"].get("type") if kind == "revise" else None)
     if item_type and item_type != "translation":
         place = (document["data"].get("place") or {}).get("id")
@@ -137,7 +172,8 @@ def submit_result(args: argparse.Namespace) -> int:
     if found:
         print("Not submitted. Fix these and submit again:\n" + "\n".join(f"- {p}" for p in found))
         return 1
-    function = "submit_research" if document["type"] == "research_cell" else "submit_task"
+    function = {"research_cell": "submit_research", "find_photos": "submit_photos"}.get(document["type"],
+                                                                                       "submit_task")
     if function == "submit_task":
         result = result | {"rulebook": document["rulebook"]}
     with db.connect("worker") as conn:

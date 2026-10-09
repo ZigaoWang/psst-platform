@@ -14,6 +14,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from psst.checks import runner
+from psst.photos import importing
 from psst.places import resolve
 
 log = logging.getLogger("psst.system")
@@ -28,6 +29,7 @@ class SystemWorker:
         self.handlers: dict[str, Callable[[Connection, dict[str, Any]], dict[str, Any]]] = {
             "tool_check": self.tool_check,
             "resolve_places": self.resolve_places,
+            "import_photo": self.import_photo,
         }
         self._audits_planned = 0.0
 
@@ -37,6 +39,9 @@ class SystemWorker:
 
     def resolve_places(self, conn: Connection, task: dict[str, Any]) -> dict[str, Any]:
         return resolve.resolve(conn, self.token, list(task["input"].get("places") or []))
+
+    def import_photo(self, conn: Connection, task: dict[str, Any]) -> dict[str, Any]:
+        return importing.import_photo(conn, self.token, task)
 
     def step(self) -> bool:
         """Do one task, if one is waiting. Returns whether there was one."""

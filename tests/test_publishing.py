@@ -3,53 +3,17 @@ Content is invented."""
 
 from __future__ import annotations
 
-import functools
-import gzip
-import json
-import threading
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-
 import pytest
 
-from psst.publish.channels import Channels
-from psst.publish.run import PublishError, publish, rollback
+from psst.publish.run import PublishError, rollback
 from tests import sample
-from tests.flow import audit_everything, item_state, write_and_check
-
-
-@pytest.fixture
-def site(tmp_path):
-    """The public directory, served over HTTP the way nginx serves it."""
-    public = tmp_path / "public"
-    (public / "content").mkdir(parents=True)
-    handler = functools.partial(SimpleHTTPRequestHandler, directory=str(public))
-    handler.log_message = lambda *args: None  # type: ignore[attr-defined]
-    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    yield {"channels": Channels(str(public / "content")), "url": f"http://127.0.0.1:{server.server_port}",
-           "public": public, "work": tmp_path / "work"}
-    server.shutdown()
-
-
-def run_publish(database, site, **options):
-    with database.connect("publisher") as conn:
-        token = conn.execute("SELECT * FROM psst.start_run('publisher', 'test')").fetchone()["token"]
-    with database.connect("publisher") as conn:
-        conn.autocommit = False
-        return publish(conn, token, site["channels"], site["url"], site["work"], **options)
+from tests.flow import audit_everything, item_state, production_city, run_publish, write_and_check
 
 
 def ready(database, city, n=0, place=None):
     story = write_and_check(database, city, n, kind="story", place=place)
     guide = write_and_check(database, city, n, kind="guide", place=place)
     return story, guide
-
-
-def production_city(site):
-    production = site["public"] / "content" / "production" / "v2"
-    manifest = json.loads((production / "manifest.json").read_text())
-    entry = manifest["cities"][0]
-    return manifest, json.loads(gzip.decompress((production / entry["file"]).read_bytes()))
 
 
 def test_a_city_publishes_through_staging_to_production(database, city, site):

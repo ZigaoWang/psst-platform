@@ -49,7 +49,7 @@ write_env() {  # file mode group content
 }
 write_env admin.env 600 root "${common}PSST_DB_PASSWORD_ADMIN=$PSST_DB_PASSWORD_ADMIN\n"
 write_env worker.env 600 root "${common}PSST_DB_PASSWORD_WORKER=$PSST_DB_PASSWORD_WORKER\n"
-write_env system.env 640 psst-platform "${common}PSST_DB_PASSWORD_SYSTEM=$PSST_DB_PASSWORD_SYSTEM\n"
+write_env system.env 640 psst-platform "${common}PSST_DB_PASSWORD_SYSTEM=$PSST_DB_PASSWORD_SYSTEM\nPSST_IMAGES_DIR=$base/public/images\n"
 write_env publisher.env 640 psst-platform "${common}PSST_DB_PASSWORD_PUBLISHER=$PSST_DB_PASSWORD_PUBLISHER\nPSST_PUBLISH_HOST=local\nPSST_PUBLISH_ROOT=$base/public/content\nPSST_PUBLIC_URL=https://$host\n"
 write_env console.env 640 psst-platform "PSST_CONSOLE_DATABASE_URL=postgresql://psst_platform_console:$PSST_DB_PASSWORD_CONSOLE@127.0.0.1:5432/psst_platform\n"
 

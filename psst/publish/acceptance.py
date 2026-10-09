@@ -39,6 +39,15 @@ def download(base_url: str, channel: str) -> tuple[dict[str, Any], dict[str, Any
     return manifest, pack(manifest["common"]), {c["cityId"]: pack(c) for c in manifest["cities"]}
 
 
+def served(url: str) -> bool:
+    request = urllib.request.Request(url, method="HEAD", headers={"User-Agent": http.USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return bool(response.status == 200)
+    except (urllib.error.URLError, TimeoutError):
+        return False
+
+
 def check(base_url: str, version: str, allow_shrink: str | None = None) -> list[str]:
     """Every problem with staging; an empty list means it can be promoted."""
     problems: list[str] = []
@@ -74,6 +83,15 @@ def check(base_url: str, version: str, allow_shrink: str | None = None) -> list[
     problems += [f"old id {old} points to {new}, which isn't published" for old, new in common["legacyIds"].items()
                  if new not in place_ids]
     production = download(base_url, "production")
+    live_images = {i["full"]["file"] for c in (production[2].values() if production else [])
+                   for p in c["places"] for i in p.get("images", [])}
+    for city in cities.values():
+        for place in city["places"]:
+            for image in place.get("images", []):
+                for rendition in ("full", "thumb"):
+                    name = image[rendition]["file"]
+                    if name not in live_images and not served(f"{base_url.rstrip('/')}/images/{name}"):
+                        problems.append(f"{image['id']}: {name} isn't served")
     if production and not allow_shrink:
         before, after = production[0].get("counts", {}), manifest.get("counts", {})
         for key in ("places", "facts"):

@@ -228,6 +228,10 @@
                       ]
                     }
                   }
+                },
+                "pair": {
+                  "type": "string",
+                  "description": "Optional, on a historic photo: the current photo taken from the same spot."
                 }
               }
             }

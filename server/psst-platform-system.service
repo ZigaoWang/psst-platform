@@ -13,6 +13,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+ReadWritePaths=/www/wwwroot/psst-platform/public/images
 
 [Install]
 WantedBy=multi-user.target

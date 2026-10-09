@@ -75,6 +75,8 @@ def schema(task_type: str, item_type: str | None = None) -> dict[str, Any]:
         return translation()
     if task_type == "research_cell":
         return research()
+    if task_type == "find_photos":
+        return photos()
     raise KeyError(f"no result schema for {task_type}")
 
 
@@ -117,3 +119,16 @@ def research() -> dict[str, Any]:
     return {"type": "object", "additionalProperties": False, "required": ["places", "leads", "notes"],
             "properties": {"places": {"type": "array", "items": {"oneOf": [new_place, existing]}},
                            "leads": {"type": "array", "items": lead}, "notes": NOTE}}
+
+
+def photos() -> dict[str, Any]:
+    choice = {"type": "object", "additionalProperties": False, "required": ["key", "alt", "focus", "kind"],
+              "properties": {"key": {"type": "string", "pattern": "^commons:File:.+"},
+                             "alt": {"type": "string", "minLength": 10, "maxLength": 300},
+                             "focus": {"type": "array", "minItems": 2, "maxItems": 2,
+                                       "items": {"type": "number", "minimum": 0, "maximum": 1}},
+                             "kind": {"enum": ["photo", "historic"]},
+                             "year": {"type": "integer", "minimum": 1826, "maximum": 2100},
+                             "pair": {"type": "string", "pattern": "^it_"}}}
+    return {"type": "object", "additionalProperties": False, "required": ["choices", "notes"],
+            "properties": {"choices": {"type": "array", "maxItems": 6, "items": choice}, "notes": NOTE}}

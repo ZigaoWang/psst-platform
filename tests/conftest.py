@@ -7,13 +7,16 @@ Set PSST_TEST_SUPERUSER_URL to use a server you started (CI does); otherwise a D
 
 from __future__ import annotations
 
+import functools
 import os
 import secrets
 import subprocess
+import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 import psycopg
@@ -21,6 +24,7 @@ import pytest
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from psst.core import db
+from psst.publish.channels import Channels
 
 CONTAINER = "psst-platform-test"
 IMAGE = "postgis/postgis:14-3.4"
@@ -127,3 +131,17 @@ def database(template: tuple[str, str]) -> Iterator[Database]:
 def city(database: Database) -> dict[str, str]:
     from tests.flow import setup_city
     return setup_city(database)
+
+
+@pytest.fixture
+def site(tmp_path: Any) -> Iterator[dict[str, Any]]:
+    """The public directory, served over HTTP the way nginx serves it."""
+    public = tmp_path / "public"
+    (public / "content").mkdir(parents=True)
+    handler = functools.partial(SimpleHTTPRequestHandler, directory=str(public))
+    handler.log_message = lambda *args: None  # type: ignore[attr-defined]
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield {"channels": Channels(str(public / "content")), "url": f"http://127.0.0.1:{server.server_port}",
+           "public": public, "work": tmp_path / "work"}
+    server.shutdown()

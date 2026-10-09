@@ -3,9 +3,11 @@ claims. Everything here is invented."""
 
 from __future__ import annotations
 
+import gzip
 import json
 
 from psst.checks import runner
+from psst.publish.run import publish
 from tests import sample
 
 SONNET, HAIKU = "claude-sonnet-5-5", "claude-haiku-5-5"
@@ -132,3 +134,18 @@ def audit_everything(database, verdict="supported"):
             return
         auditor.submit(task, verdicts(claim_ids(database, task["revision_id"]), verdict)
                        | {"item": {"verdict": "pass", "note": "agrees with the claims"}})
+
+
+def run_publish(database, site, **options):
+    with database.connect("publisher") as conn:
+        token = conn.execute("SELECT * FROM psst.start_run('publisher', 'test')").fetchone()["token"]
+    with database.connect("publisher") as conn:
+        conn.autocommit = False
+        return publish(conn, token, site["channels"], site["url"], site["work"], **options)
+
+
+def production_city(site):
+    production = site["public"] / "content" / "production" / "v2"
+    manifest = json.loads((production / "manifest.json").read_text())
+    entry = manifest["cities"][0]
+    return manifest, json.loads(gzip.decompress((production / entry["file"]).read_bytes()))

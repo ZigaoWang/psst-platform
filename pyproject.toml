@@ -10,6 +10,7 @@ dependencies = [
     "pyyaml>=6.0",
     "pypdf>=5.0",
     "pypinyin>=0.53",
+    "pillow>=11.0",
 ]
 
 [project.scripts]

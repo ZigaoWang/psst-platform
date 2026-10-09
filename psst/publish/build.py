@@ -130,8 +130,12 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
     if not places:
         raise BuildError("Nothing can publish yet: no place has both an audited story and guide information.")
 
-    english = [i for i in items if i["type"] in ("story", "guide") and i["place_id"] in places
+    english = [i for i in items if i["type"] in ("story", "guide", "photo") and i["place_id"] in places
                or i["type"] == "trail"]
+    photos_by_place: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for photo in by_type["photo"]:
+        if photo["place_id"] in places:
+            photos_by_place[photo["place_id"]].append(photo)
     published_revisions = {i["item_id"]: i["revision_id"] for i in english}
     translations: dict[str, dict[str, Any]] = defaultdict(dict)
     for t in by_type["translation"]:
@@ -199,6 +203,20 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
             entry["translations"] = translations[guide["item_id"]]
         return entry
 
+    def image_entry(photo: dict[str, Any]) -> dict[str, Any]:
+        body = photo["body"]
+        credit = body["credit"]
+        entry: dict[str, Any] = {
+            "id": photo["item_id"], "kind": body["kind"], "year": body.get("year"), "alt": body["alt"],
+            "focus": body["focus"], "full": body["full"], "thumb": body["thumb"],
+            "credit": {"author": credit["author"], "authorUrl": credit.get("author_url"), "license": credit["license"],
+                       "licenseUrl": credit.get("license_url"), "sourceUrl": credit["source_url"],
+                       "source": credit["source"], "title": credit.get("title")},
+        }
+        if body.get("pair"):
+            entry["pair"] = body["pair"]
+        return entry
+
     by_group: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for place_id in sorted(places):
         place = places[place_id]
@@ -216,6 +234,9 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
             "facts": [story_entry(s) for s in stories],
             "guide": guide_entry(guides[place_id], place["wikidata_id"], place["kind"]),
         }
+        if photos_by_place.get(place_id):
+            entry["images"] = [image_entry(p) for p in sorted(photos_by_place[place_id],
+                                                              key=lambda p: (p["position"], p["item_id"]))]
         by_group[place["group_id"]].append(entry)
 
     trails_by_city: dict[int, list[dict[str, Any]]] = defaultdict(list)

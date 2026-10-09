@@ -38,7 +38,8 @@ INSERT INTO psst.admin_area_names VALUES (2, 'zh-Hans', '测试城'), (3, 'zh-Ha
 INSERT INTO psst.tags VALUES ('tg_aaaaaaaa', 'Lost rivers', 'theme', NULL);
 INSERT INTO psst.tag_labels VALUES ('lost rivers', 'tg_aaaaaaaa', 'Lost rivers', true);
 INSERT INTO psst.demand VALUES ('851f1d4bfffffff', '2026-10-01', 3);
-INSERT INTO psst.places VALUES ('pl_0123456789', 'building', ST_SetSRID(ST_MakePoint(0.2, 0.2), 4326), 'Q2', NULL, 2, NULL);
+INSERT INTO psst.places VALUES
+    ('pl_0123456789', 'building', ST_SetSRID(ST_MakePoint(0.2, 0.2), 4326), 'Q2', NULL, 2, NULL);
 INSERT INTO psst.place_names VALUES ('pl_0123456789', 'display', 'en', 'Old Mill');
 INSERT INTO psst.legacy_place_ids VALUES ('testville/old-mill', 'pl_0123456789');
 INSERT INTO psst.facts VALUES ('fa_0000000000', 'pl_0123456789', 'A story that must not come over');

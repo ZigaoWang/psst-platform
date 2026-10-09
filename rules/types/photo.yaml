@@ -4,9 +4,10 @@ prose_fields: [alt]
 schema:
   type: object
   additionalProperties: false
-  required: [file, kind, alt, focus, credit]
+  required: [full, thumb, kind, alt, focus, credit]
   properties:
-    file: {type: string, pattern: "^[0-9a-f]{24}$"}
+    full: {$ref: "#/$defs/rendition"}
+    thumb: {$ref: "#/$defs/rendition"}
     kind: {enum: [photo, historic]}
     year: {type: integer, minimum: 1826, maximum: 2100}
     alt: {type: string, minLength: 10, maxLength: 300}
@@ -28,10 +29,24 @@ schema:
         author_url: {type: string, pattern: "^https://"}
         license: {type: string, minLength: 1}
         license_url: {type: string, pattern: "^https://"}
+  $defs:
+    rendition:
+      type: object
+      additionalProperties: false
+      required: [file, width, height]
+      properties:
+        file: {type: string, pattern: "^[0-9a-f]{24}\\.jpg$"}
+        width: {type: integer, minimum: 1}
+        height: {type: integer, minimum: 1}
 
 free_licenses: ["public domain", "pd", "cc0", "cc by", "cc-by", "cc by-sa", "cc-by-sa", "no known copyright restrictions"]
 alt_refuses: ["photo of", "image of", "picture of"]
 max_per_place: 6
+# Our own copies: the longest side of each rendition, in pixels.
+renditions: {full: 1920, thumb: 640}
+# Photos searched for near a place, in meters.
+nearby_meters: 60
+max_candidates: 24
 checks: [tool, item]
 item_questions:
   - Does the photo show this place, as it is now (or, for a historic photo, as it was in the given year)?

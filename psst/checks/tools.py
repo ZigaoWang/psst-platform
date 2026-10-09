@@ -226,13 +226,16 @@ def _sources(report: Report, item_type: str, body: dict[str, Any], claims: list[
     elif myths:
         report.refuse("claims", "claims with the role 'myth' belong to a story with a 'myth' field")
     if body.get("veracity") == "fact":
+        # Whatever its kind, a claim resting on one press or community source is an anecdote, and an anecdote with one
+        # source is a legend (content.md, section 4.1).
         for claim in claims:
-            if claim.kind != "event" or claim.role != "fact":
+            if claim.role != "fact":
                 continue
             passages = quotes.get(claim.n, [])
             if not any(_role(s, rulebook) in strong for s, _ in passages) and len({s.source for s, _ in passages}) < 2:
-                report.refuse(f"claim {claim.n}", "an event with one press or community source is a legend: "
-                                                  "corroborate it or mark the story 'legend'")
+                report.refuse(f"claim {claim.n}", "rests on one press or community source, which makes it a legend: "
+                                                  "corroborate it with a record or a second source, or mark the story "
+                                                  "'legend'")
 
 
 def _key_facts(report: Report, body: dict[str, Any], claims: list[Claim],

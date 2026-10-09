@@ -13,7 +13,8 @@ from psst.core.text import find_quote
 RECORD = Snapshot("sn_record0000", "so_record0000", "https://records.example.org/pump-house", "official_record",
                   "List entry. The Old Pump House, Mill Lane. Built in 1871 to the design of the engineer Ada Thorne "
                   "for the Testville Water Company. Converted to a public library in 1952. The chimney is 31 meters "
-                  "tall and carries a cast iron band at each floor level.")
+                  "tall and carries a cast iron band at each floor level. The original boiler beams remain over the "
+                  "reading room.")
 PAPER = Snapshot("sn_paper00000", "so_paper00000", "https://news.example.com/library-at-80", "press",
                  "Readers at the Mill Lane library still sit under the old boiler beams, and staff say the "
                  "chimney's iron bands were made at the Ferris foundry nearby.")
@@ -56,7 +57,8 @@ def claims():
               [Evidence(RECORD.id, "The chimney is 31 meters tall and carries a cast iron band at each floor level",
                         5)]),
         Claim(5, "Readers sit under the old boiler beams.", "attribute", [],
-              [Evidence(PAPER.id, "Readers at the Mill Lane library still sit under the old boiler beams", 6)]),
+              [Evidence(PAPER.id, "Readers at the Mill Lane library still sit under the old boiler beams", 6),
+               Evidence(RECORD.id, "The original boiler beams remain over the reading room", 7)]),
     ]
 
 
@@ -124,7 +126,15 @@ def test_an_event_with_one_press_source_is_a_legend():
     wrong = claims()
     wrong[2].evidence = [Evidence(PAPER.id, "the Mill Lane library", 4)]
     result = check("story", story(), wrong, SNAPSHOTS)
-    assert "is a legend" in refusals(result)
+    assert "which makes it a legend" in refusals(result)
+
+
+def test_an_anecdote_is_a_legend_whatever_its_claim_kind():
+    wrong = claims()
+    wrong[4].kind = "name"
+    wrong[4].evidence = wrong[4].evidence[:1]  # the boiler beams rest on the newspaper alone
+    result = check("story", story(), wrong, SNAPSHOTS)
+    assert "claim 5: rests on one press or community source" in refusals(result)
 
 
 def test_a_myth_needs_its_popular_version_sourced():

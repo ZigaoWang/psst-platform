@@ -63,7 +63,8 @@ def story_result(city, year="1871"):
         {"text": "It became a library in 1952.", "kind": "event", "values": [{"value": "1952"}],
          "evidence": [{"snapshot": city["record"], "quote": "until 1952, when it was turned into a library"}]},
         {"text": "Readers sit under the old boiler beams.", "kind": "attribute", "values": [],
-         "evidence": [{"snapshot": city["paper"], "quote": "sit under the old boiler beams"}]},
+         "evidence": [{"snapshot": city["paper"], "quote": "sit under the old boiler beams"},
+                      {"snapshot": city["record"], "quote": "The boiler beams still cross the reading room"}]},
     ]
     return {"body": body, "claims": claims, "rulebook": sample.RULEBOOK, "reason": "first draft"}
 

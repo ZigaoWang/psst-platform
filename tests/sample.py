@@ -11,7 +11,8 @@ import psycopg
 CITY_ID = 900001
 RULEBOOK = "0123456789ab"
 SNAPSHOT_TEXT = ("The Old Pump House on Mill Lane was built in 1871 by the engineer Ada Thorne. "
-                 "It pumped water to the town until 1952, when it was turned into a library.")
+                 "It pumped water to the town until 1952, when it was turned into a library. The boiler beams "
+                 "still cross the reading room.")
 
 
 def city(conn: psycopg.Connection[dict[str, Any]]) -> int:

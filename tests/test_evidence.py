@@ -93,7 +93,8 @@ def submit(database, service, story_changes=None, claim_changes=None):
         {"text": "It became a library in 1952.", "kind": "event", "values": [{"value": "1952"}],
          "evidence": [{"snapshot": record, "quote": "until 1952, when it was turned into a library"}]},
         {"text": "Readers sit under the old boiler beams.", "kind": "attribute", "values": [],
-         "evidence": [{"snapshot": paper, "quote": "readers still sit under the old boiler beams"}]},
+         "evidence": [{"snapshot": paper, "quote": "readers still sit under the old boiler beams"},
+                      {"snapshot": record, "quote": "The boiler beams still cross the reading room"}]},
     ]
     for n, change in (claim_changes or {}).items():
         for proof in change.get("evidence", []):
@@ -107,34 +108,34 @@ def submit(database, service, story_changes=None, claim_changes=None):
     return revision
 
 
-def tool_check_and_settle(database, revision):
-    system, system_token = database.start_run("system")
+def tool_check(database, revision):
+    """The tool check, recorded the way the system worker records it, which also settles the revision."""
+    _, system_token = database.start_run("system")
     with database.connect("system") as conn:
         result = runner.run(conn, system_token, revision)
     with database.connect("admin") as conn:
-        outcome = conn.execute("SELECT psst.settle(%s, NULL, %s) AS r", (system, revision)).fetchone()["r"]
         state = conn.execute("SELECT i.state FROM psst.items i JOIN psst.revisions r ON r.item_id = i.id "
                              "WHERE r.id = %s", (revision,)).fetchone()["state"]
-    return result, outcome, state
+    return result, state
 
 
 def test_a_sound_story_passes_the_tool_check_and_waits_for_claim_checks(database, service):
-    result, outcome, state = tool_check_and_settle(database, submit(database, service))
+    result, state = tool_check(database, submit(database, service))
     assert result.ok, result.report.refusals
-    assert outcome == {"outcome": "wait"} and state == "checking"
+    assert state == "checking"
 
 
 def test_a_wrong_year_is_sent_back_by_tools_alone(database, service):
     revision = submit(database, service, story_changes={
         "short": "The library on Mill Lane was built in 1872 to pump the town's water."})
-    result, outcome, state = tool_check_and_settle(database, revision)
-    assert outcome["outcome"] == "revise" and state == "draft"
+    result, state = tool_check(database, revision)
+    assert state == "draft"
     assert any("'1872' isn't among the claims' values" in r for r in result.report.refusals)
 
 
 def test_a_passage_the_source_never_said_is_sent_back_by_tools_alone(database, service):
     revision = submit(database, service, claim_changes={1: {"evidence": [
         {"snapshot": None, "quote": "until 1952, when it was turned into a lending library"}]}})
-    result, outcome, state = tool_check_and_settle(database, revision)
-    assert outcome["outcome"] == "revise" and state == "draft"
+    result, state = tool_check(database, revision)
+    assert state == "draft"
     assert any("the quote isn't in snapshot" in r for r in result.report.refusals)

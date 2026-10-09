@@ -25,8 +25,9 @@ install -d -o psst-platform -g psst-platform work
 PSST_CONFIG=$base/env/admin.env .venv/bin/psst db migrate
 ln -sfn $base/releases/$release $base/app.next && mv -T $base/app.next $base/app
 systemctl enable -q --now psst-platform-fetch psst-platform-system psst-platform-console psst-platform-intake \
-  psst-platform-publish.timer psst-platform-backup.timer psst-platform-restore-test.timer
+  psst-platform-publish.timer psst-platform-backup.timer psst-platform-restore-test.timer psst-platform-site.timer
 systemctl restart psst-platform-fetch psst-platform-system psst-platform-console psst-platform-intake
+sh server/build-site.sh --force
 ls -1dt $base/releases/* | tail -n +4 | xargs -r rm -rf
 echo "deployed $release"
 REMOTE

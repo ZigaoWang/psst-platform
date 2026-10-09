@@ -14,7 +14,7 @@ Everything lives under `/www/wwwroot/psst-platform`, beside the previous system 
 | `site/` | the website's static pages |
 | `backup/` | nightly dumps and the clone of the private backup repository |
 
-Services (systemd, user `psst-platform`): `psst-platform-fetch` (the fetch service on 127.0.0.1:8471), `psst-platform-system` (the system worker), `psst-platform-console` (the console on 127.0.0.1:4317, at `/admin`), `psst-platform-intake` (reader reports and demand on 127.0.0.1:8788, at `/api/v1/`), and the timers `psst-platform-publish` (publish and rollback requests from the console, every minute), `psst-platform-backup` (nightly), and `psst-platform-restore-test` (weekly). nginx serves the site from `/etc/nginx/conf.d/psst-platform.conf`.
+Services (systemd, user `psst-platform`): `psst-platform-fetch` (the fetch service on 127.0.0.1:8471), `psst-platform-system` (the system worker), `psst-platform-console` (the console on 127.0.0.1:4317, at `/admin`), `psst-platform-intake` (reader reports and demand on 127.0.0.1:8788, at `/api/v1/`), and the timers `psst-platform-publish` (publish and rollback requests from the console, every minute), `psst-platform-backup` (nightly), and `psst-platform-restore-test` (weekly), and `psst-platform-site` (rebuilds the website when production holds a new content version, every five minutes). nginx serves the site from `/etc/nginx/conf.d/psst-platform.conf`.
 
 ## Deploying
 

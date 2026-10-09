@@ -1,0 +1,6 @@
+[Unit]
+Description=Psst platform: rebuild the website when new content is published
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /www/wwwroot/psst-platform/app/server/build-site.sh

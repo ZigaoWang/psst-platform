@@ -4,19 +4,17 @@ How content work is done through the task queue: who does what, the steps every 
 
 ## Roles
 
-Each task type is routed to one model (`routing.<type>` in the console's settings). A run only receives the task types routed to its model.
+Each task type is routed to one model (`routing.<type>` in the console's settings). A run takes every type routed to its model unless `--type` narrows it.
 
 | Role | Task types | Model | Tasks per run |
 |---|---|---|---|
-| Researcher | `research_cell` | Haiku 5.5 | 3 |
-| Story writer | `write_story` | Sonnet 5.5 | 4 |
-| Guide writer | `write_guide` | Haiku 5.5 | 6 |
-| Trail writer | `write_trail` | Sonnet 5.5 | 2 |
-| Checker | `check_item`, `check_claims_a`, `check_claims_b`, `check_photo` | Haiku 5.5 | 12 |
-| Reviser | `revise`, `escalate` | Sonnet 5.5 | 8 |
+| Researcher | `research_cell` | Sonnet 5.5 | 1 cell |
+| Reviewer | `review` | Sonnet 5.5 | 2 |
+| Reviser | `revise` | Sonnet 5.5 | 6 |
 | Auditor | `audit` | Sonnet 5.5 | 10 |
+| Trail writer | `write_trail` | Sonnet 5.5 | 2 |
 | Translator | `translate` | Sonnet 5.5 | 6 |
-| Translation checker | `check_translation` | Haiku 5.5 | 12 |
+| Translation and photo checker | `check_translation`, `check_photo` | Haiku 5.5 | 12 |
 | Photo finder | `find_photos` | Haiku 5.5 | 10 |
 
 ## Every run
@@ -24,9 +22,9 @@ Each task type is routed to one model (`routing.<type>` in the console's setting
 Commands run from the repository root, with the worker settings in `~/.config/psst-platform/env`.
 
 1. Start the run once: `uv run psst run start --model <model id> --notes "<city> <role>"`. It prints a token; put `PSST_RUN_TOKEN=<token>` in front of every later command, since shell state does not carry over. The token is yours alone: one run per worker, never a token another run printed, never in a shared file. If you save it, name the file after your own run id (`work/<run id>.token`) and delete it at the end.
-2. Take a task: `uv run psst task next --type <type> [--type <type>] --city <city>`. It writes the task file to `work/tasks/` and prints its path, or says nothing is waiting.
+2. Take a task: `uv run psst task next --city <city>` (add `--type <type>` to take only that type). It writes the task file to `work/tasks/` and prints its path, or says nothing is waiting.
 3. Read the task file. `prompt` is the instructions, `data` everything the task needs, `result_schema` the shape of the answer.
-4. Write the result to `work/results/<task id>.json` and submit it: `uv run psst task submit <task file> <result file>`. It checks the result first and lists anything to fix; fix it and submit again. The reply's `next` says what happens to the item: `wait` (other checks are still to come), `accept`, `revise`, or `escalate`; none of them needs anything more from this run. If it says the task is no longer yours, another check has already moved the item on: go to the next task.
+4. Write the result to `work/results/<task id>.json` and submit it: `uv run psst task submit <task file> <result file>`. It checks the result first and lists anything to fix; fix it and submit again. The reply says what happens next (a tool check, a review, acceptance, a revision); none of it needs anything more from this run. If it says the task is no longer yours, the item has already moved on: go to the next task.
 5. If the task can't be done properly, give it back with the reason: `uv run psst task return <task file> --problem "<why>"`. It goes to a different run; after three returns it waits for an editor.
 6. Stop at the run's task count or when nothing is waiting, then end the run: `uv run psst run end --notes "<one line>"`. Ending a run gives back any task it still holds.
 
@@ -39,23 +37,20 @@ Rules for every run:
 
 ## Role notes
 
-**Researcher.** Go through every lead, famous ones included, and look for an angle beyond the first paragraph of the place's encyclopedia article. List a record (a listing, a survey, an old newspaper, an official history) among an angle's sources whenever one exists. At least half the places added are ones a visitor would never look up.
+**Researcher.** Follow the task's prompt: one cell end to end, from leads to every story and guide, in one voice, with the reference stories as the bar. Primary sources first; drop what isn't surprising and say why. A dense cell is a long session: keep going until the leads are done or left `later` with a reason.
 
-**Story writer.** Read content.md once. Find the records with a web search: heritage list entries, the Survey of London, the operator's own history, old newspapers, local history societies. In a `fact` story every claim needs a primary or scholarly passage, or two independent sources; otherwise it is a `legend`. Before submitting, read every sentence against the claims and cut any detail no claim states. If the angle doesn't hold up, or its surprise is already in the encyclopedia's opening and no better one has a record behind it, give the task back.
+**Reviewer.** Read every item with its passages beside it. Approve what is true and surprising, edit what you can fix yourself, reject the rest with one specific note and whether a revision could fix it. Reject what isn't surprising even when every fact is right.
 
-**Guide writer.** Fetch the Wikidata item (`data.wikidata.url`) and the official listing or the operator's page. For a Historic England listing use `https://historicengland.org.uk/listing/the-list/list-entry/<number>`. The identifier's year and maker belong to the structure standing now, not an earlier one or a reopening; leave out a Wikidata value the other sources contradict, and when Wikidata's year differs from the article's, use the one a source states for the structure standing now or give no year. Say what a thing is, not what it was planned or meant to be, unless a claim says so in those words. Every word of detail in the identifier and About is stated by a claim.
+**Reviser.** This is the item's only revision. Fix exactly what the review or audit named; if the story can't be made worth telling, give the task back.
 
-**Checker.** Judge only from the task file. Look for the mismatch: a different year, event, or thing, a part described as the whole, a story told as fact. Each note names the detail compared.
-
-**Reviser.** For an escalation, decide from the full snapshots and cite the words that settled it. For a revision, fix exactly what the problems name, then read the whole text once more against the claims so it doesn't come back a second time.
+**Auditor.** Recheck a sampled item from the full snapshots. One error fails the batch, so be exact.
 
 ## Keeping the queue moving
 
-An operator watches the queue (`uv run psst task queue --city <city>`, `/admin/tasks`, or each city page) and starts runs where work is waiting:
+An operator watches the queue (`uv run psst task queue --city <city>`, `/admin/tasks`, or each city page) and starts runs where work is waiting. The queue command lists the types no open run can take.
 
-- Checks first: they unblock everything behind them. About one checker per 12 waiting checks.
-- Revisions and escalations next, then writing, then research.
+- Reviews and audits first: they unblock publishing. Then revisions, then research.
 - When fewer than about ten research cells are queued for a city, queue more from its console page (most wanted first).
-- Audits are planned by the system worker; start auditor runs when audit tasks appear.
-- Publish from the console when the publish page shows content ready and no audit batch is failing. Publishing writes the platform's own production channel and website and leaves the app alone; pointing the app at the platform for the first time is a separate step that needs explicit approval.
-- Read each run's closing summary. A pattern of the same problem across runs (a check that fails for a reason the standard doesn't intend, a source that keeps refusing) is a fault in a prompt or a rule, to be fixed there rather than worked around in each task.
+- Record each finished run's tokens: `uv run psst run tokens <run id> <tokens>`. Cost per published place is measured from them.
+- Publish from the console when the publish page shows content ready. Publishing writes the platform's own production channel and website and leaves the app alone; pointing the app at the platform for the first time is a separate step that needs explicit approval.
+- Read each run's closing summary. A pattern of the same problem across runs is a fault in a prompt or a rule, to be fixed there rather than worked around in each task.

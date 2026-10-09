@@ -181,3 +181,13 @@ def test_a_rule_change_rechecks_what_was_checked_under_the_old_rulebook(database
         assert rechecks.recheck(conn, system.token) == {"rechecked": 0, "sent_back": 1}
     assert item_state(database, revision) == "checking"
     assert Worker(database, kind="system").lease("tool_check") is not None
+
+
+def test_a_task_given_back_goes_to_another_run(database, city):
+    queue_story(database, city)
+    first = Worker(database, SONNET)
+    task = first.lease("write_story")
+    with database.connect("worker") as conn:
+        conn.execute("SELECT psst.return_task(%s, %s, 'the angle does not hold up')", (first.token, task["id"]))
+    assert first.lease("write_story") is None
+    assert Worker(database, SONNET).lease("write_story")["id"] == task["id"]

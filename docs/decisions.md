@@ -104,3 +104,8 @@ Alternatives: publishing under a system run (the publisher login would need the 
 
 Research finds places and angles with sources to start from; it doesn't write anything readers see. Every angle is then written by Sonnet 5.5 with quoted evidence, checked twice, checked as a whole, and audited, so a weak angle costs a writing task, not accuracy. The routing setting was changed in the console with this reason, and the measured rates will show whether it holds.
 Alternatives: Sonnet 5.5 for research (several times the cost for work the later steps filter anyway).
+
+## 20. Correcting a place's Wikidata link is a system task
+
+An editor names the right item in the console; the system worker reads it and takes the coordinate and other-language names from it the same way a new place is resolved, keeps the display name, and sends the guide back to draft with a revision task, because the guide's key facts came from the wrong item. Stories stay as they are: their claims rest on their own sources.
+Alternatives: editing the link in place from the console (the pin and names would still come from the wrong item); retiring the place and creating a new one (loses its id and its checked stories).

@@ -26,7 +26,7 @@ Where the build stands. Updated before every milestone and whenever the plan cha
 
 ## Open issues
 
-- Research angles from Haiku are often already in the encyclopedia's opening or rest on one community source; writers give those back. Measure the share and tighten the research prompt if it stays high.
+- Research angles: in the first London waves writers gave back or replaced roughly half, mostly because the surprise was already in the encyclopedia's first paragraph. The research prompt now holds angles to that test and asks for a record among the sources; measure the share on the next cells.
 
 ## How to resume
 

@@ -302,9 +302,9 @@ class _Shapes:
         year = YEAR.search(identifier)
         if year and dated and not any(year.group(1) in value for value in dated):
             report.refuse("identifier", f"gives {year.group(1)}, but the key facts date it {', '.join(dated)}")
-        properties = [kf["property"] for kf in body["key_facts"]]
-        if len(properties) != len(set(properties)):
-            report.refuse("key_facts", "lists a property twice")
+        pairs = [(kf["property"], kf["value"]) for kf in body["key_facts"]]
+        if len(pairs) != len(set(pairs)):
+            report.refuse("key_facts", "lists the same value twice")
 
     @staticmethod
     def photo(report: Report, body: dict[str, Any], spec: dict[str, Any], context: Context,

@@ -186,6 +186,20 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
             entry["translations"] = translations[story["item_id"]]
         return entry
 
+    def key_fact_entries(facts: list[dict[str, Any]], kind: str) -> list[dict[str, Any]]:
+        """One line per property, in display order; several values for one property (two materials) share it."""
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for fact in facts:
+            grouped.setdefault(fact["property"], []).append(fact)
+        entries = []
+        for prop, values in list(grouped.items())[:guide_spec["max_shown"]]:
+            label = guide_spec["built_label"].get(kind, labels[prop]) if prop == "P571" else labels[prop]
+            entry: dict[str, Any] = {"property": prop, "label": label, "value": ", ".join(v["value"] for v in values)}
+            if len(values) > 1:
+                entry["values"] = [{"value": v["value"], "id": v.get("value_id")} for v in values]
+            entries.append(entry)
+        return entries
+
     def guide_entry(guide: dict[str, Any], wikidata_id: str | None, kind: str) -> dict[str, Any]:
         body, (sources, claims) = guide["body"], evidence.get(guide["revision_id"], ([], []))
         facts = sorted((kf for kf in body["key_facts"] if kf["property"] in order),
@@ -194,10 +208,7 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
             "id": guide["item_id"], "identifier": body["identifier"], "about": body["about"],
             "wikidataId": wikidata_id, "lastVerified": _date(guide["verified_on"]), "sources": sources,
             "claims": claims,
-            "keyFacts": [{"property": kf["property"],
-                          "label": guide_spec["built_label"].get(kind, labels[kf["property"]])
-                          if kf["property"] == "P571" else labels[kf["property"]],
-                          "value": kf["value"]} for kf in facts[:guide_spec["max_shown"]]],
+            "keyFacts": key_fact_entries(facts, kind),
         }
         if translations.get(guide["item_id"]):
             entry["translations"] = translations[guide["item_id"]]

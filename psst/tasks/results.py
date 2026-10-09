@@ -121,19 +121,10 @@ def research() -> dict[str, Any]:
 
 
 def review() -> dict[str, Any]:
-    """One decision per item: approve, edit (with the corrected body and claims), or reject (saying whether one
-    revision could fix it)."""
-    decision = {
-        "type": "object", "additionalProperties": False, "required": ["revision", "decision", "note"],
-        "properties": {"revision": {"type": "string", "pattern": "^rv_"},
-                       "decision": {"enum": ["approve", "edit", "reject"]},
-                       "note": NOTE, "revisable": {"type": "boolean"},
-                       "body": {"type": "object"}, "claims": CLAIMS},
-        "allOf": [{"if": {"properties": {"decision": {"const": "edit"}}},
-                   "then": {"required": ["body", "claims"]}},
-                  {"if": {"properties": {"decision": {"const": "reject"}}},
-                   "then": {"required": ["revisable"]}}],
-    }
+    """One mark per item, good, weak, or bad, with the reason."""
+    decision = {"type": "object", "additionalProperties": False, "required": ["revision", "mark", "reason"],
+                "properties": {"revision": {"type": "string", "pattern": "^rv_"},
+                               "mark": {"enum": ["good", "weak", "bad"]}, "reason": NOTE}}
     return {"type": "object", "additionalProperties": False, "required": ["decisions", "notes"],
             "properties": {"decisions": {"type": "array", "items": decision}, "notes": NOTE}}
 

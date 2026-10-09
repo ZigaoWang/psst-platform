@@ -185,19 +185,13 @@ def problems(document: dict[str, Any], result: dict[str, Any]) -> list[str]:
 
 
 def review_problems(data: dict[str, Any], result: dict[str, Any]) -> list[str]:
-    """Every item decided once, and every edit passing the tool checks."""
+    """Every item marked exactly once."""
     items = {i["revision"]: i for i in data["items"]}
     decided = [d["revision"] for d in result["decisions"]]
     found = [f"decide {r} ({items[r]['place']['name'] if items[r]['place'] else r})"
              for r in items if r not in decided]
     found += [f"{r} isn't in this review" for r in decided if r not in items]
     found += [f"{r} is decided twice" for r in set(decided) if decided.count(r) > 1]
-    with db.connect("worker") as conn:
-        for decision in result["decisions"]:
-            item = items.get(decision["revision"])
-            if decision["decision"] == "edit" and item:
-                check = runner.preflight(conn, item["type"], (item["place"] or {}).get("id"), decision)
-                found += [f"edit of {decision['revision']}: {r}" for r in check.report.refusals]
     return found
 
 

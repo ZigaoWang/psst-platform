@@ -94,7 +94,7 @@ def test_a_rejection_says_whether_a_revision_could_fix_it(database, story):
         check(conn, story["system"], story, "tool", "pass")
         conn.execute("SELECT psst.record_check(%s, NULL, %s, NULL, 'review', 'fail', %s, %s)",
                      (story["a"], story["revision"], "the chimney is the 1902 rebuild",
-                      json.dumps({"decision": "reject", "revisable": True})))
+                      json.dumps({"mark": "weak", "revisable": True})))
         assert evaluate(conn, story) == {"outcome": "reject", "problems": ["the chimney is the 1902 rebuild"],
                                          "revisable": True}
 

@@ -119,7 +119,7 @@ def tool_checks(database, system=None):
 
 
 def approve(revision):
-    return {"decision": "approve", "note": "the records say this, and it is worth telling"}
+    return {"mark": "good", "reason": "the records say this, and it is worth telling"}
 
 
 def review(database, decide=approve, reviewer=None):

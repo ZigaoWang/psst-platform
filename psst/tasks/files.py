@@ -177,6 +177,7 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
     elif kind == "review":
         data = {"items": [review_item(conn, lookups, revision_id)
                           for revision_id in task["input"]["revisions"] if being_checked(conn, revision_id)],
+                "marked_examples": golden_examples(conn),
                 "reference_stories": style_references(conn, task["city_id"]),
                 "rules": {"story": rulebook.type("story"), "guide": rulebook.type("guide")}}
     elif kind == "find_photos":
@@ -245,6 +246,13 @@ def review_item(conn: Connection, lookups: Lookups, revision_id: str) -> dict[st
             "claims": claims_with_passages(conn, revision_id),
             "other_stories": other_items(conn, item["place_id"], item["id"]),
             "encyclopedia_lead": lookups.lead(place) if lookups.lead and place else None}
+
+
+def golden_examples(conn: Connection) -> list[dict[str, Any]]:
+    """The editor's marked stories with the mark and the reason: what good, weak, and bad mean here."""
+    return [dict(r) for r in conn.execute("""
+        SELECT place, headline, short, long, sources, mark, reason FROM psst.golden_stories
+        ORDER BY created_at, id""")]
 
 
 def style_references(conn: Connection, city_id: int | None) -> list[dict[str, Any]]:

@@ -63,53 +63,31 @@ def test_a_review_decides_every_item_of_the_submission(database, city):
     task = reviewer.lease("review")
     assert len(task["input"]["revisions"]) == 3  # two stories and the guide, reviewed together
     with pytest.raises(psycopg.errors.InvalidParameterValue, match="decide every item"):
-        reviewer.submit(task, {"decisions": [{"revision": task["input"]["revisions"][0], "decision": "approve",
-                                              "note": "checked"}], "notes": "partial", "rulebook": sample.RULEBOOK})
+        reviewer.submit(task, {"decisions": [{"revision": task["input"]["revisions"][0], "mark": "good",
+                                              "reason": "checked"}], "notes": "partial", "rulebook": sample.RULEBOOK})
 
 
-def test_an_edit_is_the_reviewers_revision_and_needs_no_second_review(database, city):
+def test_a_weak_story_gets_one_revision_and_a_second_weak_mark_retires_it(database, city):
     story, _ = research(database, city)
     tool_checks(database)
-    edited = story_result(city)
-    edited["body"]["headline"] = "The library that used to pump water"
-
-    def decide(revision):
-        if revision == story:
-            return {"decision": "edit", "note": "a plainer headline", "body": edited["body"],
-                    "claims": edited["claims"]}
-        return {"decision": "approve", "note": "the record says this"}
-
-    review(database, decide)
-    with database.connect("admin") as conn:
-        current = conn.execute("SELECT i.current_revision, i.state FROM psst.items i JOIN psst.revisions r "
-                               "ON r.item_id = i.id WHERE r.id = %s", (story,)).fetchone()
-    assert current["current_revision"] != story and current["state"] == "checking"
-    tool_checks(database)
-    assert item_state(database, current["current_revision"]) == "accepted"
-    assert Worker(database, SONNET).lease("review") is None
-
-
-def test_a_rejection_gets_one_revision_and_a_second_rejection_retires_it(database, city):
-    story, _ = research(database, city)
-    tool_checks(database)
-    review(database, lambda r: {"decision": "reject", "note": "the telling stitches quotes together",
-                                "revisable": True} if r == story else {"decision": "approve", "note": "fine"})
+    review(database, lambda r: {"mark": "weak", "reason": "the telling stitches quotes together"}
+           if r == story else {"mark": "good", "reason": "fine"})
     assert item_state(database, story) == "draft"
     reviser = Worker(database, SONNET)
     task = reviser.lease("revise")
     assert task["input"]["problems"] == ["the telling stitches quotes together"]
     second = reviser.submit(task, story_result(city))["revision"]
     tool_checks(database)
-    review(database, lambda r: {"decision": "reject", "note": "still not surprising", "revisable": True})
+    review(database, lambda r: {"mark": "weak", "reason": "still not surprising"})
     assert item_state(database, second) == "retired"
     assert Worker(database, SONNET).lease("revise") is None
 
 
-def test_a_rejection_no_revision_could_fix_retires_the_item(database, city):
+def test_a_bad_story_is_dropped(database, city):
     story, guide = research(database, city)
     tool_checks(database)
-    review(database, lambda r: {"decision": "reject", "note": "a statistic, not a story", "revisable": False}
-           if r == story else {"decision": "approve", "note": "fine"})
+    review(database, lambda r: {"mark": "bad", "reason": "a statistic, not a story"}
+           if r == story else {"mark": "good", "reason": "fine"})
     assert item_state(database, story) == "retired"
     assert item_state(database, guide) == "accepted"
 

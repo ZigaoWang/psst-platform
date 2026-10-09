@@ -9,6 +9,8 @@ import h3
 import psycopg
 from psycopg.types.json import Jsonb
 
+from psst import rules
+
 from . import cells, coords, leads
 
 Connection = psycopg.Connection[dict[str, Any]]
@@ -41,20 +43,23 @@ def _distance_km(a: tuple[float, float], b: tuple[float, float]) -> float:
     return 12_742 * math.asin(math.sqrt(h))
 
 
-def order(conn: Connection, city: dict[str, Any]) -> list[str]:
-    """Open cells, most wanted first: where app users looked at empty maps, then the fewest passes, then cells
-    nearest the city's middle, so coverage grows outward from the densest parts."""
+def priorities(conn: Connection, city: dict[str, Any]) -> list[tuple[str, int]]:
+    """Open cells with their priority, highest first. The score is absolute, so cells queued at different times
+    compare: nearer the city's middle scores higher, each earlier pass costs as much as 20 km, and an area app users
+    looked at while it was empty gains 1 km per view once its views pass the rulebook's minimum."""
+    minimum = int(rules.load().places["demand_min_views"])
     rows = conn.execute("SELECT cell, passes FROM psst.research_cells WHERE city_id = %s AND state = 'open'",
                         (city["id"],)).fetchall()
     demand = {r["cell"]: int(r["n"]) for r in conn.execute(
         "SELECT cell, sum(count) AS n FROM psst.demand WHERE day > current_date - 90 GROUP BY cell")}
     middle = (city["lat"], city["lon"])
-
-    def priority(row: dict[str, Any]) -> tuple[float, ...]:
-        parent = str(h3.cell_to_parent(row["cell"], cells.DEMAND))
-        return (-demand.get(parent, 0), row["passes"], _distance_km(h3.cell_to_latlng(row["cell"]), middle))
-
-    return [r["cell"] for r in sorted(rows, key=priority)]
+    scored = []
+    for row in rows:
+        views = demand.get(str(h3.cell_to_parent(row["cell"], cells.DEMAND)), 0)
+        km = _distance_km(h3.cell_to_latlng(row["cell"]), middle) + 20 * row["passes"]
+        km -= views if views >= minimum else 0
+        scored.append((row["cell"], max(0, 100_000 - round(km * 100))))
+    return sorted(scored, key=lambda s: -s[1])
 
 
 def queue(conn: Connection, token: str, slug: str, count: int) -> dict[str, Any]:
@@ -71,15 +76,15 @@ def queue(conn: Connection, token: str, slug: str, count: int) -> dict[str, Any]
         middle = coords.wikidata([city["wikidata_id"]]).get(city["wikidata_id"]) or []
         if len(middle) == 1:
             city = {**city, "lat": middle[0][0], "lon": middle[0][1]}
-    chosen = order(conn, city)[:count]
+    chosen = priorities(conn, city)[:count]
     problems: list[str] = []
     entries = []
-    for rank, cell in enumerate(chosen):
+    for cell, priority in chosen:
         found, issues = leads.sweep(conn, cell, city["country_code"])
         problems += [f"{cell}: {issue}" for issue in issues]
         conn.execute("SELECT psst.record_leads(%s, %s, %s)", (token, cell, Jsonb(found)))
         conn.commit()
-        entries.append({"cell": cell, "priority": len(chosen) - rank})
+        entries.append({"cell": cell, "priority": priority})
     row = conn.execute("SELECT psst.queue_research(%s, %s) AS n", (token, Jsonb(entries))).fetchone()
     conn.commit()
     return {"queued": int(row["n"]) if row else 0, "problems": problems}

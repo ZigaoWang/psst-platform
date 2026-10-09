@@ -80,3 +80,6 @@ local_wikipedia:
   CN: zh
   HK: zh
   MY: ms
+# Research order: cells nearest the city's middle first, every cell before any gets a second pass, and areas app
+# users looked at while empty pulled forward once they have this many views in 90 days (fewer is noise).
+demand_min_views: 10

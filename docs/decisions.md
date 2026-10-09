@@ -109,3 +109,8 @@ Alternatives: Sonnet 5.5 for research (several times the cost for work the later
 
 An editor names the right item in the console; the system worker reads it and takes the coordinate and other-language names from it the same way a new place is resolved, keeps the display name, and sends the guide back to draft with a revision task, because the guide's key facts came from the wrong item. Stories stay as they are: their claims rest on their own sources.
 Alternatives: editing the link in place from the console (the pin and names would still come from the wrong item); retiring the place and creating a new one (loses its id and its checked stories).
+
+## 21. The whole-item check runs before the claim checks
+
+In the first London waves about half of all items failed the whole-item check, and their two claim checks, running at the same time, were cancelled or thrown away. The item check now runs first and the claim checks follow only when it passes: one check instead of three for an item that goes back, at the cost of one more step before acceptance.
+Alternatives: all three in parallel (faster to accept, a quarter or more of claim checks wasted); claim checks first (two checks spent before the cheaper, more often failing one).

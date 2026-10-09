@@ -1,0 +1,84 @@
+"""Task files give each worker what its task needs and nothing that would bias it, results are checked before
+they're submitted, and the system worker runs tool checks from the queue."""
+
+from __future__ import annotations
+
+import json
+
+import psycopg
+
+from psst.cli import tasks as task_cli
+from psst.services.system_worker import SystemWorker
+from psst.tasks import files, prompts
+from tests.flow import HAIKU, SONNET, Worker, queue_story, story_result
+
+
+def leased(database, worker, *types):
+    task = worker.lease(*types)
+    with database.connect("worker") as conn:
+        return files.build(conn, task)
+
+
+def written(database, city):
+    queue_story(database, city)
+    writer = Worker(database, SONNET)
+    revision = writer.submit(writer.lease("write_story"), story_result(city))["revision"]
+    system = Worker(database, kind="system")
+    worker = SystemWorker(lambda: psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row),
+                          system.token)
+    assert worker.step() and not worker.step()
+    return revision
+
+
+def test_claim_checkers_see_claims_and_passages_but_never_the_prose(database, city):
+    written(database, city)
+    document = leased(database, Worker(database, HAIKU), "check_claims_a")
+    text = json.dumps(document)
+    assert "Ada Thorne designed the pump house" not in text  # the story's own words
+    first = document["data"]["claims"][0]
+    assert first["passages"][0]["quote"] == "built in 1871 by the engineer Ada Thorne"
+    assert first["passages"][0]["before"].endswith("was ")
+    assert document["prompt_version"] == prompts.load("check_claims_a").version
+
+
+def test_the_item_check_sees_the_prose_and_the_questions(database, city):
+    written(database, city)
+    document = leased(database, Worker(database, HAIKU), "check_item")
+    assert document["data"]["body"]["headline"]
+    assert document["data"]["questions"][0].startswith("List every name")
+    assert "passages" not in document["data"]["claims"][0]
+
+
+def test_the_system_worker_runs_queued_tool_checks(database, city):
+    revision = written(database, city)
+    with database.connect("admin") as conn:
+        verdict = conn.execute("SELECT verdict FROM psst.checks WHERE revision_id = %s AND kind = 'tool'",
+                               (revision,)).fetchone()["verdict"]
+        queued = {r["type"] for r in conn.execute("SELECT type FROM psst.tasks WHERE state = 'queued'")}
+    assert verdict == "pass"
+    assert queued == {"check_claims_a", "check_claims_b", "check_item"}
+
+
+def test_a_result_is_refused_before_submitting_when_it_breaks_the_rules(database, city, monkeypatch):
+    monkeypatch.setenv("PSST_DATABASE_URL_WORKER", database.url("worker"))
+    queue_story(database, city)
+    document = leased(database, Worker(database, SONNET), "write_story")
+    wrong = story_result(city, year="1872")
+    found = task_cli.problems(document, {k: wrong[k] for k in ("body", "claims", "reason")})
+    assert any("'1872' isn't among the claims' values" in p for p in found)
+    assert task_cli.problems(document, {"body": {}, "claims": [], "reason": "x"})
+
+
+def test_escalations_must_decide(database, city, monkeypatch):
+    monkeypatch.setenv("PSST_DATABASE_URL_WORKER", database.url("worker"))
+    document = {"type": "escalate", "data": {}, "result_schema": {"type": "object"}}
+    found = task_cli.problems(document, {"verdicts": [{"claim": "cl_x", "verdict": "unclear", "note": "hard"}]})
+    assert found == ["claim cl_x: decide; 'unclear' isn't an option here"]
+
+
+def test_every_prompt_loads_with_the_shared_instructions():
+    for path in sorted(prompts.PROMPTS.glob("[a-z]*.md")):
+        prompt = prompts.load(path.stem)
+        assert "uv run psst task submit" in prompt.text
+        assert "—" not in prompt.text and "–" not in prompt.text
+

@@ -118,3 +118,22 @@ def test_the_queue_command_counts_a_citys_tasks(database, city, monkeypatch, cap
     task_cli.show_queue(argparse.Namespace(city="testville"))
     shown = json.loads(capsys.readouterr().out)
     assert shown["tasks"]["write_story"] == {"queued": 1, "leased": 0, "waiting_for_editor": 0}
+
+
+def test_a_stopped_system_worker_gives_back_its_task(database, city):
+    import pytest
+    queue_story(database, city)
+    writer = Worker(database, SONNET)
+    writer.submit(writer.lease("write_story"), story_result(city))
+    system = SystemWorker(lambda: psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row),
+                          Worker(database, kind="system").token)
+
+    def stopped(conn, task):
+        raise SystemExit(0)  # what SIGTERM raises in the middle of a task
+
+    system.handlers["tool_check"] = stopped
+    with pytest.raises(SystemExit):
+        system.work()
+    with database.connect("admin") as conn:
+        task = conn.execute("SELECT state FROM psst.tasks WHERE type = 'tool_check'").fetchone()
+    assert task["state"] == "queued"

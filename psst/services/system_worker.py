@@ -6,6 +6,7 @@ It runs on the server as a service under one system run, leasing system tasks th
 from __future__ import annotations
 
 import logging
+import signal
 import time
 from collections.abc import Callable
 from typing import Any
@@ -80,11 +81,23 @@ class SystemWorker:
         return int(row["n"]) if row else 0
 
     def work(self, once: bool = False, idle_seconds: float = 5.0) -> None:
-        while True:
-            busy = self.step()
-            if time.monotonic() - self._audits_planned > AUDIT_PLAN_SECONDS:
-                self.plan_audits()
-            if once and not busy:
-                return
-            if not busy:
-                time.sleep(idle_seconds)
+        """Works until stopped. A stop (SIGTERM from a deploy or restart) ends the run, which gives back the task in
+        hand at once instead of leaving it leased until the lease runs out."""
+        signal.signal(signal.SIGTERM, _stop)
+        try:
+            while True:
+                busy = self.step()
+                if time.monotonic() - self._audits_planned > AUDIT_PLAN_SECONDS:
+                    self.plan_audits()
+                if once and not busy:
+                    return
+                if not busy:
+                    time.sleep(idle_seconds)
+        finally:
+            with self.connect() as conn:
+                conn.execute("SELECT psst.end_run(%s, 'stopped')", (self.token,))
+                conn.commit()
+
+
+def _stop(signum: int, frame: object) -> None:
+    raise SystemExit(0)

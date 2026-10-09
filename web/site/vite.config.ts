@@ -11,7 +11,8 @@ export default defineConfig({
 			},
 			// Every page is prerendered from the published output; nothing runs on the server.
 			adapter: adapter({ strict: true }),
-			prerender: { handleMissingId: 'fail', handleHttpError: 'fail' },
+			// Each route lists every page it has; a route with none (no trails yet) builds nothing.
+			prerender: { handleMissingId: 'fail', handleHttpError: 'fail', handleUnseenRoutes: 'ignore' },
 			csp: {
 				mode: 'hash',
 				directives: {

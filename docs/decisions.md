@@ -32,10 +32,10 @@ Alternatives: requiring the instruction inside `long` (not checkable); waiting f
 Stories and guides are items with `it_` ids. The app decodes ids as plain strings, so it reads them without an update; the output schemas in `format/v2/` accept `it_` ids. The previous `fa_` and `gd_` ids belonged to content that is not carried over.
 Alternatives: minting `fa_` and `gd_` ids for new items (two id schemes for one kind of thing).
 
-## 7. Translations are revisions, published in Simplified Chinese for every city
+## 7. Translations are items, published in Simplified Chinese for every city
 
-"Served both ways" means a Chinese reader gets Chinese text, in every city, not only Shanghai. A translation is a revision of the same item with `language` and `translation_of`, carrying the same claims, checked by tools (numbers and names) and by a back translation compared claim by claim. It publishes only with the English revision it translates.
-Alternatives: a separate translations table (a second content workflow); on-device translation only (unchecked, and unavailable to the website).
+"Served both ways" means a Chinese reader gets Chinese text, in every city, not only Shanghai. A translation is an item of type `translation` linked to the item it translates, so the English and the Chinese each have their own state in the one lifecycle. Each translation revision names the English revision it was made from, carries no claims of its own, and is checked by tools (numbers and names) and by a back translation compared with the English claims. It publishes only with the English revision it translates.
+Alternatives: a translation as another revision of the same item (one state can't describe two languages at different stages); a separate translations table (a second content workflow); on-device translation only (unchecked, and unavailable to the website).
 
 ## 8. Audit batches pool accepted work by type and city
 

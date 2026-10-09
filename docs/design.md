@@ -104,9 +104,9 @@ Every piece of curated content is an **item** with an immutable chain of **revis
 
 | table | purpose |
 | --- | --- |
-| `item_types` | `story`, `guide`, `photo`, `trail` today; `audio` later. Whether the item belongs to one place, and its acceptance threshold. The revision body's schema and check plan live in the rulebook. |
-| `items` | `id`, `type`, `place_id` (null for trails), `city_id`, `state` (section 6), `current_revision`, `published_revision`, `position`, `created_by_run`. |
-| `revisions` | `id`, `item_id`, `number`, `language`, `translation_of` (the English revision a translation was made from), `body` (JSONB), `rulebook` (version it was checked against), `created_by_run`, `created_by_task`, `created_at`, `reason`. Never updated or deleted. |
+| `item_types` | `story`, `guide`, `photo`, `trail`, and `translation` today; `audio` later. Whether the item belongs to one place, and its acceptance threshold. The revision body's schema and check plan live in the rulebook. |
+| `items` | `id`, `type`, `place_id` (null for trails), `city_id`, `translates` and `language` (for translations), `state` (section 6), `current_revision`, `published_revision`, `position`, `checking_since`, `created_by_run`. |
+| `revisions` | `id`, `item_id`, `number`, `translation_of` (for a translation, the English revision it was made from), `body` (JSONB), `rulebook` (version it was checked against), `created_by_run`, `created_by_task`, `created_at`, `reason`. Never updated or deleted. |
 
 Revision bodies follow content.md section 4:
 
@@ -115,7 +115,7 @@ Revision bodies follow content.md section 4:
 - **photo:** `file`, `kind`, `year`, `alt`, `focus`, `pair`, and the credit fields copied from the source's metadata.
 - **trail:** `title`, `intro`, `stops` (place id and `note`, in order), `tags`.
 
-A translation is a revision of the same item in another language, with `translation_of` set. It carries the claims of the revision it translates and is checked against them (section 7.5). An edit creates a new revision; approving, publishing, retiring, and reverting move pointers and states and never change a revision.
+A translation is its own item of type `translation`, linked to the item it translates, so each language moves through the lifecycle on its own. Each of its revisions names the English revision it was made from and is checked against that revision's claims (section 7.5). An edit creates a new revision; approving, publishing, retiring, and reverting move pointers and states and never change a revision.
 
 ### 5.3 Claims and evidence
 

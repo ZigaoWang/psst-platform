@@ -51,7 +51,7 @@ Rules for every run:
 
 ## Keeping the queue moving
 
-An operator watches the queue (`/admin/tasks`, or the counts on each city page) and starts runs where work is waiting:
+An operator watches the queue (`uv run psst task queue --city <city>`, `/admin/tasks`, or each city page) and starts runs where work is waiting:
 
 - Checks first: they unblock everything behind them. About one checker per 12 waiting checks.
 - Revisions and escalations next, then writing, then research.

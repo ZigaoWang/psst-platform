@@ -4,13 +4,17 @@ Where the build stands. Updated before every milestone and whenever the plan cha
 
 ## Done
 
-- Content standard ([content.md](content.md)), design version 2 ([design.md](design.md)), [decisions.md](decisions.md).
-- M1 Foundation: schema (`db/migrations/0001` to `0005`), lifecycle functions, roles and grants, rulebook (`rules/`), `psst` command, throwaway test database, CI.
-- M2 Evidence: text normalization and quote matching (`psst/core/text.py`), source reading (`psst/evidence/`), the fetch service (`psst/services/fetch_service.py`, the only writer of snapshots), tool checks (`psst/checks/tools.py`) and their runner, `psst fetch` and `psst run`.
+- Content standard ([content.md](content.md)), design version 2 ([design.md](design.md)), [decisions.md](decisions.md), [operations.md](operations.md).
+- M1 Foundation: schema and lifecycle in Postgres, roles and grants, rulebook (`rules/`), `psst` command, throwaway test database, CI.
+- M2 Evidence: quote matching, source reading, the fetch service (the only writer of snapshots), tool checks.
+- M3 Tasks: queue with leases and independence rules, task files, prompts (`prompts/`), claim and item checks, escalation, audits, the system worker.
+- M4 Publishing: format 2 output, staging, acceptance over HTTPS, promotion, rollback, publication records.
+- M5 Console: SvelteKit console at `/admin` with sign-in, every section, editor actions, measured accuracy, coverage map.
+- M6 Server: deployed to `/www/wwwroot/psst-platform` (database `psst_platform`, services, nginx at `https://psst-platform.67-230-170-225.sslip.io`, nightly backups to the private `psst-platform-backup` repository). Reference data imported (boundaries, tags, demand, 2,713 previous places as the coverage checklist). Cities set up: London (406 cells), Shanghai (309), Hong Kong (376), Kuala Lumpur (83).
 
 ## Next
 
-M3 Tasks: task queue and leases, task types and their inputs and results, prompts, claim and item checks, escalation, audits.
+M7 Content, London first: queue research cells, run research, writing, and checking workers through the task system, audit, and publish to the platform's own production channel. The first publish that replaces the app's live content waits for approval.
 
 ## Open issues
 
@@ -18,5 +22,7 @@ None.
 
 ## How to resume
 
-1. Read docs/design.md, docs/content.md, docs/decisions.md, and this file.
-2. Start Docker; the tests start a throwaway PostGIS container (`uv run pytest`).
+1. Read docs/design.md, docs/content.md, docs/decisions.md, docs/operations.md, and this file.
+2. Tests: start Docker, then `uv run pytest`.
+3. Workers on this Mac use `~/.config/psst-platform/env` (SSH host and the worker password). System and publisher commands run on the server (operations.md).
+4. The console account's password is in `/www/wwwroot/psst-platform/env/console-account.txt` on the server (root only).

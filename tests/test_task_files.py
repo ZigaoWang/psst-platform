@@ -152,3 +152,22 @@ def test_a_long_page_keeps_every_quoted_passage():
     shown = files.excerpt(text, [(start, start + 40)], window=100)
     assert shown.startswith("Opening words.") and "built in 1871 by the engineer Ada Thorne" in shown
     assert "[...]" in shown and len(shown) < 500
+
+
+def test_research_carries_the_golden_bar_and_its_revisions_record_the_version(database, city):
+    with database.connect("admin") as conn:
+        conn.execute("INSERT INTO psst.guidance (name, version, body, note) VALUES "
+                     "('golden_bar', 'a1b2c3d4e5f6', 'An invented bar: lead with the surprise.', 'first')")
+    queue(database, city, "research_cell", "bar", task_input={"cell": sample.CELL})
+    writer = Worker(database, SONNET)
+    task = writer.lease("research_cell")
+    with database.connect("worker") as conn:
+        document = files.build(conn, task)
+    assert document["bar_version"] == "a1b2c3d4e5f6"
+    assert document["data"]["golden_bar"].startswith("An invented bar")
+    result = {"places": [{"existing": city["place"], "ordinary": True, "stories": [story_result(city)]}],
+              "leads": [], "notes": "one story", "rulebook": sample.RULEBOOK, "bar": document["bar_version"]}
+    with database.connect("worker") as conn:
+        conn.execute("SELECT psst.submit_research(%s, %s, %s, 'test')", (writer.token, task["id"], json.dumps(result)))
+    with database.connect("admin") as conn:
+        assert conn.execute("SELECT bar_version FROM psst.revisions").fetchone()["bar_version"] == "a1b2c3d4e5f6"

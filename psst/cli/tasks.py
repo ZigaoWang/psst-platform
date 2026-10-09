@@ -237,7 +237,7 @@ def submit_result(args: argparse.Namespace) -> int:
     function = {"research_cell": "submit_research", "find_photos": "submit_photos"}.get(document["type"],
                                                                                        "submit_task")
     if function != "submit_photos":
-        result = result | {"rulebook": document["rulebook"]}
+        result = result | {"rulebook": document["rulebook"], "bar": document.get("bar_version")}
     with db.connect("worker") as conn:
         outcome = conn.execute(f"SELECT psst.{function}(%s, %s, %s, %s) AS r",
                                (token(), document["task"], Jsonb(result), document["prompt_version"])).fetchone()

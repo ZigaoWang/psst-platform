@@ -207,12 +207,26 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
     else:
         data |= {"input": task["input"]}
 
+    bar = golden_bar(conn) if kind in BAR_TASKS else None
+    if bar:
+        data["golden_bar"] = bar["body"]
     prompt = prompts.load(kind)
     return {
         "task": task["id"], "type": kind, "revision": task["revision_id"], "leased_until": str(task["leased_until"]),
         "prompt": prompt.text, "prompt_version": prompt.version, "rulebook": rulebook.version,
+        "bar_version": bar["version"] if bar else None,
         "data": data, "result_schema": results.schema(kind, item_type),
     }
+
+
+BAR_TASKS = {"research_cell", "review", "revise", "write_trail"}
+
+
+def golden_bar(conn: Connection) -> dict[str, Any] | None:
+    """The current golden bar: worked examples of good and weak writing, kept in the database (decision 25)."""
+    row = conn.execute(
+        "SELECT version, body FROM psst.current_guidance('golden_bar') WHERE version IS NOT NULL").fetchone()
+    return dict(row) if row else None
 
 
 def being_checked(conn: Connection, revision_id: str) -> bool:

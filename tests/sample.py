@@ -35,6 +35,8 @@ def place(conn: psycopg.Connection[dict[str, Any]], run_id: str, wikidata: str =
                 %s, '87195da49ffffff', 'GB', %s, %s)
         RETURNING id""", (wikidata, wikidata, CITY_ID, run_id)).fetchone()
     assert row
+    conn.execute("INSERT INTO psst.place_names (place_id, role, lang, name, source) VALUES (%s, 'display', 'en', %s, "
+                 "'wikidata')", (row["id"], f"Old Pump House {wikidata}"))
     return str(row["id"])
 
 

@@ -9,9 +9,9 @@ import psycopg
 
 from psst.core.config import ConfigError
 
-from . import database, fetching, rulebook, runs, system, tasks
+from . import database, fetching, publishing, rulebook, runs, system, tasks
 
-GROUPS = [runs, tasks, fetching, system, database, rulebook]
+GROUPS = [runs, tasks, fetching, system, publishing, database, rulebook]
 
 
 def parser() -> argparse.ArgumentParser:

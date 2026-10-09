@@ -76,3 +76,26 @@ Alternatives: the local Homebrew Postgres (no PostGIS); a shared test database (
 
 Bilingual research and translation are the hardest part of the standard. Doing Shanghai second proves them before Hong Kong and Kuala Lumpur, which need the same.
 Alternatives: the design's proposed order (London, Hong Kong, Shanghai, Kuala Lumpur).
+
+## 16. Model judgment where code would guess
+
+Tool checks decide only what code decides exactly: whether a quote is in its snapshot, whether digits and years
+trace to claim values, lengths, wording rules, copied runs of words, and source kinds. Whether a word is a proper
+name, or a detail is stated by a claim, is language, so the whole-item check answers it as a structured list (any
+entry fails the revision), checked independently and escalated on disagreement.
+Alternatives: name detection with word lists (brittle, refuses good text and misses bad); a named-entity library
+(another model, with less context than the check has).
+
+## 17. A rollback doesn't change the database
+
+Rolling back points production at an earlier manifest and records it; items stay `published` in the database. A
+rollback is an emergency switch: the editor then fixes or retires what was wrong, and the next publish builds from
+the database again.
+Alternatives: reversing every transition since the earlier version (would also undo unrelated work published in the
+same version).
+
+## 18. The publisher has its own kind of run
+
+Publishing is recorded under `publisher` runs, started only by the publisher login, so publications are attributed
+and no other role can mark content published.
+Alternatives: publishing under a system run (the publisher login would need the system role's rights).

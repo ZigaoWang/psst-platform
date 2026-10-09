@@ -66,10 +66,24 @@ def story_result(city, year="1871"):
     return {"body": body, "claims": claims, "rulebook": sample.RULEBOOK, "reason": "first draft"}
 
 
-def queue_story(database, city, n=0):
+def guide_result(city):
+    body = {"identifier": "Former pumping station, 1871, by Ada Thorne",
+            "about": "A former pumping station on Mill Lane, designed by the engineer Ada Thorne and finished in 1871. "
+                     "It supplied the town's water until 1952, when it became a library.",
+            "key_facts": [{"property": "P571", "value": "1871", "claim": 1}]}
+    claims = story_result(city)["claims"][:2]
+    return {"body": body, "claims": claims, "rulebook": sample.RULEBOOK, "reason": "first draft"}
+
+
+def queue(database, city, task_type="write_story", n=0, place=None):
     with database.connect("admin") as conn:
-        return conn.execute("SELECT psst.enqueue(%s, 'write_story', %s, '{}', %s, %s, NULL, NULL) AS id",
-                            (city["admin"], f"write_story:test:{n}", sample.CITY_ID, city["place"])).fetchone()["id"]
+        return conn.execute("SELECT psst.enqueue(%s, %s, %s, '{}', %s, %s, NULL, NULL) AS id",
+                            (city["admin"], task_type, f"{task_type}:test:{n}", sample.CITY_ID,
+                             place or city["place"])).fetchone()["id"]
+
+
+def queue_story(database, city, n=0):
+    return queue(database, city, "write_story", n)
 
 
 def claim_ids(database, revision):
@@ -88,18 +102,33 @@ def verdicts(ids, verdict="supported"):
     return {"verdicts": [{"claim": c, "verdict": verdict, "note": "the passage says this"} for c in ids]}
 
 
-def write_and_check(database, city, n=0, writer=None, system=None):
-    """Write a story through the queue and take it through every check to acceptance."""
-    queue_story(database, city, n)
-    writer = writer or Worker(database, SONNET)
+def write_and_check(database, city, n=0, writer=None, system=None, kind="story", place=None):
+    """Write a story or guide through the queue and take it through every check to acceptance."""
+    queue(database, city, f"write_{kind}", n, place)
+    writer = writer or Worker(database, HAIKU if kind == "guide" else SONNET)
     system = system or Worker(database, kind="system")
-    revision = writer.submit(writer.lease("write_story"), story_result(city))["revision"]
+    result = story_result(city) if kind == "story" else guide_result(city)
+    revision = writer.submit(writer.lease(f"write_{kind}"), result)["revision"]
     assert system.tool_check().ok
     ids = claim_ids(database, revision)
-    for task_type in ("check_claims_a", "check_claims_b"):
+    for task_type in ("check_claims_a", "check_claims_b", "check_item"):
         checker = Worker(database, HAIKU)
-        checker.submit(checker.lease(task_type), verdicts(ids))
-    checker = Worker(database, HAIKU)
-    checker.submit(checker.lease("check_item"), {"verdict": "pass", "note": "nothing beyond the claims",
-                                                 "untraced": []})
+        task = checker.lease(task_type)
+        assert task, f"no {task_type} task"
+        checker.submit(task, verdicts(ids) if task_type != "check_item"
+                       else {"verdict": "pass", "note": "nothing beyond the claims", "untraced": []})
     return revision
+
+
+def audit_everything(database, verdict="supported"):
+    """Plan audits for everything accepted and pass (or fail) every sampled revision."""
+    system = Worker(database, kind="system")
+    with database.connect("system") as conn:
+        conn.execute("SELECT psst.plan_audits(%s, true)", (system.token,))
+    while True:
+        auditor = Worker(database, SONNET)
+        task = auditor.lease("audit")
+        if task is None:
+            return
+        auditor.submit(task, verdicts(claim_ids(database, task["revision_id"]), verdict)
+                       | {"item": {"verdict": "pass", "note": "agrees with the claims"}})

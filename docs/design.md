@@ -329,7 +329,7 @@ Item ids (`it_`) replace the previous `fa_` and `gd_` ids; the app treats ids as
 
 ### 11.2 Publishing
 
-`psst publish` (or the console's button, through a `system` task) takes the publish lock, builds the output from accepted revisions whose audit batches passed plus everything already published, uploads it to staging, downloads it back over HTTPS and checks it (hashes, schemas, references, legacy ids, images served, no unexplained shrinkage), and promotes only the version it checked. A place publishes only with its guide information, and a city publishes only when every place in it has guide information. Rollback swaps the manifest back. Every publication records what changed, item by item, so the console shows a diff.
+`psst publish` (or the console's button, through a `system` task) takes the publish lock, builds the output from accepted revisions whose audit batches passed plus everything already published, uploads it to staging, downloads it back over HTTPS and checks it (hashes, schemas, references, legacy ids, images served, no unexplained shrinkage), and promotes only the version it checked. A place publishes only with its guide information, so every published place has it. Rollback swaps the manifest back. Every publication records what changed, item by item, so the console shows a diff.
 
 ### 11.3 First publish
 

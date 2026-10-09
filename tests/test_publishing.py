@@ -136,3 +136,21 @@ def test_a_revision_whose_own_audit_passed_publishes_when_its_batch_fails(databa
     outcome = run_publish(database, site)
     assert outcome.promoted and outcome.counts["places"] >= 1
     assert item_state(database, first) == "published"
+
+
+def test_a_live_revision_that_breaks_a_newer_rule_is_held_back(database, city, site, monkeypatch):
+    import dataclasses
+
+    from psst import rules
+    from psst.publish import build
+    ready(database, city)
+    audit_everything(database)
+    run_publish(database, site)
+    rulebook = rules.load()
+    stricter = dataclasses.replace(rulebook, writing=rulebook.writing | {
+        "banned_phrases": [*rulebook.writing["banned_phrases"], "boiler beams"]})
+    monkeypatch.setattr(build.rules, "load", lambda: stricter)
+    version = production_city(site)[0]["contentVersion"]
+    with pytest.raises(Exception, match="Nothing can publish yet"):  # its only place is held back, not refused
+        run_publish(database, site)
+    assert production_city(site)[0]["contentVersion"] == version

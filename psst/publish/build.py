@@ -102,6 +102,21 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
                   AND t.to_state = 'accepted') AS verified_on
         FROM psst.publishable p JOIN psst.revisions r ON r.id = p.revision_id
         ORDER BY p.item_id""")
+    # A revision written before a rule was added can break it; it stays out until its correction passes, and the
+    # rule recheck has already sent it back for one.
+    held: list[dict[str, Any]] = []
+    passing = []
+    for item in items:
+        report = Report()
+        if item["type"] != "translation":
+            for name in rulebook.type(item["type"])["prose_fields"]:
+                if isinstance(item["body"].get(name), str):
+                    writing.check_prose(report, name, item["body"][name], rulebook)
+        if report.refusals:
+            held.append({"item": item["item_id"], "reason": "breaks a current writing rule: " + report.refusals[0]})
+        else:
+            passing.append(item)
+    items = passing
     by_type: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in items:
         by_type[item["type"]].append(item)
@@ -111,8 +126,8 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
     for story in by_type["story"]:
         stories_by_place[story["place_id"]].append(story)
     guides = {g["place_id"]: g for g in by_type["guide"]}
-    held = [{"place": p, "reason": "no guide information ready"}
-            for p in sorted(stories_by_place) if p not in guides]
+    held += [{"place": p, "reason": "no guide information ready"}
+             for p in sorted(stories_by_place) if p not in guides]
     place_ids = sorted(p for p in stories_by_place if p in guides)
     places = {p["id"]: p for p in _rows(conn, """
         SELECT p.id, p.kind, p.size, ST_Y(p.geom) AS lat, ST_X(p.geom) AS lon, p.coord_source, p.coord_ref,
@@ -142,15 +157,6 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
         if published_revisions.get(t["translates"]) == t["translation_of"]:
             translations[t["translates"]][t["language"]] = t["body"]
     evidence = _sources_and_claims(conn, [i["revision_id"] for i in english])
-
-    report = Report()
-    for item in english:
-        spec = rulebook.type(item["type"])
-        for name in spec["prose_fields"]:
-            if isinstance(item["body"].get(name), str):
-                writing.check_prose(report, f"{item['item_id']}.{name}", item["body"][name], rulebook)
-    if report.refusals:
-        raise BuildError("Content breaks the writing rules:\n  " + "\n  ".join(report.refusals[:30]))
 
     tag_places: dict[str, set[str]] = defaultdict(set)
     for story in by_type["story"]:

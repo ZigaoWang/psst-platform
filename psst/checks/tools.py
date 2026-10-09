@@ -98,6 +98,7 @@ def check(item_type: str, body: dict[str, Any], claims: list[Claim], snapshots: 
         _trace(report, prose, claims, quotes_by_claim, context)
         _own_words(report, prose, claims, snapshots, rulebook)
         _paraphrase(report, prose, claims, snapshots, rulebook)
+        _repeats(report, prose)
     if item_type == "story":
         _look(report, body)
     _sources(report, item_type, body, claims, quotes_by_claim, snapshots, rulebook)
@@ -252,6 +253,19 @@ def _paraphrase(report: Report, prose: dict[str, str], claims: list[Claim], snap
             if best and best[1] >= share * len(own) and best[1] >= 0.5 * len(sentences[best[0]][0]):
                 report.refuse(where, f"\"{match.group(0).strip()}\" repeats a sentence of snapshot "
                                      f"{sentences[best[0]][1]} in other words; tell it your own way")
+
+
+def _repeats(report: Report, prose: dict[str, str]) -> None:
+    """Say it once: no sentence repeats another anywhere in the item, word for word or nearly (most of its words in
+    both directions), the short and the long included."""
+    sentences = [(where, m.group(0).strip(), set(words(m.group(0))))
+                 for where, text in prose.items() for m in SENTENCE.finditer(text)]
+    sentences = [s for s in sentences if len(s[2]) >= 6]
+    for i, (where, _, own) in enumerate(sentences):
+        for other_where, other_text, other in sentences[i + 1:]:
+            shared = len(own & other)
+            if shared >= 0.8 * len(own) and shared >= 0.8 * len(other):
+                report.refuse(other_where, f"\"{other_text}\" says again what {where} already says; say it once")
 
 
 def _look(report: Report, body: dict[str, Any]) -> None:

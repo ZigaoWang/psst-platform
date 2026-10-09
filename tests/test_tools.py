@@ -238,3 +238,9 @@ def test_a_look_at_something_the_story_never_mentions_is_refused():
     result = check("story", story(look="Stand by the bus stop and look across at the post office."), claims(),
                    SNAPSHOTS)
     assert "names nothing the story is about" in refusals(result)
+
+
+def test_a_sentence_said_twice_is_refused():
+    repeated = LONG + " Readers now sit under the original boiler beams."
+    result = check("story", story(long=repeated), claims(), SNAPSHOTS)
+    assert "says again what long already says" in refusals(result)

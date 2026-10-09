@@ -14,7 +14,7 @@ Every part (schema, pipeline, task workflows, admin console, published output, w
 
 1. **Design document first.** Data model, workflows, task system, console, published output, security. Concrete (tables, states, screens, examples), short enough to read in one sitting, agreed before any code.
 2. **Build beside the old system.** New schema, pipeline, and console run against a copy while the old system keeps serving the app.
-3. **Rebuild the content.** The existing places and stories become research leads only; every published fact is researched and checked again under the new rules. Place ids carry over so saved places still work.
+3. **Write the content new.** Nothing is copied from the previous system; its place list is used only as a coverage checklist. A researched place that is the same Wikidata item or OpenStreetMap element as a previous place keeps its id, so saved places still work.
 4. **Switch over in one step.** The first publish from the new platform replaces the current content, and the app shows only new, checked content from then on. The old database is archived read-only, and the old code is deleted.
 
 ## Design decisions
@@ -86,7 +86,7 @@ Revised after the platform and website. From the October 8 audit:
 
 ## Decisions
 
-Made on October 9, 2026: existing content is used as research leads only; the app shows only new, checked content once the new platform publishes; SvelteKit for the website and console; the design lives in this repository. Remaining open decisions are in [design.md](design.md), section 18.
+Made on October 9, 2026: all content is written new, with the previous place list used only as a coverage checklist; the app shows only new, checked content once the new platform publishes; SvelteKit for the website and console; the design lives in this repository. The remaining decisions are settled in [design.md](design.md), section 18, and later ones are recorded in [decisions.md](decisions.md).
 
 ## Already done (October 8, 2026)
 
@@ -94,13 +94,3 @@ Security and correctness fixes in both repositories, committed and pushed:
 
 - Admin buttons work only from the admin page; publishing is locked and promotes only the checked version; claims and review decisions can't collide; the server's page reader stays on the public web; clean CLI errors; run indexes.
 - App: safe file names and links from the server, the area signal sends nothing without a known location and converts China coordinates, reports send once, search no longer sticks, the feed keeps its place, first launch can download content, plain translated load errors, dark mode loading screens, window sizes instead of `UIScreen.main`.
-
-## State of content work on October 8, 2026
-
-All work is paused; everything finished is stored in the database, nothing published.
-
-- **Guide writing** (`run_5wgzsccf5w`, open): London 1,932 of 2,081 places drafted. A prepared batch of 40 (from St Peter upon Cornhill) is unwritten in `work/guides/run_5wgzsccf5w/draft.json` and claimed for 12 hours. Left: about 150 London places, Shanghai, Hong Kong, and the small towns. Kuala Lumpur is done.
-- **Guide review** (`run_eehp5bexxg`, open): 400 reviewed (60 approved, 340 edited, 0 rejected). About 2,290 waiting. Common problems: identifiers in the wrong shape, About claims not in the sources, Wikidata values conflicting with sources. About 35 story claims that conflict with sources are listed in `work/guides/story_notes.md` for a story review.
-- **Story review** (`run_c1dpp9nx7b`, open): all 664 waiting stories decided (about 70 approved, 400 edited, 150 rejected). A single-source audit reopened 110 stories (100 back in draft, 10 published and unverified); its second pass was stopped before applying anything. The list is in `work/audit_flag.json` and can be rebuilt from `psst review next`.
-- **London verification** (`run_cceqw64xaf`, closed): about 1,110 of 2,594 verified; about 1,500 left. Common mistakes: details not in the cited source, overstated claims, dates that don't match the source, conflicting sources.
-- **Rule to settle before the next story pass:** the single-source rule was applied to official records as well as anecdotes, which labels documented facts as legends. Recommended: an authoritative record supports a plain fact on its own; the rule applies to anecdotes.

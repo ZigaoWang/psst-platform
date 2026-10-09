@@ -39,4 +39,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run check --workspaces --if-present
-      - run: npm run build --workspaces --if-present
+      - run: npm run build -w @psst/console
+      - run: npm run build -w @psst/site
+        env:
+          PSST_CONTENT_SOURCE: fixtures/content

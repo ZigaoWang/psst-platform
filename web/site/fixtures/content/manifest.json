@@ -1,0 +1,23 @@
+{
+  "formatVersion": 2,
+  "contentVersion": "20261009T102149Z",
+  "generatedAt": "2026-10-09T10:21:49+00:00",
+  "common": {
+    "file": "packs/common.8ec3c1a8946da8dc.json.gz",
+    "sha256": "8ec3c1a8946da8dc7676a65586aea0ff31aef0bb37417d0de903b4af193174c1",
+    "bytes": 168
+  },
+  "cities": [
+    {
+      "file": "packs/city-900001.bff62d7895672969.json.gz",
+      "sha256": "bff62d789567296922a94b0536ab0328ce5796e9d153bdedd78e2ab133a5bec0",
+      "bytes": 989,
+      "cityId": "900001"
+    }
+  ],
+  "counts": {
+    "places": 2,
+    "facts": 2,
+    "trails": 0
+  }
+}

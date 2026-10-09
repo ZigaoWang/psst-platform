@@ -148,6 +148,8 @@ def audit(database, city, count, wrong=0):
     for index in range(count):
         auditor = Worker(database, SONNET)
         task = auditor.lease("audit")
+        if task is None:
+            break
         ids = claim_ids(database, task["revision_id"])
         verdict = "contradicted" if index < wrong else "supported"
         auditor.submit(task, verdicts(ids, verdict) | {"item": {"verdict": "pass", "note": "agrees"}})
@@ -166,9 +168,18 @@ def test_a_failed_audit_reopens_the_batch(database, city):
     revisions, batch = audit(database, city, 3, wrong=1)
     assert batch["outcome"] == "failed" and batch["errors"] == 1
     states = sorted(item_state(database, r) for r in revisions)
-    assert states == ["checking", "checking", "draft"]
+    assert states == ["accepted", "accepted", "draft"]  # every one was audited; only the wrong one goes back
     assert Worker(database, SONNET).lease("revise") is not None
-    assert Worker(database, kind="system").lease("tool_check") is not None
+
+
+def test_a_failed_audit_rechecks_what_it_did_not_read(database, city):
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.settings SET value = '1' WHERE key = 'audit.min_sample'")
+        conn.execute("UPDATE psst.settings SET value = '0' WHERE key = 'audit.extra_sample_rate'")
+    revisions, batch = audit(database, city, 3, wrong=1)
+    assert batch["outcome"] == "failed" and batch["sample_size"] == 1
+    states = sorted(item_state(database, r) for r in revisions)
+    assert states == ["checking", "checking", "draft"]  # the two it never read are checked again
 
 
 def test_a_rule_change_rechecks_what_was_checked_under_the_old_rulebook(database, city, monkeypatch):

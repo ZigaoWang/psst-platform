@@ -1,0 +1,657 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://psst.zigao.wang/format/v2/city.schema.json",
+  "title": "Psst city pack, format 2",
+  "description": "Every published place in one city, with its published facts and photos. Coordinates are WGS-84. Photo files are at <content host>/images/<file>. Trails, claims, look, myth, and translations are optional additions older apps ignore.",
+  "type": "object",
+  "required": [
+    "formatVersion",
+    "cityId",
+    "places"
+  ],
+  "properties": {
+    "formatVersion": {
+      "const": 2
+    },
+    "cityId": {
+      "type": "string"
+    },
+    "places": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "size",
+          "lat",
+          "lon",
+          "location",
+          "facts"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^pl_[0-9a-hjkmnp-tv-z]{10}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "localName": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "required": [
+              "lang",
+              "name"
+            ],
+            "properties": {
+              "lang": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "names": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "kind": {
+            "type": "string"
+          },
+          "size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ]
+          },
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lon": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "location": {
+            "type": "object",
+            "required": [
+              "source",
+              "ref",
+              "license"
+            ],
+            "properties": {
+              "source": {
+                "enum": [
+                  "wikidata",
+                  "osm"
+                ]
+              },
+              "ref": {
+                "type": "string"
+              },
+              "license": {
+                "enum": [
+                  "CC0-1.0",
+                  "ODbL-1.0"
+                ]
+              }
+            }
+          },
+          "countryCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "districtId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "neighborhoodId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "images": {
+            "type": "array",
+            "description": "Optional; in display order. Older apps ignore it.",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "kind",
+                "alt",
+                "focus",
+                "full",
+                "thumb",
+                "credit"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^it_[0-9a-hjkmnp-tv-z]{10}$"
+                },
+                "kind": {
+                  "enum": [
+                    "photo",
+                    "historic"
+                  ]
+                },
+                "year": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "alt": {
+                  "type": "string",
+                  "minLength": 10,
+                  "maxLength": 300
+                },
+                "focus": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "full": {
+                  "$ref": "#/$defs/rendition"
+                },
+                "thumb": {
+                  "$ref": "#/$defs/rendition"
+                },
+                "credit": {
+                  "type": "object",
+                  "required": [
+                    "author",
+                    "license",
+                    "sourceUrl"
+                  ],
+                  "properties": {
+                    "author": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "authorUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "license": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "licenseUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sourceUrl": {
+                      "type": "string",
+                      "pattern": "^https://"
+                    },
+                    "source": {
+                      "enum": [
+                        "commons",
+                        "geograph",
+                        "flickr",
+                        "archive",
+                        "owner"
+                      ]
+                    },
+                    "title": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "guide": {
+            "type": "object",
+            "description": "Optional practical information, kept apart from the stories: a one-line identifier, a short neutral About with its sources, and key facts from Wikidata, each with the property it came from. Older apps ignore it.",
+            "required": [
+              "id",
+              "identifier",
+              "about",
+              "sources",
+              "keyFacts"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^it_[0-9a-hjkmnp-tv-z]{10}$"
+              },
+              "identifier": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 70
+              },
+              "about": {
+                "type": "string",
+                "minLength": 100,
+                "maxLength": 700
+              },
+              "wikidataId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^Q[1-9][0-9]*$"
+              },
+              "lastVerified": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sources": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "title",
+                    "publisher",
+                    "url"
+                  ],
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "publisher": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string",
+                      "pattern": "^https://"
+                    }
+                  }
+                }
+              },
+              "keyFacts": {
+                "type": "array",
+                "description": "In display order. `label` is English; apps translate it by `property`.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "property",
+                    "label",
+                    "value"
+                  ],
+                  "properties": {
+                    "property": {
+                      "type": "string",
+                      "pattern": "^P[1-9][0-9]*$"
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "value"
+                        ],
+                        "properties": {
+                          "value": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "claims": {
+                "type": "array",
+                "description": "Optional: each claim the text makes and the sources (by index) that back it.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "text",
+                    "sources"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    }
+                  }
+                }
+              },
+              "translations": {
+                "type": "object",
+                "description": "Optional: checked translations, keyed by language.",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "identifier": {
+                      "type": "string"
+                    },
+                    "about": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "facts": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "category",
+                "veracity",
+                "headline",
+                "short",
+                "long",
+                "sources"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^it_[0-9a-hjkmnp-tv-z]{10}$"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "veracity": {
+                  "enum": [
+                    "fact",
+                    "legend",
+                    "disputed"
+                  ]
+                },
+                "headline": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "short": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 220
+                },
+                "long": {
+                  "type": "string",
+                  "minLength": 300,
+                  "maxLength": 1200
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "researchedOn": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "lastVerified": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sources": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "title",
+                      "publisher",
+                      "url"
+                    ],
+                    "properties": {
+                      "title": {
+                        "type": "string"
+                      },
+                      "publisher": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string",
+                        "pattern": "^https://"
+                      }
+                    }
+                  }
+                },
+                "look": {
+                  "type": "string",
+                  "description": "Optional: what to look at and where to stand. Also the last paragraph of `long`, for apps that don't read this field."
+                },
+                "myth": {
+                  "type": "string",
+                  "description": "Optional: the popular version a story sets straight."
+                },
+                "claims": {
+                  "type": "array",
+                  "description": "Optional: each claim the text makes and the sources (by index) that back it.",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "text",
+                      "sources"
+                    ],
+                    "properties": {
+                      "text": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  }
+                },
+                "translations": {
+                  "type": "object",
+                  "description": "Optional: checked translations, keyed by language.",
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "headline": {
+                        "type": "string"
+                      },
+                      "short": {
+                        "type": "string"
+                      },
+                      "long": {
+                        "type": "string"
+                      },
+                      "look": {
+                        "type": "string"
+                      },
+                      "myth": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "trails": {
+      "type": "array",
+      "description": "Optional: themed walks through places in this pack.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "intro",
+          "stops",
+          "tags"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^it_[0-9a-hjkmnp-tv-z]{10}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "intro": {
+            "type": "string",
+            "minLength": 1
+          },
+          "stops": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "required": [
+                "placeId",
+                "note"
+              ],
+              "properties": {
+                "placeId": {
+                  "type": "string",
+                  "pattern": "^pl_[0-9a-hjkmnp-tv-z]{10}$"
+                },
+                "note": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "claims": {
+            "type": "array",
+            "description": "Optional: each claim the text makes and the sources (by index) that back it.",
+            "items": {
+              "type": "object",
+              "required": [
+                "text",
+                "sources"
+              ],
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "translations": {
+            "type": "object",
+            "description": "Optional: checked translations, keyed by language.",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "intro": {
+                  "type": "string"
+                },
+                "stopNotes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "rendition": {
+      "type": "object",
+      "required": [
+        "file",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "file": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{24}\\.jpg$"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

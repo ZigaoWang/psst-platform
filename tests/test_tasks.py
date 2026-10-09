@@ -191,3 +191,12 @@ def test_a_task_given_back_goes_to_another_run(database, city):
         conn.execute("SELECT psst.return_task(%s, %s, 'the angle does not hold up')", (first.token, task["id"]))
     assert first.lease("write_story") is None
     assert Worker(database, SONNET).lease("write_story")["id"] == task["id"]
+
+
+def test_ending_a_run_gives_back_its_tasks(database, city):
+    queue_story(database, city)
+    worker = Worker(database, SONNET)
+    task = worker.lease("write_story")
+    with database.connect("worker") as conn:
+        conn.execute("SELECT psst.end_run(%s)", (worker.token,))
+    assert Worker(database, SONNET).lease("write_story")["id"] == task["id"]

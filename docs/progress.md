@@ -28,6 +28,25 @@ Where the build stands. Updated before every milestone and whenever the plan cha
 
 - Research angles: in the first London waves writers gave back or replaced roughly half, mostly because the surprise was already in the encyclopedia's first paragraph. The research prompt now holds angles to that test and asks for a record among the sources; measure the share on the next cells.
 
+## Measurements
+
+### Before the content loop change (London, first day, task graph of design.md section 7, version 2)
+
+| Measure | Value |
+|---|---|
+| Places published | 6 (6 stories, 6 guides) |
+| Model tasks done | 738: 34 write_story, 74 write_guide, 16 research_cell, 107 revise, 207 check_item, 230 claim checks, 15 escalate, 55 audit |
+| Model tasks per published place | 123 |
+| Worker runs | 63 Haiku 5.5 (11.2 h), 39 Sonnet 5.5 (6.2 h) |
+| Tokens | about 13 million, estimated from per-run usage reports (Haiku runs about 135,000, Sonnet runs about 115,000); about 2 million per published place. Not recorded by the platform. |
+| Elapsed time | 3 h 10 min of task creation, about 9 h to the first publish |
+| Story angles given back by writers | 11 cancelled or returned, 5 failed after three writers; about half of research angles replaced or given back |
+| Item check fail rate | about 50 percent per round |
+| Audit error rate | 7 errors in 55 audited (13 percent); all three batches failed |
+| Revisions per accepted item | about 1.5 |
+
+The cost sat in checking (452 claim and item checks for 6 places) and in revision rounds, and the stories that passed were accurate but often flat: correct facts stitched from quotes, guides that restate the encyclopedia's first sentence.
+
 ## How to resume
 
 1. Read docs/design.md, docs/content.md, docs/decisions.md, docs/operations.md, and this file.

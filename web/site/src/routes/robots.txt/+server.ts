@@ -6,3 +6,6 @@ export function GET() {
 		headers: { 'Content-Type': 'text/plain' }
 	});
 }
+
+// Built once, with the rest of the site.
+export const prerender = true;

@@ -18,3 +18,6 @@ export async function GET() {
 		paths.map(url).join('\n') + '\n</urlset>\n';
 	return new Response(body, { headers: { 'Content-Type': 'application/xml' } });
 }
+
+// Built once, with the rest of the site.
+export const prerender = true;

@@ -40,7 +40,7 @@ def test_reports_are_resolved_when_the_item_is_published_again(database, city, s
     revision, item = published(database, city, site)
     intake.report({"factId": item, "reason": "outdated"})
     Worker(database, kind="system").tool_check()
-    for task_type in ("check_claims_a", "check_claims_b", "check_item"):
+    for task_type in ("check_item", "check_claims_a", "check_claims_b"):
         checker = Worker(database, HAIKU)
         checker.submit(checker.lease(task_type), verdicts(claim_ids(database, revision)) if task_type != "check_item"
                        else {"verdict": "pass", "note": "still right", "untraced": []})

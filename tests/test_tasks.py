@@ -49,8 +49,9 @@ def test_one_run_never_does_two_checks_of_the_same_revision(database, city):
     writer.submit(writer.lease("write_story"), story_result(city))
     Worker(database, kind="system").tool_check()
     checker = Worker(database, HAIKU)
-    assert checker.lease("check_claims_a")["type"] == "check_claims_a"
-    assert checker.lease("check_claims_b", "check_item") is None
+    checker.submit(checker.lease("check_item"), {"verdict": "pass", "note": "fine", "untraced": []})
+    assert checker.lease("check_claims_a", "check_claims_b") is None
+    assert Worker(database, HAIKU).lease("check_claims_a")["type"] == "check_claims_a"
 
 
 def test_disagreement_escalates_to_a_stronger_model(database, city):
@@ -59,13 +60,13 @@ def test_disagreement_escalates_to_a_stronger_model(database, city):
     revision = writer.submit(writer.lease("write_story"), story_result(city))["revision"]
     Worker(database, kind="system").tool_check()
     ids = claim_ids(database, revision)
+    item = Worker(database, HAIKU)
+    item.submit(item.lease("check_item"), {"verdict": "pass", "note": "fine", "untraced": []})
     first = Worker(database, HAIKU)
     first.submit(first.lease("check_claims_a"), verdicts(ids))
     second = Worker(database, HAIKU)
     second.submit(second.lease("check_claims_b"), {"verdicts": verdicts(ids[:2])["verdicts"] + [
         {"claim": ids[2], "verdict": "unsupported", "note": "the passage is about readers, not beams"}]})
-    item = Worker(database, HAIKU)
-    item.submit(item.lease("check_item"), {"verdict": "pass", "note": "fine", "untraced": []})
     assert Worker(database, HAIKU).lease("escalate") is None
     escalator = Worker(database, SONNET)
     task = escalator.lease("escalate")

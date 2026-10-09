@@ -101,6 +101,8 @@ def test_accuracy_counts_overturned_verdicts(database, session, city):
     revision = writer.submit(writer.lease("write_story"), story_result(city))["revision"]
     Worker(database, kind="system").tool_check()
     ids = claim_ids(database, revision)
+    item = Worker(database, HAIKU)
+    item.submit(item.lease("check_item"), {"verdict": "pass", "note": "fine", "untraced": []})
     first, second = Worker(database, HAIKU), Worker(database, HAIKU)
     first.submit(first.lease("check_claims_a"), {"verdicts": [
         {"claim": c, "verdict": "supported", "note": "says so"} for c in ids]})

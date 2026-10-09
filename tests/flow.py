@@ -114,7 +114,7 @@ def write_and_check(database, city, n=0, writer=None, system=None, kind="story",
     revision = writer.submit(writer.lease(f"write_{kind}"), result)["revision"]
     assert system.tool_check().ok
     ids = claim_ids(database, revision)
-    for task_type in ("check_claims_a", "check_claims_b", "check_item"):
+    for task_type in ("check_item", "check_claims_a", "check_claims_b"):
         checker = Worker(database, HAIKU)
         task = checker.lease(task_type)
         assert task, f"no {task_type} task"

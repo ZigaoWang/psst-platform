@@ -32,6 +32,8 @@ def written(database, city):
 
 def test_claim_checkers_see_claims_and_passages_but_never_the_prose(database, city):
     written(database, city)
+    item = Worker(database, HAIKU)
+    item.submit(item.lease("check_item"), {"verdict": "pass", "note": "fine", "untraced": []})
     document = leased(database, Worker(database, HAIKU), "check_claims_a")
     text = json.dumps(document)
     assert "Ada Thorne designed the pump house" not in text  # the story's own words
@@ -56,7 +58,7 @@ def test_the_system_worker_runs_queued_tool_checks(database, city):
                                (revision,)).fetchone()["verdict"]
         queued = {r["type"] for r in conn.execute("SELECT type FROM psst.tasks WHERE state = 'queued'")}
     assert verdict == "pass"
-    assert queued == {"check_claims_a", "check_claims_b", "check_item"}
+    assert queued == {"check_item"}  # the claim checks follow once it passes
 
 
 def test_a_result_is_refused_before_submitting_when_it_breaks_the_rules(database, city, monkeypatch):

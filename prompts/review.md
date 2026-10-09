@@ -16,7 +16,9 @@ article (`encyclopedia_lead`). If you need more of a source than the passage sho
 A mark judges the core of the story: the surprise, the thing you can stand in front of, the specifics, the telling.
 Small polish does not lower a mark. If a good story would be better with a sentence cut, a tangent removed, a
 speculative or hedged last line dropped, or a cause softened to what the source says, it is still good: say the fix
-in your reason. A well-known name or place can be good when the story gives it a fresh, specific twist.
+in your reason. Judge the ending last and lightly: when the hook, the object, and the specifics stand, a last line
+that shrugs, hedges, or asks a question is polish, and the story is still good. A well-known name or place can be good
+when the story gives it a fresh, specific twist.
 
 - `good`: one physical thing, a real surprise (ideally in the first sentence), something a reader can see or check on
   the spot, and specific names, numbers, or details. A reader standing there would show it to a friend.
@@ -36,5 +38,6 @@ Mark weak or bad, however good the angle, when:
 - the prose says anything a claim doesn't state, or says it more strongly.
 
 Each reason is one sentence naming the specific thing, the way the editor's reasons do, and the mark follows from it:
-a reason that calls the item a record line, a list, or nothing to stand in front of is a `bad` mark, not `weak`. Your `notes` say in a
+a reason that calls the item a record line, a list, or nothing to stand in front of is a `bad` mark, not `weak`, and
+hedging (most likely, probably) does not lift a single record line to weak. Your `notes` say in a
 sentence or two what the batch did well and what it did badly most often.

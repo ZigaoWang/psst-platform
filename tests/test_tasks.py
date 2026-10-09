@@ -200,3 +200,14 @@ def test_ending_a_run_gives_back_its_tasks(database, city):
     with database.connect("worker") as conn:
         conn.execute("SELECT psst.end_run(%s)", (worker.token,))
     assert Worker(database, SONNET).lease("write_story")["id"] == task["id"]
+
+
+def test_a_worker_learns_why_its_task_was_taken_away(database, city):
+    queue_story(database, city)
+    worker = Worker(database, SONNET)
+    task = worker.lease("write_story")
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.tasks SET state = 'cancelled', leased_by = NULL, leased_until = NULL, "
+                     "problem = 'the revision is no longer being checked' WHERE id = %s", (task["id"],))
+    with pytest.raises(psycopg.Error, match="no longer yours: the revision is no longer being checked"):
+        worker.submit(task, {})

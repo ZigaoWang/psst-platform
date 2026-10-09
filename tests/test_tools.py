@@ -1,0 +1,211 @@
+"""The tool checks refuse what code can decide, before any model looks (design.md, section 7.2). The records,
+places, and people here are invented."""
+
+from __future__ import annotations
+
+import copy
+
+import pytest
+
+from psst.checks.tools import Claim, Context, Evidence, Snapshot, Stop, check, numbers
+from psst.core.text import find_quote
+
+RECORD = Snapshot("sn_record0000", "so_record0000", "https://records.example.org/pump-house", "official_record",
+                  "List entry. The Old Pump House, Mill Lane. Built in 1871 to the design of the engineer Ada Thorne "
+                  "for the Testville Water Company. Converted to a public library in 1952. The chimney is 31 meters "
+                  "tall and carries a cast iron band at each floor level.")
+PAPER = Snapshot("sn_paper00000", "so_paper00000", "https://news.example.com/library-at-80", "press",
+                 "Readers at the Mill Lane library still sit under the old boiler beams, and staff say the "
+                 "chimney's iron bands were made at the Ferris foundry nearby.")
+WIKI = Snapshot("sn_wiki000000", "so_wiki000000", "https://en.wikipedia.org/wiki/Old_Pump_House", "official_record",
+                "The Old Pump House is a former pumping station built in 1871 in Testville. It became a library "
+                "in 1952.")
+SNAPSHOTS = {s.id: s for s in (RECORD, PAPER, WIKI)}
+
+LONG = ("Ada Thorne designed the building in 1871 for the Testville Water Company, and its steam pumps pushed water "
+        "up to the town's reservoir for eight decades. When the pumps stopped, the council kept the shell and in 1952 "
+        "turned it into a public library. Readers now sit under the original boiler beams. The 31 meter chimney "
+        "was never taken down: its cast iron bands, one for each floor, still show where the engine house floors "
+        "once stood inside.")
+
+
+def story(**changes):
+    body = {
+        "category": "history", "veracity": "fact", "headline": "The library that pumped the town's water",
+        "short": "The library on Mill Lane was built in 1871 as a pumping station, and readers sit under its boiler "
+                 "beams.",
+        "long": LONG,
+        "look": "From the far pavement of Mill Lane, look up at the iron bands circling the chimney.",
+        "tags": [],
+    }
+    body.update(changes)
+    return body
+
+
+def claims():
+    return [
+        Claim(1, "The pump house was built in 1871 to Ada Thorne's design.", "date",
+              [{"value": "1871"}, {"value": "Ada Thorne"}],
+              [Evidence(RECORD.id, "Built in 1871 to the design of the engineer Ada Thorne", 1)]),
+        Claim(2, "It was built for the Testville Water Company.", "name", [{"value": "Testville Water Company"}],
+              [Evidence(RECORD.id, "for the Testville Water Company", 2)]),
+        Claim(3, "It became a public library in 1952.", "event", [{"value": "1952"}],
+              [Evidence(RECORD.id, "Converted to a public library in 1952", 3),
+               Evidence(PAPER.id, "the Mill Lane library", 4)]),
+        Claim(4, "The chimney is 31 meters tall with an iron band at each floor.", "attribute", [{"value": "31"}],
+              [Evidence(RECORD.id, "The chimney is 31 meters tall and carries a cast iron band at each floor level",
+                        5)]),
+        Claim(5, "Readers sit under the old boiler beams.", "attribute", [],
+              [Evidence(PAPER.id, "Readers at the Mill Lane library still sit under the old boiler beams", 6)]),
+    ]
+
+
+def refusals(result):
+    return "\n".join(result.report.refusals)
+
+
+def test_a_sound_story_passes():
+    result = check("story", story(), claims(), SNAPSHOTS)
+    assert result.ok, refusals(result)
+    assert all(m["start"] is not None for m in result.matches)
+
+
+def test_a_wrong_year_in_the_prose_is_refused():
+    result = check("story", story(long=LONG.replace("in 1952", "in 1953")), claims(), SNAPSHOTS)
+    assert "'1953' isn't among the claims' values" in refusals(result)
+
+
+def test_a_claim_value_its_passage_doesnt_give_is_refused():
+    wrong = claims()
+    wrong[0].values[0] = {"value": "1872"}
+    result = check("story", story(long=LONG.replace("1871", "1872")), wrong, SNAPSHOTS)
+    assert "'1872' isn't in any of its passages" in refusals(result)
+
+
+def test_a_quote_missing_from_its_snapshot_is_refused():
+    wrong = claims()
+    wrong[2].evidence[0] = Evidence(RECORD.id, "Converted to a lending library in 1952", 3)
+    result = check("story", story(), wrong, SNAPSHOTS)
+    assert "the quote isn't in snapshot sn_record0000" in refusals(result)
+    assert {"evidence": 3, "start": None, "end": None} in result.matches
+
+
+def test_claims_resting_only_on_reference_works_are_refused():
+    wrong = claims()
+    wrong[2].evidence = [Evidence(WIKI.id, "It became a library in 1952", 3)]
+    result = check("story", story(), wrong, SNAPSHOTS)
+    assert "claim 3: rests only on reference works" in refusals(result)
+
+
+def test_a_story_needs_two_sources():
+    single = [c for c in claims() if all(e.snapshot == RECORD.id for e in c.evidence)]
+    result = check("story", story(short="The library on Mill Lane was built in 1871 as a pumping station.",
+                                  long=LONG.replace(" Readers now sit under the original boiler beams.", "")),
+                   single, SNAPSHOTS)
+    assert "needs at least 2 independent sources; has 1" in refusals(result)
+
+
+def test_copied_wording_is_refused():
+    copied = LONG.replace("Readers now sit under the original boiler beams.",
+                          "Readers at the Mill Lane library still sit under the old boiler beams.")
+    result = check("story", story(long=copied), claims(), SNAPSHOTS)
+    assert "write it in your own words" in refusals(result)
+
+
+def test_quoting_a_source_is_not_copying():
+    quoted = LONG.replace("Readers now sit under the original boiler beams.",
+                          'A reporter wrote that "Readers at the Mill Lane library still sit under the old boiler '
+                          'beams."')
+    result = check("story", story(long=quoted), claims(), SNAPSHOTS)
+    assert "own words" not in refusals(result)
+
+
+def test_an_event_with_one_press_source_is_a_legend():
+    wrong = claims()
+    wrong[2].evidence = [Evidence(PAPER.id, "the Mill Lane library", 4)]
+    result = check("story", story(), wrong, SNAPSHOTS)
+    assert "is a legend" in refusals(result)
+
+
+def test_a_myth_needs_its_popular_version_sourced():
+    result = check("story", story(myth="People say the chimney was a lighthouse for barges."), claims(), SNAPSHOTS)
+    assert "needs a claim with the role 'myth'" in refusals(result)
+
+
+def test_a_legend_says_it_is_a_story():
+    result = check("story", story(veracity="legend"), claims(), SNAPSHOTS)
+    assert "a legend says it's a story people tell" in refusals(result)
+
+
+@pytest.mark.parametrize("field, text, problem", [
+    ("short", "The library on Mill Lane was built in 1871 — as a pumping station.", "em dash"),
+    ("long", LONG.replace("Readers now", "Readers in this iconic building now"), "uses 'iconic'"),
+    ("look", "Look at the chimney.", "is too short"),
+    ("headline", "Why does a library have a chimney?", "contains '?'"),
+])
+def test_writing_rules_apply_to_every_field(field, text, problem):
+    result = check("story", story(**{field: text}), claims(), SNAPSHOTS)
+    assert problem in refusals(result)
+
+
+def test_numbers_are_read_from_digits_only():
+    assert numbers("Built in 1871, 1,200 bricks, the 1860s, the 19th century, M25, 3.5 meters.") == \
+        ["1871", "1200", "1860s", "19th", "3.5"]
+
+
+def test_chinese_quotes_match_across_extraction_spaces():
+    text = "步高里 建于 1930 年,共有 78 幢 房屋。"
+    assert find_quote(text, "步高里建于1930年") is not None
+
+
+def guide(**changes):
+    body = {"identifier": "Former pumping station, 1871, by Ada Thorne",
+            "about": "A pumping station built in 1871 for the Testville Water Company. It became a public library "
+                     "in 1952.",
+            "key_facts": [{"property": "P571", "value": "1871", "claim": 1}]}
+    body.update(changes)
+    return body
+
+
+def test_a_sound_guide_passes():
+    result = check("guide", guide(), claims()[:3], SNAPSHOTS)
+    assert result.ok, refusals(result)
+
+
+def test_guide_text_never_judges():
+    result = check("guide", guide(about=guide()["about"].replace("A pumping", "A famous pumping")),
+                   claims()[:3], SNAPSHOTS)
+    assert "'famous' is a judgment" in refusals(result)
+
+
+def test_the_identifier_year_agrees_with_the_key_facts():
+    result = check("guide", guide(identifier="Former pumping station, 1952"), claims()[:3], SNAPSHOTS)
+    assert "gives 1952, but the key facts date it 1871" in refusals(result)
+
+
+def test_trail_stops_must_be_published_and_walkable():
+    stops = {f"pl_{c * 10}": Stop(51.5, -0.1 + i * 0.02, True) for i, c in enumerate("abcd")}
+    stops["pl_dddddddddd"].published = False
+    body = {"title": "Water in the old town", "intro": "", "tags": ["tg_aaaaaaaa"],
+            "stops": [{"place": p, "note": "A stop on the walk with a detail worth seeing up close."} for p in stops]}
+    body["intro"] = ("The walk follows the old water supply from the pumping station to the reservoir, past the "
+                     "places the pipes once ran under, and ends at the reservoir gate after about an hour on foot.")
+    result = check("trail", body, [], SNAPSHOTS, Context(stops=stops))
+    text = refusals(result)
+    assert "pl_dddddddddd has no published stories" in text
+    assert "m from the stop before" in text
+
+
+def test_a_translation_keeps_every_number():
+    source = story()
+    body = {"language": "zh-Hans", "headline": "曾为全镇供水的图书馆", "short": "米尔巷的图书馆建于1872年。",
+            "long": "这座建筑建于1871年。", "look": "从米尔巷对面抬头看烟囱上的铁箍。"}
+    result = check("translation", body, [], {}, Context(source_type="story", source_body=source))
+    assert "short: its numbers differ from the English" in refusals(result)
+
+
+def test_the_check_never_changes_its_inputs():
+    body, given = story(), claims()
+    before = (copy.deepcopy(body), copy.deepcopy(given))
+    check("story", body, given, SNAPSHOTS)
+    assert (body, given) == before

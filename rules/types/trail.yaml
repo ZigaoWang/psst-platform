@@ -30,6 +30,7 @@ max_leg_meters: 1000
 max_total_meters: 6000
 checks: [tool, claims, item]
 item_questions:
-  - Does the intro or any note say anything its claims don't?
+  - List every name, date, number, or other detail in the prose that no claim states. Any entry fails.
+  - Does the prose say anything more strongly than its claims ("the first" for "one of the first")?
   - Does every stop belong to the theme, for the reason its note gives?
   - Is the walking order sensible on the ground?

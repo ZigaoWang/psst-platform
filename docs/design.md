@@ -218,7 +218,7 @@ A writer reads sources only through `psst fetch`, which asks the fetch service t
 On submit the system worker refuses a revision, with every reason listed, unless:
 
 1. **Passages match.** Every quoted passage appears in its snapshot after Unicode, whitespace, and quotation mark normalization.
-2. **Details trace.** Every year, number, and proper name in the prose appears among the claims' values, and every claim value appears in at least one of that claim's passages.
+2. **Numbers trace.** Every year and number in the prose appears among the claims' values, and every claim value appears in at least one of that claim's passages. Names and other details are language, not arithmetic, so the whole-item check traces them (section 7.4).
 3. **Writing rules hold** (section 9): lengths, banned words, US spelling, dashes, the identifier shape, `look` present.
 4. **Own words.** The prose shares no run of eight words with any snapshot it cites.
 5. **Source rules hold.** For a story: at least two distinct sources; at least one primary or scholarly source; every claim backed by a passage from a source that is not `reference`; a `myth` story cites a source for the popular version and a primary or scholarly source for the correction; an anecdote with one source is `legend`.
@@ -242,7 +242,7 @@ Both answer `supported`, `unsupported`, `contradicted`, or `unclear`, with a one
 
 ### 7.4 Whole-item check
 
-Some errors live between claims: a headline that overstates, "the first" where the claim says "one of the first", a replica described as the original, a `look` pointing at the wrong thing. One check per revision reads the prose against its claim list and the place's encyclopedia lead and answers narrow questions: does the prose say anything the claims don't, or say it more strongly? Is the story's surprise already in the encyclopedia lead? Is it true of this place rather than its kind? Does `look` name something to see and where to stand? A `fail` sends the revision back with the reasons; an `unclear` escalates.
+Some errors live between claims: a headline that overstates, "the first" where the claim says "one of the first", a replica described as the original, a `look` pointing at the wrong thing. One check per revision reads the prose against its claim list and the place's encyclopedia lead and answers narrow questions, with structured answers: which names, dates, or details in the prose does no claim state (any entry fails the revision)? Does the prose say anything more strongly than its claims? Is the story's surprise already in the encyclopedia lead? Is it true of this place rather than its kind? Does `look` name something to see and where to stand? A `fail` sends the revision back with the reasons; an `unclear` escalates.
 
 ### 7.5 Translations
 

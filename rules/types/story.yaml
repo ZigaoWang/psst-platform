@@ -32,7 +32,8 @@ checks: [tool, claims, item]
 
 # What the whole-item check asks (design.md, section 7.4). Each is answered pass, fail, or unclear.
 item_questions:
-  - Does the prose (headline, short, long, look, myth) say anything its claims don't, or say it more strongly?
+  - List every name, date, number, or other detail in the prose that no claim states. Any entry fails.
+  - Does the prose say anything more strongly than its claims ("the first" for "one of the first")?
   - Is the surprise already in the opening paragraph of the place's encyclopedia article?
   - Is the story true of this exact place, rather than of every place of its kind?
   - Does `look` name something a person can see and where to stand to see it?

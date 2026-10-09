@@ -157,3 +157,15 @@ A narration of an accepted story or trail, recorded or generated from the exact 
 ## 5. Writing
 
 These apply to all content and to the guide's plainer register alike: US English spelling and punctuation; metric units, with imperial where a local reader expects it; no em or en dashes; no exclamation marks; no hype or filler ("iconic", "nestled", "boasts", "testament to", "hidden gem", "it's worth noting"); own words, never copied. Proper names keep their own spelling ("Southbank Centre"). Names from other languages appear as people see them on the ground, with the local script in the place's local name. The rulebook lists the exact words, lengths, and spellings the checks enforce.
+
+## The golden bar
+
+The editor's marks are the standard (decisions.md, decision 25). A worked guide in the database, the golden bar, shows for each thing written three good examples and three weak ones beside a rewrite. Its principles, which every story and guide is held to:
+
+- The surprise is in the first sentence of the short and the long. Background comes after it, if at all.
+- The story is about something a reader can see or check on the spot, and the look says where to stand and what to see.
+- Specific names, numbers, and details, each from a claim.
+- It ends on the payoff: no unanswered question, no speculation, no tangent into a second story.
+- Every sentence is said once and reads cleanly aloud.
+- One strong story per place beats two thin ones.
+- A guide identifier dates the structure standing now; a guide About is plain and in its own words, never the encyclopedia's first sentence reworded.

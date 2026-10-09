@@ -47,7 +47,7 @@ def city(database, monkeypatch):
 
 
 def lease_research(database):
-    worker = Worker(database, SONNET)
+    worker = Worker(database, HAIKU)
     task = worker.lease("research_cell")
     with database.connect("worker") as conn:
         document = files.build(conn, task)

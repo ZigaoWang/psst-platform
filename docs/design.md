@@ -266,7 +266,7 @@ The console shows the same sample view: claim, passages, verdicts, and one actio
 
 | type | input | output | default model |
 | --- | --- | --- | --- |
-| `research_cell` | a cell, its leads, nearby places | places to create, story angles with sources to read, leads accounted for | Sonnet 5.5 |
+| `research_cell` | a cell, its leads, nearby places | places to create, story angles with sources to read, leads accounted for | Haiku 5.5 |
 | `write_story` | a place and an angle | one story revision with claims and evidence | Sonnet 5.5 |
 | `write_guide` | a place, its Wikidata item, sources | one guide revision with claims and evidence | Haiku 5.5 |
 | `revise` | a revision and the problems found | a new revision | same as the writer |
@@ -430,7 +430,7 @@ psst-platform/
 ## 18. Settled decisions
 
 1. **Thresholds:** audit thresholds of 1 error in 50 for stories and trails, 1 in 30 for guides, photos, and translations. Editors change them in Settings.
-2. **Model routing defaults:** as in section 8.1: Haiku 5.5 for claim, item, translation, and photo checks and guide writing; Sonnet 5.5 for research, story writing, escalations, audits, and translation. Changed only on measured rates.
+2. **Model routing defaults:** as in section 8.1: Haiku 5.5 for research, guide writing, and the claim, item, translation, and photo checks; Sonnet 5.5 for story writing, revision, escalations, audits, and translation. Changed only on measured rates.
 3. **Order of cities:** London, then Shanghai, Hong Kong, and Kuala Lumpur. Shanghai moves up from fourth to second because the bilingual work it needs is the hardest to get right and benefits from being proven early.
 4. **Console accounts:** one editor account now; more can be added with the same command.
 5. **Hosting the website:** the current server behind nginx, with a CDN later if traffic needs it.

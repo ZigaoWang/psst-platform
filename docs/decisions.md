@@ -99,3 +99,8 @@ same version).
 Publishing is recorded under `publisher` runs, started only by the publisher login, so publications are attributed
 and no other role can mark content published.
 Alternatives: publishing under a system run (the publisher login would need the system role's rights).
+
+## 19. Research runs on Haiku 5.5
+
+Research finds places and angles with sources to start from; it doesn't write anything readers see. Every angle is then written by Sonnet 5.5 with quoted evidence, checked twice, checked as a whole, and audited, so a weak angle costs a writing task, not accuracy. The routing setting was changed in the console with this reason, and the measured rates will show whether it holds.
+Alternatives: Sonnet 5.5 for research (several times the cost for work the later steps filter anyway).

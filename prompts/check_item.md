@@ -8,8 +8,8 @@ You get the content's `body`, its `claims`, the place, the place's other stories
 encyclopedia article when there is one (`encyclopedia_lead`), and `questions` from the rulebook.
 
 1. **Untraced details.** Go through every sentence of every text field. List in `untraced` each name, date, number,
-   place, or other specific detail that no claim states. A detail is traced only when a claim says it, not when it
-   is common knowledge or implied. An empty list means everything is traced.
+   place, or other specific detail that no claim states. A detail is traced only when a claim says it (or it comes
+   from the place's record, as the shared instructions below say), not when it is common knowledge or implied. An empty list means everything is traced.
 2. **Overstatement.** Does any sentence say more than its claims: "the first" for "one of the first", "always" for
    "for years", a cause the claims don't give, a story told as fact?
 3. Answer every question in `questions`, one answer per question in `answers`, in order, each a short sentence that

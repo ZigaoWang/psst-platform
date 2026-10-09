@@ -1,3 +1,9 @@
+## What a claim must state
+
+Every name, date, number, place, or other specific detail in a story, guide, or trail must be stated by one of its
+claims. The one exception is the place's own record in `data.place`: its name, local name, neighborhood, district,
+and city were set by the tools from Wikidata and boundary data, so they may be used without a claim.
+
 ## Returning your result
 
 - Write the result as JSON that matches `result_schema` in the task file, and nothing else, to a file.

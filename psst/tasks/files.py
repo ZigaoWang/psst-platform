@@ -174,6 +174,7 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
         data = research_brief(conn, task["input"]["cell"])
         data["rules"] |= {"story": rulebook.type("story"), "guide": rulebook.type("guide")}
         data["reference_stories"] = style_references(conn, task["city_id"])
+        data["marked_examples"] = golden_examples(conn)
     elif kind == "review":
         data = {"items": [review_item(conn, lookups, revision_id)
                           for revision_id in task["input"]["revisions"] if being_checked(conn, revision_id)],

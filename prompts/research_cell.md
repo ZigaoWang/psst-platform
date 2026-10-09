@@ -7,9 +7,11 @@ sources and rejects what isn't surprising, so spend your effort on fewer, better
 standard is the repository's `docs/content.md`; read it once before you start.
 
 You get the cell (`data.bounds`, `data.neighborhoods`), its leads (`data.leads`, best known first), the places already
-in and around it with their stories (`data.places_nearby`), the rules (`data.rules`), and `data.reference_stories`:
-stories an editor chose as the standard. Read them first for the voice and for the kind of surprise. Never reuse
-their content.
+in and around it with their stories (`data.places_nearby`), the rules (`data.rules`), `data.reference_stories`
+(stories an editor chose as the standard), `data.marked_examples` (stories the editor marked good, weak, or bad, with
+the reason for each), and `data.golden_bar` (good and weak writing side by side, and a checklist). Read all three
+first: a review will mark every story the way the editor marked these, and only good ones publish. Never reuse their
+content.
 
 ## 1. Find the places
 
@@ -51,18 +53,21 @@ standing there sees; its surprise isn't in the first paragraph of the encycloped
 numbers, years, physical details); it's true or honestly labeled; and it would make a well-read friend say "wait,
 really?". A statistic, a date, or a list of facts is not a story. Drop the rest and say why in the lead's reason.
 
-A place has one to three stories; one excellent story is enough. Lead with the detail nobody knows, not the one
-everybody does.
+One strong story per place beats two thin ones; write a second only when it is as good as the first. Lead with the
+detail nobody knows, not the one everybody does.
 
 ## 4. Write
 
 Write each story the way you'd tell it to a friend standing there, before you think about claims.
 
 - `headline`: the secret, plainly, up to 60 characters. Not a pun, not a question.
-- `short`: one or two sentences that stand alone on a card and lead with the surprise.
-- `long`: the how and why, with the names and dates that make it real; for a legend or a dispute, what the evidence
-  shows. Don't repeat the short version with more adjectives, and don't stitch quotes together: tell it.
-- `look`: what to look at and where to stand to see it. It points at the thing the story is about.
+- `short`: one or two sentences that stand alone on a card; the surprise is in the first sentence.
+- `long`: start at the surprise, not with background; then the how and why, with the names and dates that make it
+  real. End on the payoff: no speculation, no unanswered question, no tangent into a second story. Don't repeat the
+  short version, never say the same thing twice, and don't stitch quotes together: tell it. Read every sentence
+  aloud; rewrite any that doesn't read cleanly.
+- `look`: something visible today that the story is about, and where to stand to see it. If there is nothing to
+  see, the place has no story.
 - `veracity`: `fact` only when the records establish it; `legend` for a story people tell that is unproven, written
   as one ("the story goes"); `disputed` when good sources disagree. To set a popular story straight, put the popular
   version in `myth` and give it claims with the role `myth`.
@@ -82,8 +87,9 @@ When a story reads well, list its claims: every checkable statement, with its ki
 name, and detail it asserts, as written in your prose), and its evidence: the snapshot id and the exact words copied
 from that snapshot. Use `source_form` when the source writes a value differently ("4th September" for "September 4").
 Every number and proper name in the prose must appear in a cited passage, and the prose never says more than its
-claims. A `fact` story needs a primary or scholarly passage for every claim, or two independent sources; otherwise it
-is a `legend`.
+claims. A `fact` story needs a primary or scholarly passage for every claim, or two independent sources, never
+Wikipedia alone; otherwise it is a `legend`. Label each source's kind honestly: an enthusiasts' site or a society
+website is `community`, not `scholarly`.
 
 ## 6. Submit
 

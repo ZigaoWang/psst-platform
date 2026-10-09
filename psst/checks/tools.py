@@ -97,6 +97,9 @@ def check(item_type: str, body: dict[str, Any], claims: list[Claim], snapshots: 
     if item_type != "photo":
         _trace(report, prose, claims, quotes_by_claim, context)
         _own_words(report, prose, claims, snapshots, rulebook)
+        _paraphrase(report, prose, claims, snapshots, rulebook)
+    if item_type == "story":
+        _look(report, body)
     _sources(report, item_type, body, claims, quotes_by_claim, snapshots, rulebook)
     return Result(report, matches)
 
@@ -154,6 +157,13 @@ def _trace(report: Report, prose: dict[str, str], claims: list[Claim],
         for number in numbers(text):
             if not any(number in k for k in known):
                 report.refuse(where, f"'{number}' isn't among the claims' values; add the claim it belongs to")
+    pages = {snapshot.id: snapshot.text for found in quotes.values() for snapshot, _ in found}
+    cited = set(words(" ".join(pages.values()) + " " + " ".join(context.names)))
+    for where, text in prose.items():
+        missing = sorted({n for n in proper_names(text) if not set(words(n)) <= cited})
+        if missing:
+            report.refuse(where, f"{', '.join(repr(n) for n in missing)} isn't in any cited passage; "
+                                 "cite where it comes from or leave it out")
     for claim in claims:
         passages = [p for _, p in quotes.get(claim.n, [])]
         for value in claim.values:
@@ -161,6 +171,24 @@ def _trace(report: Report, prose: dict[str, str], claims: list[Claim],
             if passages and not any(contains(p, form) or contains(p.replace(",", ""), form.replace(",", ""))
                                     for p in passages):
                 report.refuse(f"claim {claim.n}", f"'{form}' isn't in any of its passages")
+
+
+CAPITAL_WORD = re.compile(r"(?<![\w'’-])[A-Z][\w'’]*")
+SENTENCE_START = re.compile(r"(?:^|[.!?:;]\s+|[\"“(]\s*)$")
+
+
+def proper_names(text: str) -> list[str]:
+    """Each capitalized word, except one that only starts a sentence (a sentence's first word counts when the next
+    word is capitalized too, as in a name)."""
+    found = list(CAPITAL_WORD.finditer(text))
+    names = []
+    for index, match in enumerate(found):
+        following = found[index + 1] if index + 1 < len(found) else None
+        starts = SENTENCE_START.search(text[:match.start()]) is not None
+        joined = following is not None and text[match.end():following.start()] == " "
+        if len(match.group(0)) > 1 and (not starts or joined):
+            names.append(match.group(0))
+    return names
 
 
 # Own words --------------------------------------------------------------------------------------------------
@@ -185,6 +213,54 @@ def _own_words(report: Report, prose: dict[str, str], claims: list[Claim], snaps
                 report.refuse(where, f"copies \"{' '.join(shared)}\" from snapshot {runs[shared]}; "
                                      "write it in your own words or quote it")
                 break
+
+
+SENTENCE = re.compile(r"[^.!?]+[.!?]?")
+
+
+def _content(text: str) -> set[str]:
+    """Words of four letters or more, without names: a shared name is a fact, not a copied sentence."""
+    names = {w.casefold() for w in CAPITAL_WORD.findall(text)}
+    return {w for w in words(text) if len(w) >= 4 and w.isalpha() and w not in names}
+
+
+def _paraphrase(report: Report, prose: dict[str, str], claims: list[Claim], snapshots: dict[str, Snapshot],
+                rulebook: Rulebook) -> None:
+    """No sentence of the prose repeats most of the words of one source sentence, even reworded."""
+    share = float(rulebook.writing["max_sentence_overlap"])
+    least = int(rulebook.writing["min_overlap_words"])
+    cited = {p.snapshot for c in claims for p in c.evidence if p.snapshot in snapshots}
+    index: dict[str, set[int]] = {}
+    sentences: list[tuple[set[str], str]] = []
+    for snapshot_id in sorted(cited):
+        for match in SENTENCE.finditer(snapshots[snapshot_id].text):
+            found = _content(match.group(0))
+            if len(found) >= least:
+                sentences.append((found, snapshot_id))
+                for word in found:
+                    index.setdefault(word, set()).add(len(sentences) - 1)
+    for where, text in prose.items():
+        for match in SENTENCE.finditer(QUOTED.sub(" ", text)):
+            own = _content(match.group(0))
+            if len(own) < least:
+                continue
+            counts: dict[int, int] = {}
+            for word in own:
+                for sentence in index.get(word, ()):
+                    counts[sentence] = counts.get(sentence, 0) + 1
+            best = max(counts.items(), key=lambda kv: kv[1] / len(sentences[kv[0]][0]), default=None)
+            if best and best[1] >= share * len(own) and best[1] >= 0.5 * len(sentences[best[0]][0]):
+                report.refuse(where, f"\"{match.group(0).strip()}\" repeats a sentence of snapshot "
+                                     f"{sentences[best[0]][1]} in other words; tell it your own way")
+
+
+def _look(report: Report, body: dict[str, Any]) -> None:
+    """The look points at something the story is about: it shares a word of five letters or more with the story."""
+    def long_words(text: str) -> set[str]:
+        return {w for w in words(text) if len(w) >= 5 and w.isalpha()}
+    look = long_words(body.get("look") or "")
+    if look and not look & long_words(" ".join(body[f] for f in ("headline", "short", "long"))):
+        report.refuse("look", "names nothing the story is about; point at the thing the story describes")
 
 
 # Source rules -----------------------------------------------------------------------------------------------

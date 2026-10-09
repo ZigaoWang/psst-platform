@@ -36,6 +36,10 @@ def _compiled(rulebook: Rulebook) -> _Patterns:
         british_suffixes=[
             re.compile(r"\b(" + "|".join(ise) + r")is(" + "|".join(rules["british_ise_endings"]) + r")\b"),
             re.compile(r"\b(" + "|".join(yse) + r")s(" + "|".join(rules["british_yse_endings"]) + r")\b"),
+            re.compile(r"\b(" + "|".join(rules["british_our_stems"]) + r")(" + "|".join(rules["british_our_endings"])
+                       + r")\b"),
+            re.compile(r"\b(" + "|".join(rules["british_re_stems"]) + r")(" + "|".join(rules["british_re_endings"])
+                       + r")\b"),
         ],
     )
 
@@ -62,14 +66,17 @@ def check_prose(report: Report, where: str, text: str, rulebook: Rulebook | None
         if pattern.search(lowered):
             report.flag(where, f"uses '{phrase}'; is it earning its place?")
     british = rules["british_spellings"]
+    flagged = set()
     for match in WORD.finditer(text):
         word = match.group(0)
         if word[0].islower() and word in british:
             report.refuse(where, f"British spelling '{word}'; use '{british[word]}'")
+            flagged.add(word)
     for suffix in patterns.british_suffixes:
         for match in suffix.finditer(text):
-            if match.group(0)[0].islower():
-                report.refuse(where, f"British spelling '{match.group(0)}'; use the -ize or -yze form")
+            if match.group(0)[0].islower() and match.group(0) not in flagged:
+                report.refuse(where, f"British spelling '{match.group(0)}'; use the US form")
+                flagged.add(match.group(0))
 
 
 def check_neutral(report: Report, where: str, text: str, rulebook: Rulebook | None = None) -> None:

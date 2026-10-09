@@ -219,3 +219,22 @@ def test_the_check_never_changes_its_inputs():
     before = (copy.deepcopy(body), copy.deepcopy(given))
     check("story", body, given, SNAPSHOTS)
     assert (body, given) == before
+
+
+def test_a_name_no_cited_source_mentions_is_refused():
+    result = check("story", story(long=LONG.replace("Ada Thorne designed", "Ada Thorne and Hugo Brandt designed")),
+                   claims(), SNAPSHOTS)
+    assert "'Brandt', 'Hugo' isn't in any cited passage" in refusals(result)
+
+
+def test_a_source_sentence_told_in_other_words_is_refused():
+    copied = ("The chimney rises 31 meters tall and carries a cast iron band at every floor level of the old "
+              "building.")
+    result = check("story", story(long=LONG + " " + copied), claims(), SNAPSHOTS)
+    assert "repeats a sentence of snapshot sn_record0000 in other words" in refusals(result)
+
+
+def test_a_look_at_something_the_story_never_mentions_is_refused():
+    result = check("story", story(look="Stand by the bus stop and look across at the post office."), claims(),
+                   SNAPSHOTS)
+    assert "names nothing the story is about" in refusals(result)

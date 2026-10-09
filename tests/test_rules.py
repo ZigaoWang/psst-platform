@@ -64,3 +64,16 @@ def test_guide_text_never_judges():
 
 def test_sentences_are_counted_past_abbreviations():
     assert writing.count_sentences("Built by C. W. Smith in 1871. It closed in 1952.") == 2
+
+
+@pytest.mark.parametrize("word", ["honours", "honoured", "neighbours", "centres", "theatres", "kilometres"])
+def test_british_word_families_are_refused(word):
+    report = Report()
+    writing.check_prose(report, "short", f"It {word} the past.")
+    assert any("British spelling" in r for r in report.refusals)
+
+
+def test_proper_names_keep_their_own_spelling():
+    report = Report()
+    writing.check_prose(report, "short", "The National Theatre faces the Southbank Centre.")
+    assert not report.refusals

@@ -243,6 +243,16 @@ british_spellings:
   practise: practice
   practised: practiced
 
+# Word families with British endings, as stem plus ending: -our (honour, honours, honoured) and -re (centre,
+# theatres, metres). Proper names keep their own spelling: only lowercase words are checked.
+british_our_stems: [arb, ard, arm, behavi, cand, clam, col, demean, endeav, fav, ferv, flav, harb, hon, hum, lab,
+  neighb, od, parl, rig, rum, sav, splend, tum, val, vap, vig]
+british_our_endings: [our, ours, oured, ouring, ourful, ourable, ourably, ourite, ourites, ourless, ourer, ourers,
+  ourhood, ourhoods]
+british_re_stems: [cent, theat, met, kilomet, centimet, millimet, lit, fib, calib, somb, spect, lust, sab, meag,
+  sepulch, manoeuv]
+british_re_endings: [re, res, red, ring]
+
 # -ise and -yse verbs written -ize and -yze in US English, as stem plus ending.
 british_ise_stems: [organ, recogn, real, special, urban, modern, standard, civil, colon, commercial, critic, apolog,
   author, capital, central, character, custom, final, formal, harmon, immortal, industrial, legal, memorial, minim,
@@ -277,3 +287,8 @@ stock_phrases:
 
 # Own words: the longest run of words prose may share with any snapshot it cites.
 max_shared_words: 7
+# A prose sentence is refused when this share of its content words (four letters or more, names aside) come from
+# one source sentence and they make up at least half of that sentence, for sentences with at least
+# min_overlap_words such words.
+max_sentence_overlap: 0.7
+min_overlap_words: 6

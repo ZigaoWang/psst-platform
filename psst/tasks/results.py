@@ -73,6 +73,12 @@ def schema(task_type: str, item_type: str | None = None) -> dict[str, Any]:
         return research()
     if task_type == "review":
         return review()
+    if task_type == "calibrate":
+        mark = {"type": "object", "additionalProperties": False, "required": ["golden", "mark", "reason"],
+                "properties": {"golden": {"type": "string", "pattern": "^gs_"},
+                               "mark": {"enum": ["good", "weak", "bad"]}, "reason": NOTE}}
+        return {"type": "object", "additionalProperties": False, "required": ["marks", "notes"],
+                "properties": {"marks": {"type": "array", "items": mark}, "notes": NOTE}}
     if task_type == "find_photos":
         return photos()
     raise KeyError(f"no result schema for {task_type}")

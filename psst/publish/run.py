@@ -70,6 +70,10 @@ def publish(conn: Connection, token: str, channels: Channels, base_url: str, out
     _lock(conn)
     result: Build | None = None
     try:
+        gate = conn.execute("SELECT psst.setting('gate.open') AS open").fetchone()
+        if not (gate and gate["open"] is True):
+            raise PublishError("The review gate is closed: no current calibration agrees with the editor's marks "
+                               "(decision 25).")
         result = build(conn, out_root, _next_version_time(conn))
         changes = _changes(conn, result)
         conn.commit()

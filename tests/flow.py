@@ -44,6 +44,7 @@ def setup_city(database):
     """A city with one place and two saved sources: an official record and a newspaper."""
     admin, _ = database.start_run("system")
     with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.settings SET value = 'true' WHERE key = 'gate.open'")  # calibrated in test_gate
         place = sample.place(conn, admin)
         record = sample.snapshot(conn, admin)
         paper = sample.snapshot(conn, admin, "Readers at the Mill Lane library sit under the old boiler beams.",

@@ -175,6 +175,21 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
         data["rules"] |= {"story": rulebook.type("story"), "guide": rulebook.type("guide")}
         data["reference_stories"] = style_references(conn, task["city_id"])
         data["marked_examples"] = golden_examples(conn)
+    elif kind == "calibrate":
+        fold = int(task["input"]["fold"])
+        golden = [dict(r) for r in conn.execute("""
+            SELECT id, place, headline, short, long, sources, mark, reason, psst.golden_fold(id) = %s AS blind
+            FROM psst.golden_stories ORDER BY md5(id)""", (fold,))]
+        data = {"items": [{k: g[k] for k in ("id", "place", "headline", "short", "long", "sources")}
+                          for g in golden if g["blind"]],
+                "marked_examples": [{k: g[k] for k in ("place", "headline", "short", "long", "sources", "mark",
+                                                       "reason")} for g in golden if not g["blind"]],
+                "reference_stories": style_references(conn, task["city_id"]),
+                "rules": {"story": rulebook.type("story"), "guide": rulebook.type("guide")},
+                "calibration": "These stories are already written and published or marked; there are no claims to "
+                               "check. Mark each one good, weak, or bad as you would in a review, from its text "
+                               "alone, and return {'marks': [{'golden': <id>, 'mark': ..., 'reason': ...}], "
+                               "'notes': ...}."}
     elif kind == "review":
         data = {"items": [review_item(conn, lookups, revision_id)
                           for revision_id in task["input"]["revisions"] if being_checked(conn, revision_id)],
@@ -212,7 +227,7 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
     bar = golden_bar(conn) if kind in BAR_TASKS else None
     if bar:
         data["golden_bar"] = bar["body"]
-    prompt = prompts.load(kind)
+    prompt = prompts.load("review" if kind == "calibrate" else kind)  # calibration measures the review prompt
     return {
         "task": task["id"], "type": kind, "revision": task["revision_id"], "leased_until": str(task["leased_until"]),
         "prompt": prompt.text, "prompt_version": prompt.version, "rulebook": rulebook.version,
@@ -221,7 +236,7 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
     }
 
 
-BAR_TASKS = {"research_cell", "review", "revise", "write_trail"}
+BAR_TASKS = {"research_cell", "review", "calibrate", "revise", "write_trail"}
 
 
 def golden_bar(conn: Connection) -> dict[str, Any] | None:

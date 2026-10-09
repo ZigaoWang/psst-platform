@@ -23,6 +23,7 @@ LEGACY_ID = "pl_0123456789"
 def city(database, monkeypatch):
     system = Worker(database, kind="system")
     with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.settings SET value = 'true' WHERE key = 'gate.open'")  # calibrated in test_gate
         sample.city(conn)
         conn.execute("INSERT INTO psst.area_parts (area_id, geom) SELECT id, geom FROM psst.areas WHERE id = %s",
                      (sample.CITY_ID,))

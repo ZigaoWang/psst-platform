@@ -17,10 +17,13 @@ from psycopg.types.json import Jsonb
 from psst.checks import runner
 from psst.photos import importing
 from psst.places import research, resolve
+from psst.tasks import prompts
+from psst.tasks.files import golden_bar
 
 log = logging.getLogger("psst.system")
 Connection = psycopg.Connection[dict[str, Any]]
 AUDIT_PLAN_SECONDS = 600
+GATE_SECONDS = 300
 
 
 class SystemWorker:
@@ -35,6 +38,7 @@ class SystemWorker:
             "relink_place": self.relink_place,
         }
         self._audits_planned = 0.0
+        self._gate_refreshed = 0.0
 
     def tool_check(self, conn: Connection, task: dict[str, Any]) -> dict[str, Any]:
         result = runner.run(conn, self.token, task["revision_id"], task["id"])
@@ -73,6 +77,17 @@ class SystemWorker:
                 log.exception("%s %s failed", task["type"], task["id"])
         return True
 
+    def refresh_gate(self) -> dict[str, Any]:
+        """Open or close the review gate for the current review prompt and golden bar, queueing any calibration it
+        lacks (decision 25)."""
+        with self.connect() as conn:
+            bar = golden_bar(conn)
+            row = conn.execute("SELECT psst.refresh_gate(%s, %s, %s) AS s",
+                               (self.token, prompts.load("review").version, bar["version"] if bar else None)).fetchone()
+            conn.commit()
+        self._gate_refreshed = time.monotonic()
+        return dict(row["s"]) if row else {}
+
     def plan_audits(self, force: bool = False) -> int:
         with self.connect() as conn:
             row = conn.execute("SELECT psst.plan_audits(%s, %s) AS n", (self.token, force)).fetchone()
@@ -89,6 +104,8 @@ class SystemWorker:
                 busy = self.step()
                 if time.monotonic() - self._audits_planned > AUDIT_PLAN_SECONDS:
                     self.plan_audits()
+                if time.monotonic() - self._gate_refreshed > GATE_SECONDS:
+                    self.refresh_gate()
                 if once and not busy:
                     return
                 if not busy:

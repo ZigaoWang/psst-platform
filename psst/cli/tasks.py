@@ -171,6 +171,9 @@ def problems(document: dict[str, Any], result: dict[str, Any]) -> list[str]:
                     found += [f"place {index} {written_type} {n}: {r}" for r in check.report.refusals]
     if kind == "review":
         found += review_problems(document["data"], result)
+    if kind == "calibrate":
+        given = {m["golden"] for m in result["marks"]}
+        found += [f"mark {i['id']} ({i['headline']})" for i in document["data"]["items"] if i["id"] not in given]
     if kind == "find_photos":
         room = rules.load().type("photo")["max_per_place"] - len(document["data"]["existing_photos"])
         if len(result["choices"]) > room:
@@ -228,9 +231,9 @@ def submit_result(args: argparse.Namespace) -> int:
     if found:
         print("Not submitted. Fix these and submit again:\n" + "\n".join(f"- {p}" for p in found))
         return 1
-    function = {"research_cell": "submit_research", "find_photos": "submit_photos"}.get(document["type"],
-                                                                                       "submit_task")
-    if function != "submit_photos":
+    function = {"research_cell": "submit_research", "find_photos": "submit_photos",
+                "calibrate": "submit_calibration"}.get(document["type"], "submit_task")
+    if function not in ("submit_photos", "submit_calibration"):
         result = result | {"rulebook": document["rulebook"], "bar": document.get("bar_version")}
     with db.connect("worker") as conn:
         outcome = conn.execute(f"SELECT psst.{function}(%s, %s, %s, %s) AS r",

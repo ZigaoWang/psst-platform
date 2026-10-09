@@ -99,3 +99,21 @@ def test_a_guide_revision_sees_the_wikidata_lines_and_the_lead(database, city):
     with database.connect("worker") as conn:
         data = files.build(conn, task, lookups)["data"]
     assert data["wikidata"] == {"lines": ["built (P571): 1871"]} and data["encyclopedia_lead"] == "A lead."
+
+
+def test_the_queue_command_counts_a_citys_tasks(database, city, monkeypatch, capsys):
+    import argparse
+    from contextlib import contextmanager
+
+    from psst.core import db
+
+    @contextmanager
+    def connect(role):
+        with database.connect(role) as conn:
+            yield conn
+
+    monkeypatch.setattr(db, "connect", connect)
+    queue_story(database, city)
+    task_cli.show_queue(argparse.Namespace(city="testville"))
+    shown = json.loads(capsys.readouterr().out)
+    assert shown["tasks"]["write_story"] == {"queued": 1, "leased": 0, "waiting_for_editor": 0}

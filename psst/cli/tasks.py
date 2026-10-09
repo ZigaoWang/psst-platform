@@ -40,6 +40,9 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     give_back.add_argument("task_file", type=Path)
     give_back.add_argument("--problem", required=True)
     give_back.set_defaults(run=return_task)
+    queue = commands.add_parser("queue", help="count waiting and leased tasks, and items by state, for a city")
+    queue.add_argument("--city", required=True, help="the city's slug, such as london")
+    queue.set_defaults(run=show_queue)
 
 
 def _lead(place: dict[str, Any]) -> dict[str, Any] | None:
@@ -91,6 +94,27 @@ def _photo_file(body: dict[str, Any]) -> str | None:
     except (OSError, ValueError):
         return None
     return str(path)
+
+
+def show_queue(args: argparse.Namespace) -> int:
+    """What is waiting in a city, so whoever starts runs knows which roles are needed."""
+    with db.connect("worker") as conn:
+        city = conn.execute("SELECT id FROM psst.cities WHERE slug = %s", (args.city,)).fetchone()
+        if city is None:
+            raise config.ConfigError(f"no city with the slug {args.city!r}")
+        tasks = conn.execute("""
+            SELECT type, count(*) FILTER (WHERE state = 'queued') AS queued,
+                   count(*) FILTER (WHERE state = 'leased') AS leased,
+                   count(*) FILTER (WHERE state = 'failed') AS waiting_for_editor
+            FROM psst.tasks WHERE city_id = %s AND state IN ('queued', 'leased', 'failed')
+            GROUP BY type ORDER BY type""", (city["id"],)).fetchall()
+        items = conn.execute("""
+            SELECT type, state, count(*) AS n FROM psst.items WHERE city_id = %s
+            GROUP BY type, state ORDER BY type, state""", (city["id"],)).fetchall()
+    counts = ("queued", "leased", "waiting_for_editor")
+    print(json.dumps({"tasks": {r["type"]: {k: r[k] for k in counts} for r in tasks},
+                      "items": {f"{r['type']} {r['state']}": r["n"] for r in items}}, indent=2))
+    return 0
 
 
 def lease_next(args: argparse.Namespace) -> int:

@@ -17,7 +17,7 @@ from psycopg.rows import dict_row
 
 from . import config, tunnel
 
-Role = Literal["admin", "system", "worker", "publisher", "console"]
+Role = Literal["admin", "system", "worker", "publisher", "console", "api"]
 MIGRATIONS = config.ROOT / "db" / "migrations"
 ROLES_SQL = config.ROOT / "db" / "roles.sql"
 

@@ -6,6 +6,7 @@ import argparse
 import logging
 
 from psst.core import db
+from psst.services import intake as reader_intake
 from psst.services.fetch_service import FetchService, serve
 from psst.services.system_worker import SystemWorker
 
@@ -20,6 +21,8 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     work.set_defaults(run=run_work)
     fetcher = commands.add_parser("serve-fetch", help="run the fetch service on this machine's loopback interface")
     fetcher.set_defaults(run=run_fetch)
+    intake = commands.add_parser("serve-intake", help="run reader intake (reports and demand) on the loopback")
+    intake.set_defaults(run=run_intake)
     audits = commands.add_parser("plan-audits", help="group accepted work into audit batches")
     audits.add_argument("--force", action="store_true", help="also batch groups smaller than the minimum")
     audits.set_defaults(run=run_plan_audits)
@@ -50,5 +53,14 @@ def run_fetch(args: argparse.Namespace) -> int:
         token = start(conn, "system", "fetch service")
     server = serve(FetchService(lambda: db.open_connection(info), token))
     logging.getLogger("psst.fetch").info("listening on %s:%s", *server.server_address[:2])
+    server.serve_forever()
+    return 0
+
+
+def run_intake(args: argparse.Namespace) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    info = db.conninfo("api")
+    server = reader_intake.serve(reader_intake.Intake(lambda: db.open_connection(info, autocommit=True)))
+    logging.getLogger("psst.intake").info("listening on %s:%s", *server.server_address[:2])
     server.serve_forever()
     return 0

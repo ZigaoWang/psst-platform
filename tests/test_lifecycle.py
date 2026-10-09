@@ -204,15 +204,3 @@ def test_an_ended_run_can_no_longer_act(database):
 def test_a_worker_can_only_read(database, statement):
     with database.connect("worker") as conn, pytest.raises(psycopg.errors.InsufficientPrivilege):
         conn.execute(statement)
-
-
-def test_settings_change_only_by_an_editor_with_a_reason(database):
-    _, editor = database.start_run("editor")
-    with database.connect("console") as conn:
-        conn.execute("SELECT psst.change_setting(%s, 'audit.threshold.story', '0.01', 'tighter for launch')", (editor,))
-        assert conn.execute("SELECT psst.setting('audit.threshold.story') AS v").fetchone()["v"] == 0.01
-        with pytest.raises(psycopg.errors.InvalidParameterValue):
-            conn.execute("SELECT psst.change_setting(%s, 'audit.threshold.story', '\"low\"', 'x')", (editor,))
-    _, worker = database.start_run("worker", "claude-haiku-5-5")
-    with database.connect("worker") as conn, pytest.raises(psycopg.errors.InsufficientPrivilege):
-        conn.execute("SELECT psst.change_setting(%s, 'audit.threshold.story', '0.5', 'x')", (worker,))

@@ -8,6 +8,7 @@ import os
 from typing import Any
 
 import psycopg
+from psycopg.types.json import Jsonb
 
 from psst.core import config, db
 from psst.publish.channels import Channels
@@ -25,6 +26,8 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     back.add_argument("--to", metavar="VERSION", help="a content version (default: the one before the current)")
     back.set_defaults(run=run_rollback)
     groups.add_parser("prune", help="delete packs no recent version uses").set_defaults(run=run_prune)
+    requests = groups.add_parser("publish-requests", help="carry out a publish or rollback asked for in the console")
+    requests.set_defaults(run=run_requests)
 
 
 def channels() -> Channels:
@@ -67,3 +70,34 @@ def run_rollback(args: argparse.Namespace) -> int:
 def run_prune(args: argparse.Namespace) -> int:
     print(f"{channels().prune()} unused packs deleted")
     return 0
+
+
+def run_requests(args: argparse.Namespace) -> int:
+    """Leases the waiting publish or rollback request, if any, carries it out, and records the outcome."""
+    with db.open_connection(db.conninfo("publisher")) as conn:
+        token = _start(conn)
+        task = conn.execute("SELECT * FROM psst.lease_task(%s, %s)", (token, ["publish", "rollback"])).fetchone()
+        conn.commit()
+        if task is None:
+            return 0
+        result: dict[str, Any]
+        try:
+            if task["type"] == "rollback":
+                before, after = rollback(conn, token, channels(), task["input"].get("to"))
+                result = {"ok": True, "from": before, "to": after}
+            else:
+                outcome = publish(conn, token, channels(), config.require("PSST_PUBLIC_URL"), WORK,
+                                  only_staging=bool(task["input"].get("only_staging")),
+                                  allow_shrink=task["input"].get("allow_shrink"))
+                result = {"ok": True, "version": outcome.version, "promoted": outcome.promoted,
+                          "counts": outcome.counts, "changes": {k: len(v) for k, v in outcome.changes.items()},
+                          "held": outcome.held[:200]}
+        except PublishError as error:
+            result = {"ok": False, "error": str(error), "problems": error.problems[:200]}
+        except Exception as error:  # the console shows what went wrong instead of a stuck request
+            result = {"ok": False, "error": str(error)[:2000]}
+        conn.rollback()
+        conn.execute("SELECT psst.finish_task(%s, %s, %s)", (token, task["id"], Jsonb(result)))
+        conn.commit()
+    print(json.dumps(result))
+    return 0 if result["ok"] else 1

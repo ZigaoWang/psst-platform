@@ -1,0 +1,78 @@
+# Decisions
+
+Decisions made while building, newest last. Each says what was decided, why, and what else was considered. Decisions settled in the design itself are in [design.md](design.md), sections 3 and 18.
+
+## 1. Database roles are prefixed `psst_platform_`
+
+Postgres roles are shared by every database on the server, and the previous system already uses `psst`, `psst_api`, and `psst_agent`. The new roles (`psst_platform_admin`, `_system`, `_worker`, `_publisher`, `_console`, `_api`) can't collide with them or change their grants.
+Alternatives: reusing the previous role names (would change the previous system's permissions); a short prefix such as `pp_` (unclear on a shared server).
+
+## 2. Only the fetch service writes snapshots
+
+Evidence is only as good as the snapshot it is matched against. If a worker could store snapshot text, a misremembered quote could be stored as the source. The fetch service runs on the server, reads the page itself, and is the only writer of `sources` text and `snapshots`. Workers reach it through the same SSH tunnel as the database.
+Alternatives: fetching in the CLI and storing through a function (the client could store any text); trusting workers (the failure the design exists to prevent).
+
+## 3. The system worker runs the authoritative tool checks
+
+Tool checks are code, and code on a worker's machine can be skipped. Submitting stores a revision in `checking` with a pending `system` task; the system worker runs the tool checks under its own role and records the verdict. The CLI runs the same code before submitting so writers see problems at once.
+Alternatives: tool checks inside PL/pgSQL (text normalization, tokenization, and n-gram comparison are far clearer in Python); trusting the CLI's result.
+
+## 4. Runs carry a secret token
+
+Every write function takes the run's token and records the run it belongs to, so a worker can't act as another run, check its own writing under a different id, or write without a run. The database stores only the token's hash.
+Alternatives: passing a run id (forgeable); one login role per run (heavy, and roles are cluster-wide).
+
+## 5. Stories have a separate `look` field
+
+content.md requires every story to say what to look at and from where. A field makes it checkable and lets the app and website show it on its own. The current app does not read new fields, so format 2 output also appends `look` to `long` as its last paragraph. `long` is limited to 1,000 characters so the two together stay within format 2's 1,200.
+Alternatives: requiring the instruction inside `long` (not checkable); waiting for format 3 (current readers would not see it).
+
+## 6. Item ids replace `fa_` and `gd_` in the output
+
+Stories and guides are items with `it_` ids. The app decodes ids as plain strings, so it reads them without an update; the output schemas in `format/v2/` accept `it_` ids. The previous `fa_` and `gd_` ids belonged to content that is not carried over.
+Alternatives: minting `fa_` and `gd_` ids for new items (two id schemes for one kind of thing).
+
+## 7. Translations are revisions, published in Simplified Chinese for every city
+
+"Served both ways" means a Chinese reader gets Chinese text, in every city, not only Shanghai. A translation is a revision of the same item with `language` and `translation_of`, carrying the same claims, checked by tools (numbers and names) and by a back translation compared claim by claim. It publishes only with the English revision it translates.
+Alternatives: a separate translations table (a second content workflow); on-device translation only (unchecked, and unavailable to the website).
+
+## 8. Audit batches pool accepted work by type and city
+
+Sampling at least 30 revisions per batch needs batches of at least 30. Pooling by type and city gives that while keeping results meaningful per city. A failed batch sends its erroneous revisions back to their writers and the rest back to checking.
+Alternatives: one batch per writer run (most runs are smaller than 30, so audits would cover everything at the strong model's cost); one batch per city (a single failure reopens too much).
+
+## 9. Content rules in the rulebook, operating values in settings
+
+The rulebook (`rules/`, in git, versioned by hash) holds what content must be. Thresholds, model routing, and lease lengths are tuned from the console, so they live in a `settings` table with full history.
+Alternatives: everything in the rulebook (every threshold change would need a commit and deploy); everything in the database (content rules would lose review and tests).
+
+## 10. Source kinds name what a source is, not who owns it
+
+The kinds are `official_record`, `archive`, `operator`, `scholarly`, `press`, `reference`, and `community`. `archive` separates old newspapers and maps (primary) from today's press; `operator` is the building's own owner or operator; `scholarly` includes local history societies with cited research. Primary means `official_record`, `archive`, or `operator`.
+Alternatives: the design's first list, which put old newspapers and modern press together.
+
+## 11. Stories need two independent sources, one of them primary or scholarly
+
+This is what "original synthesis of primary sources" means in a check. With content.md's other rule (every claim backed by a non-reference passage), a story can't rest on an encyclopedia.
+Alternatives: one primary source (allowed a summary of a single listing); three sources (too few places have them).
+
+## 12. Own words means no shared run of eight words
+
+The tools compare the prose with every snapshot it cites and refuse any shared run of eight words. Eight is long enough that names and set phrases don't trip it.
+Alternatives: a similarity score (harder to explain to a writer); no check (summaries slip through).
+
+## 13. The platform is served from its own host until the switch
+
+The platform publishes to `/www/wwwroot/psst-platform/public` and nginx serves it at `psst-platform.67-230-170-225.sslip.io`, with its own TLS certificate, in its own server block. The previous site's configuration is not touched. The switch points the live content channel at the platform's production output, and needs approval.
+Alternatives: a path on the previous site (changes its configuration); a new DNS name (needs a DNS change that isn't available from the server).
+
+## 14. Tests run against PostGIS 14 in Docker
+
+The server runs PostgreSQL 14 with PostGIS 3. Tests start a throwaway `postgis/postgis:14-3.4` container (locally and as the CI service), create a fresh database from the migrations, and drop it. The harness refuses any database not named `psst_test_*` on localhost.
+Alternatives: the local Homebrew Postgres (no PostGIS); a shared test database (state leaks between runs).
+
+## 15. Shanghai is the second city
+
+Bilingual research and translation are the hardest part of the standard. Doing Shanghai second proves them before Hong Kong and Kuala Lumpur, which need the same.
+Alternatives: the design's proposed order (London, Hong Kong, Shanghai, Kuala Lumpur).

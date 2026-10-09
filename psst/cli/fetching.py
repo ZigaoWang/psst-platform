@@ -20,7 +20,8 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     command = groups.add_parser("fetch", help="read a source and save a snapshot of it")
     command.add_argument("url")
     command.add_argument("--title", required=True, help="the page's title, as the source should be cited")
-    command.add_argument("--publisher", required=True, help="who published it")
+    command.add_argument("--publisher", required=True,
+                         help="who published it (a web page's own site name is recorded when it gives one)")
     command.add_argument("--kind", required=True, choices=sorted(rules.load().sources["kinds"]))
     command.add_argument("--language", required=True, help="the page's language, such as en or zh-Hans")
     command.add_argument("--archive", action="store_true", help="read the newest Internet Archive copy")

@@ -56,6 +56,8 @@ class FetchService:
             page = self.read_page(url, bool(request.get("archive")))
         if not page.ok:
             raise RequestError(page.note or f"the page answered {page.status}")
+        # A web page's own title and site name beat typed ones; PDFs and plain text keep what the worker typed.
+        title, publisher = page.headline or title, page.site_name or publisher
         with self.connect() as conn:
             row = conn.execute(
                 "SELECT * FROM psst.record_snapshot(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",

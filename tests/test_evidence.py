@@ -139,3 +139,25 @@ def test_a_passage_the_source_never_said_is_sent_back_by_tools_alone(database, s
     result, state = tool_check(database, revision)
     assert state == "draft"
     assert any("the quote isn't in snapshot" in r for r in result.report.refusals)
+
+
+def test_a_page_names_itself_over_typed_values(database):
+    from psst.evidence import fetch
+
+    class Reader:
+        def read(self, url: str, archive: bool = False) -> Page:
+            body = (b'<html><head><title>Pump House | Mill Lane Archive</title>'
+                    b'<meta property="og:title" content="The Pump House">'
+                    b'<meta property="og:site_name" content="Mill Lane Archive"></head>'
+                    b'<body><p>Built in 1871 by the engineer Ada Thorne.</p></body></html>')
+            return fetch._page(url, 200, "text/html", body)
+
+    _, system_token = database.start_run("system")
+    service = FetchService(lambda: psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row),
+                           system_token, Reader())
+    _, token = database.start_run("worker", "claude-sonnet-5-5")
+    result = service.read({"token": token, "url": "https://archive.example.org/pump", "title": "x",
+                           "publisher": "src", "kind": "archive", "language": "en"})
+    with database.connect("admin") as conn:
+        source = conn.execute("SELECT title, publisher FROM psst.sources WHERE id = %s", (result["source"],)).fetchone()
+    assert source == {"title": "The Pump House", "publisher": "Mill Lane Archive"}

@@ -41,6 +41,9 @@ class Page:
     archived_at: str | None = None
     links: list[tuple[str, str]] = field(default_factory=list)
     note: str | None = None
+    # What the page says about itself (an HTML page's og:title and og:site_name), recorded over typed values.
+    headline: str = ""
+    site_name: str = ""
 
     @property
     def ok(self) -> bool:
@@ -57,6 +60,7 @@ class _Text(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
         self.title = ""
+        self.meta: dict[str, str] = {}
         self.links: list[tuple[str, str]] = []
         self._skip = 0
         self._in_title = False
@@ -67,6 +71,10 @@ class _Text(HTMLParser):
         if tag == "a":
             self._href = dict(attrs).get("href")
             self._link_text = []
+        if tag == "meta":
+            values = dict(attrs)
+            if values.get("property") in ("og:title", "og:site_name") and values.get("content"):
+                self.meta.setdefault(str(values["property"]), html.unescape(str(values["content"])).strip())
         if tag in self.SKIP:
             self._skip += 1
         elif tag == "title":
@@ -235,8 +243,9 @@ def _page(url: str, status: int, content_type: str, body: bytes) -> Page:
         if absolute.startswith("http") and absolute not in seen:
             seen.add(absolute)
             links.append((text, absolute))
-    return Page(url, status, html.unescape(parser.title).strip(), normalize_snapshot("".join(parser.parts)),
-                links=links)
+    title = html.unescape(parser.title).strip()
+    return Page(url, status, title, normalize_snapshot("".join(parser.parts)), links=links,
+                headline=parser.meta.get("og:title") or title, site_name=parser.meta.get("og:site_name", ""))
 
 
 def _pdf(url: str, status: int, body: bytes) -> Page:

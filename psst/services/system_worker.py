@@ -15,7 +15,7 @@ from psycopg.types.json import Jsonb
 
 from psst.checks import runner
 from psst.photos import importing
-from psst.places import resolve
+from psst.places import research, resolve
 
 log = logging.getLogger("psst.system")
 Connection = psycopg.Connection[dict[str, Any]]
@@ -30,6 +30,7 @@ class SystemWorker:
             "tool_check": self.tool_check,
             "resolve_places": self.resolve_places,
             "import_photo": self.import_photo,
+            "queue_research": self.queue_research,
         }
         self._audits_planned = 0.0
 
@@ -42,6 +43,9 @@ class SystemWorker:
 
     def import_photo(self, conn: Connection, task: dict[str, Any]) -> dict[str, Any]:
         return importing.import_photo(conn, self.token, task)
+
+    def queue_research(self, conn: Connection, task: dict[str, Any]) -> dict[str, Any]:
+        return research.queue(conn, self.token, task["input"]["city"], int(task["input"]["cells"]))
 
     def step(self) -> bool:
         """Do one task, if one is waiting. Returns whether there was one."""

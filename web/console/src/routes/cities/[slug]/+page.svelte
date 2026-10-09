@@ -53,6 +53,14 @@
 </section>
 
 <section>
+	<h2>Queue research</h2>
+	<form method="POST" action="?/research" class="filters">
+		<label>Cells, most wanted first <input name="cells" type="number" min="1" max="50" value="10" /></label>
+		<button type="submit">Queue research</button>
+	</form>
+</section>
+
+<section>
 	<h2>Open tasks</h2>
 	{#if data.tasks.length}
 		<div class="table-wrap">

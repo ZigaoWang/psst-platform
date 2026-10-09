@@ -148,3 +148,17 @@ def test_leads_that_are_not_places_are_skipped_by_the_system(database, city):
     with database.connect("admin") as conn:
         lead = conn.execute("SELECT status, reason, decided_by FROM psst.leads WHERE key = 'Q9001'").fetchone()
     assert lead["status"] == "skipped" and lead["reason"].endswith("a company") and lead["decided_by"]
+
+
+def test_the_console_queues_research_for_the_system_worker(database, city, monkeypatch):
+    with database.connect("admin") as conn:
+        conn.execute("SELECT psst.console_add_account('editor', 'a long test password')")
+    with database.connect("console") as conn:
+        session = conn.execute("SELECT psst.console_sign_in('editor', 'a long test password') AS t").fetchone()["t"]
+        conn.execute("SELECT psst.console_queue_research(%s, %s, 2)", (session, sample.CITY_ID))
+    system = SystemWorker(lambda: psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row),
+                          city.token)
+    assert system.step()
+    with database.connect("admin") as conn:
+        queued = conn.execute("SELECT count(*) AS n FROM psst.tasks WHERE type = 'research_cell'").fetchone()["n"]
+    assert queued == 4  # two from the fixture, two from the console

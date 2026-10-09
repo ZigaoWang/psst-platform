@@ -23,6 +23,12 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
+	research: async (event) => {
+		const cells = Number((await event.request.formData()).get('cells') ?? 0);
+		const [city] = await sql`SELECT id FROM psst.cities WHERE slug = ${event.params.slug}`;
+		return act(event, (s) => sql`SELECT psst.console_queue_research(${s}, ${city?.id ?? 0}, ${cells})`,
+			'Research is queued; the system worker sweeps the leads within a few minutes.');
+	},
 	translate: async (event) => {
 		const city = event.params.slug;
 		return act(event, async (session) => {

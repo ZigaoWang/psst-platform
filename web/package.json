@@ -1,0 +1,7 @@
+{
+	"name": "psst-web",
+	"private": true,
+	"type": "module",
+	"workspaces": ["ui", "console"],
+	"engines": { "node": ">=22.17" }
+}

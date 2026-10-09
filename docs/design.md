@@ -379,7 +379,7 @@ A public SvelteKit site, prerendered from the published output and served by ngi
 - Every write goes through a `SECURITY DEFINER` function that checks the caller's run token and records the run; a client can't choose who it is. Table privileges beyond `SELECT` are granted to no login role.
 - Secrets live in environment files on the server and editors' machines, never in the repository.
 - The database and the fetch service listen only on the server; the CLI reaches both through an SSH tunnel. The fetch service reads only public internet addresses.
-- The console requires sign-in, a same-site origin, and CSRF protection; nginx sends HSTS, a content security policy, and no-referrer.
+- The console requires sign-in, a same-site origin, and CSRF protection; it sends a content security policy and a same-origin referrer policy (a stricter `no-referrer` makes browsers send `Origin: null` on form posts, which the CSRF check rightly refuses), and nginx adds HSTS.
 - Backups: a nightly compressed dump plus a sorted text export to the private backup repository, with a weekly restore test against the latest backup.
 
 ## 15. Environments, testing, and operations

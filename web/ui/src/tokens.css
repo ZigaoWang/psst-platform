@@ -1,0 +1,147 @@
+/* Psst design tokens, shared by the console and the website. Colors follow the iOS app: warm paper and deep
+   ink, one color per place kind, and color only where it means something (states, legend, disputed). */
+
+:root {
+	color-scheme: light dark;
+
+	--ink: #10182b;
+	--paper: #f6f3ec;
+
+	--bg: var(--paper);
+	--surface: #ffffff;
+	--surface-sunk: #efebe2;
+	--line: #ddd7ca;
+	--line-strong: #c4bcab;
+	--text: var(--ink);
+	--text-muted: #59606e;
+	--focus: #2458d6;
+	--link: #1f4fbf;
+
+	--danger: #b3261e;
+	--danger-surface: #fbe9e7;
+	--ok: #146c2e;
+	--ok-surface: #e3f3e6;
+	--warn: #8a5300;
+	--warn-surface: #fbf0dc;
+
+	/* Lifecycle states: one scale everywhere. */
+	--state-draft: #6b6f76;
+	--state-checking: #1f5fbf;
+	--state-accepted: #00747a;
+	--state-published: #146c2e;
+	--state-retired: #8c3a32;
+	--state-queued: #6b6f76;
+	--state-leased: #1f5fbf;
+	--state-done: #146c2e;
+	--state-failed: #b3261e;
+	--state-cancelled: #8c3a32;
+
+	--legend: #6b3fa0;
+	--disputed: #a14a00;
+
+	--kind-transit: #d3221b;
+	--kind-crossing: #0067b1;
+	--kind-street: #f2a900;
+	--kind-building: #1f3a93;
+	--kind-worship: #7a1f5c;
+	--kind-memorial: #74613f;
+	--kind-green: #00783a;
+	--kind-water: #00838c;
+	--kind-culture: #c4005f;
+
+	--font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Noto Sans SC", sans-serif;
+	--font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	--text-xs: 0.75rem;
+	--text-sm: 0.875rem;
+	--text-md: 1rem;
+	--text-lg: 1.25rem;
+	--text-xl: 1.75rem;
+
+	--s1: 0.25rem;
+	--s2: 0.5rem;
+	--s3: 0.75rem;
+	--s4: 1rem;
+	--s5: 1.5rem;
+	--s6: 2rem;
+	--s7: 3rem;
+
+	--r1: 4px;
+	--r2: 8px;
+	--r3: 14px;
+
+	--shadow: 0 1px 2px rgb(16 24 43 / 0.06), 0 2px 8px rgb(16 24 43 / 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #0c1220;
+		--surface: #141c2e;
+		--surface-sunk: #0f1626;
+		--line: #26304a;
+		--line-strong: #37425f;
+		--text: var(--paper);
+		--text-muted: #a3a9b6;
+		--focus: #8fb0ff;
+		--link: #9cbcff;
+		--danger: #ff8a80;
+		--danger-surface: #3a1715;
+		--ok: #7fd18f;
+		--ok-surface: #13301b;
+		--warn: #f0b860;
+		--warn-surface: #3a2a10;
+		--state-draft: #a3a9b6;
+		--state-checking: #8fb0ff;
+		--state-accepted: #5fd0d4;
+		--state-published: #7fd18f;
+		--state-retired: #e3968f;
+		--state-queued: #a3a9b6;
+		--state-leased: #8fb0ff;
+		--state-done: #7fd18f;
+		--state-failed: #ff8a80;
+		--state-cancelled: #e3968f;
+		--legend: #b794e6;
+		--disputed: #f0a04b;
+		--shadow: none;
+	}
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font: var(--text-md) / 1.5 var(--font);
+}
+
+a {
+	color: var(--link);
+}
+
+:focus-visible {
+	outline: 3px solid var(--focus);
+	outline-offset: 2px;
+}
+
+code,
+.mono {
+	font-family: var(--font-mono);
+	font-size: 0.9em;
+}
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}

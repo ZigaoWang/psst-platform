@@ -1,0 +1,18 @@
+{
+	"name": "@psst/ui",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"description": "Design tokens and components shared by the Psst console and website.",
+	"exports": {
+		"./tokens.css": "./src/tokens.css",
+		"./*.svelte": {
+			"types": "./src/*.svelte",
+			"svelte": "./src/*.svelte"
+		},
+		"./format.js": "./src/format.js"
+	},
+	"peerDependencies": {
+		"svelte": "^5.57.1"
+	}
+}

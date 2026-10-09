@@ -4,6 +4,8 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+	// The map library is one large chunk, loaded only on the map page.
+	build: { chunkSizeWarningLimit: 1200 },
 	plugins: [
 		sveltekit({
 			compilerOptions: {

@@ -20,8 +20,8 @@ echo $release > REVISION
 export UV_PYTHON_INSTALL_DIR=$base/python UV_CACHE_DIR=$base/.cache/uv
 /root/.local/bin/uv sync -q --no-dev --frozen
 (cd web && npm ci --silent --no-audit --no-fund && PSST_CONSOLE_ORIGIN=$origin npm run build -w @psst/console --silent >/dev/null)
-install -d -o psst-platform -g psst-platform work
 sh server/setup.sh
+install -d -o psst-platform -g psst-platform work
 PSST_CONFIG=$base/env/admin.env .venv/bin/psst db migrate
 ln -sfn $base/releases/$release $base/app.next && mv -T $base/app.next $base/app
 systemctl enable -q --now psst-platform-fetch psst-platform-system psst-platform-console \

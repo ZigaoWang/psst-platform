@@ -1,5 +1,6 @@
 <script lang="ts">
 	import PageHeader from '@psst/ui/PageHeader.svelte';
+	import Notice from '@psst/ui/Notice.svelte';
 	import Badge from '@psst/ui/Badge.svelte';
 	import Pager from '@psst/ui/Pager.svelte';
 	import Empty from '@psst/ui/Empty.svelte';
@@ -12,6 +13,9 @@
 
 <svelte:head><title>Tasks · Psst console</title></svelte:head>
 <PageHeader title="Tasks" />
+{#each data.stranded as s (s.type)}
+	<Notice tone="warn">{s.waiting} {s.type} tasks are waiting and no {s.model} run is open to take them.</Notice>
+{/each}
 
 <form class="filters" method="GET">
 	<label>Type

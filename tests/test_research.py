@@ -111,7 +111,7 @@ def test_research_creates_places_stories_and_guides(database, city):
     worker, task, document = lease_research(database)
     assert [lead["name"] for lead in document["data"]["leads"]] == ["Lead 0", "Lead 1"]
     outcome = submit_research(database, worker, task, result_for(database, document))
-    assert outcome == {"places": 1, "new_places": 1, "stories": 1, "guides": 1, "leads_open": 0}
+    assert outcome == {"places": 1, "new_places": 1, "stories": 1, "guides": 1, "leads_open": 0, "guides_skipped": []}
     with database.connect("admin") as conn:
         place = conn.execute("SELECT id, state FROM psst.places WHERE wikidata_id = 'Q900010'").fetchone()
         identity = {r["legacy_id"] for r in conn.execute("SELECT legacy_id FROM psst.place_identity")}
@@ -214,3 +214,14 @@ def test_a_place_outside_its_city_is_refused(database, city, monkeypatch):
     with database.connect("admin") as conn:
         place = conn.execute("SELECT state, state_reason FROM psst.places WHERE id = %s", (LEGACY_ID,)).fetchone()
     assert place == {"state": "refused", "state_reason": "its coordinate is outside the city it was researched for"}
+
+
+def test_a_second_session_skips_a_guide_the_place_already_has(database, city):
+    worker, task, document = lease_research(database)
+    submit_research(database, worker, task, result_for(database, document))
+    with database.connect("admin") as conn:
+        conn.execute("SELECT psst.enqueue(%s, 'research_cell', 'research_cell:again', %s, %s, NULL, NULL, NULL)",
+                     (city.run, json.dumps(task["input"]), sample.CITY_ID))
+    again, second, document = lease_research(database)
+    outcome = submit_research(database, again, second, result_for(database, document))
+    assert outcome["guides"] == 0 and outcome["guides_skipped"] == [LEGACY_ID] and outcome["stories"] == 1

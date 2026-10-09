@@ -1,0 +1,279 @@
+# Writing rules for everything Psst publishes as its own text (content.md, section 5).
+
+# Refused anywhere in published text. Matched as whole words or phrases, ignoring case.
+banned_phrases:
+  - nestled
+  - boasts
+  - boasting
+  - testament to
+  - rich tapestry
+  - tapestry of
+  - vibrant
+  - delve
+  - delves
+  - bustling
+  - iconic
+  - must-see
+  - steeped in
+  - whispers of the past
+  - hidden gem
+  - fun fact
+  - did you know
+  - little-known
+  - psst
+  - stands as a
+  - stands as an
+  - it's worth noting
+  - it is worth noting
+  - interestingly,
+  - in conclusion
+  - a true gem
+  - treasure trove
+  - bucket list
+  - breathtaking
+  - awe-inspiring
+  - unforgettable
+  - embark on
+  - journey through time
+  - step back in time
+  - a feast for the eyes
+  - look no further
+  - rich history
+  - stunning
+
+# Flagged for the item check to weigh: often padding, sometimes earned.
+soft_phrases:
+  - fascinating
+  - remarkable
+  - amazing
+  - incredible
+  - truly
+  - unique
+  - a nod to
+  - not just
+  - not only
+  - storied
+  - charming
+  - quaint
+  - picturesque
+
+# Refused in guide information, which never judges (content.md, section 4.2).
+guide_judging_words:
+  - famous
+  - world-famous
+  - renowned
+  - celebrated
+  - legendary
+  - world-class
+  - spectacular
+  - magnificent
+  - impressive
+  - beautiful
+  - beautifully
+  - majestic
+  - splendid
+  - glorious
+  - gorgeous
+  - striking
+  - elegant
+  - exquisite
+  - masterpiece
+  - beloved
+  - popular
+  - treasured
+  - acclaimed
+  - landmark
+guide_superlatives:
+  - best
+  - finest
+  - greatest
+  - largest
+  - biggest
+  - tallest
+  - oldest
+  - longest
+  - highest
+  - grandest
+  - busiest
+  - smallest
+  - newest
+  - earliest
+  - widest
+  - deepest
+  - youngest
+guide_phrases:
+  - one of the
+  - among the
+  - the most
+  - the least
+  - known for its
+  - a must
+
+# Characters refused in published text, with what to do instead.
+refused_characters:
+  "—": "an em dash; rewrite with a period, comma, colon, or parentheses"
+  "–": "an en dash; use 'to' for ranges or rewrite"
+  "!": "an exclamation mark"
+
+# British spellings refused in lowercase words (capitalized names such as "Southbank Centre" keep theirs).
+british_spellings:
+  colour: color
+  colours: colors
+  coloured: colored
+  colourful: colorful
+  favourite: favorite
+  flavour: flavor
+  honour: honor
+  honoured: honored
+  labour: labor
+  labourers: laborers
+  neighbour: neighbor
+  neighbours: neighbors
+  neighbouring: neighboring
+  neighbourhood: neighborhood
+  neighbourhoods: neighborhoods
+  harbour: harbor
+  harbours: harbors
+  behaviour: behavior
+  rumour: rumor
+  rumours: rumors
+  rumoured: rumored
+  humour: humor
+  vapour: vapor
+  armour: armor
+  armoured: armored
+  parlour: parlor
+  odour: odor
+  splendour: splendor
+  endeavour: endeavor
+  valour: valor
+  vigour: vigor
+  saviour: savior
+  centre: center
+  centres: centers
+  centred: centered
+  theatre: theater
+  theatres: theaters
+  metre: meter
+  metres: meters
+  kilometre: kilometer
+  kilometres: kilometers
+  centimetre: centimeter
+  centimetres: centimeters
+  millimetre: millimeter
+  millimetres: millimeters
+  litre: liter
+  litres: liters
+  fibre: fiber
+  sabre: saber
+  spectre: specter
+  calibre: caliber
+  lustre: luster
+  sombre: somber
+  meagre: meager
+  sepulchre: sepulcher
+  grey: gray
+  greying: graying
+  programme: program
+  programmes: programs
+  storey: story
+  storeys: stories
+  kerb: curb
+  kerbs: curbs
+  tyre: tire
+  tyres: tires
+  aluminium: aluminum
+  defence: defense
+  defences: defenses
+  offence: offense
+  licence: license
+  licences: licenses
+  pretence: pretense
+  jewellery: jewelry
+  catalogue: catalog
+  analogue: analog
+  cheque: check
+  plough: plow
+  travelled: traveled
+  travelling: traveling
+  traveller: traveler
+  travellers: travelers
+  cancelled: canceled
+  cancelling: canceling
+  modelled: modeled
+  modelling: modeling
+  labelled: labeled
+  fuelled: fueled
+  levelled: leveled
+  signalling: signaling
+  signalled: signaled
+  marvellous: marvelous
+  channelled: channeled
+  tunnelled: tunneled
+  tunnelling: tunneling
+  counsellor: counselor
+  jeweller: jeweler
+  quarrelled: quarreled
+  whilst: while
+  amongst: among
+  learnt: learned
+  spelt: spelled
+  burnt: burned
+  manoeuvre: maneuver
+  encyclopaedia: encyclopedia
+  mould: mold
+  moulded: molded
+  sceptic: skeptic
+  sceptical: skeptical
+  sulphur: sulfur
+  ageing: aging
+  draught: draft
+  gaol: jail
+  pyjamas: pajamas
+  moustache: mustache
+  cosy: cozy
+  annexe: annex
+  artefact: artifact
+  artefacts: artifacts
+  enrol: enroll
+  fulfil: fulfill
+  instalment: installment
+  judgement: judgment
+  mediaeval: medieval
+  practise: practice
+  practised: practiced
+
+# -ise and -yse verbs written -ize and -yze in US English, as stem plus ending.
+british_ise_stems: [organ, recogn, real, special, urban, modern, standard, civil, colon, commercial, critic, apolog,
+  author, capital, central, character, custom, final, formal, harmon, immortal, industrial, legal, memorial, minim,
+  mobil, national, neutral, normal, optim, popular, priorit, public, revolution, romantic, sanit, stabil, summar,
+  symbol, sympath, util, visual, weapon, fantas, idol, emphas, hospital, patron, privat, pedestrian, rational,
+  regular, scandal, secular, social, subsid, terror, trivial, vandal, western, agon, energ, equal, familiar, fertil,
+  galvan, hypnot, initial, local, magnet, maxim, memor, mesmer, monopol, motor, natural, polar, pressur, random,
+  canon, computer, decentral, demoral, digit, dramat, econom, epitom, evangel, fossil, general, human, ideal, immun,
+  italic, jeopard, legitim, liberal, material, militar, moral, nation, person, politic, radical, scrutin, sensit,
+  signal, spiritual, steril, stigmat, synchron, synthes, theor, traumat, tyrann, vapor, victim, vulcan]
+british_ise_endings: [e, es, ed, ing, ation, ations]
+british_yse_stems: [analy, paraly, cataly, dialy]
+british_yse_endings: [e, ed, ing]
+
+# Phrases that make a city's stories read like a template when repeated. The item check sees how often each
+# appears among a place's other stories.
+stock_phrases:
+  - look closely
+  - most visitors
+  - most people
+  - walk past
+  - walk right past
+  - to this day
+  - still stands
+  - these days
+  - what few people know
+  - few people realize
+  - blink and you
+  - easy to miss
+  - hiding in plain sight
+  - at first glance
+
+# Own words: the longest run of words prose may share with any snapshot it cites.
+max_shared_words: 7

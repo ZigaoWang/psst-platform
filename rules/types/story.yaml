@@ -1,0 +1,40 @@
+# A story (content.md, section 4.1).
+
+prose_fields: [headline, short, long, look, myth]
+categories: [name, hidden, history, design, engineering, people, pop, quirk]
+veracities: [fact, legend, disputed]
+max_tags: 4
+# Format 2 output appends `look` to `long`, which must stay within the format's 1,200 characters.
+schema:
+  type: object
+  additionalProperties: false
+  required: [category, veracity, headline, short, long, look, tags]
+  properties:
+    category: {enum: [name, hidden, history, design, engineering, people, pop, quirk]}
+    veracity: {enum: [fact, legend, disputed]}
+    headline: {type: string, minLength: 10, maxLength: 60}
+    short: {type: string, minLength: 40, maxLength: 220}
+    long: {type: string, minLength: 300, maxLength: 1000}
+    look: {type: string, minLength: 40, maxLength: 190}
+    myth: {type: string, minLength: 20, maxLength: 200}
+    tags:
+      type: array
+      maxItems: 4
+      uniqueItems: true
+      items: {type: string, pattern: "^tg_[0-9a-hjkmnp-tv-z]{8}$"}
+
+# Shape rules the tools check beyond the schema.
+headline_refuses: ["?"]
+legend_markers: ["the story goes", "the story is", "legend has it", "locals say", "it is said", "is said to",
+                 "according to legend", "tradition has it", "folklore"]
+
+checks: [tool, claims, item]
+
+# What the whole-item check asks (design.md, section 7.4). Each is answered pass, fail, or unclear.
+item_questions:
+  - Does the prose (headline, short, long, look, myth) say anything its claims don't, or say it more strongly?
+  - Is the surprise already in the opening paragraph of the place's encyclopedia article?
+  - Is the story true of this exact place, rather than of every place of its kind?
+  - Does `look` name something a person can see and where to stand to see it?
+  - Is the veracity honest for the evidence, and does a legend or myth say what the evidence shows?
+  - Would a well-read friend say "wait, really?"

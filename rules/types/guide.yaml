@@ -1,0 +1,55 @@
+# Guide information (content.md, section 4.2).
+
+prose_fields: [identifier, about]
+schema:
+  type: object
+  additionalProperties: false
+  required: [identifier, about, key_facts]
+  properties:
+    identifier: {type: string, minLength: 3, maxLength: 70}
+    about: {type: string, minLength: 100, maxLength: 700}
+    key_facts:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        required: [property, value, claim]
+        properties:
+          property: {type: string, pattern: "^P[1-9][0-9]*$"}
+          value: {type: string, minLength: 1}
+          value_id: {type: string, pattern: "^Q[1-9][0-9]*$"}
+          claim: {type: integer, minimum: 1}
+
+about_sentences: {min: 2, max: 3}
+# The identifier is a label in the shape "[style or material] <what it is>, <year>[, by <maker>]".
+identifier_shape: "^[A-Z0-9][^.]*?(, (about |c\\. )?([0-9]{3,4}s?|[0-9]{1,2}(st|nd|rd|th) century))?(, (by|now) [^,]+)?$"
+identifier_refuses:
+  - pattern: "\\bGrade (I|II)\\b|\\blisted\\b|\\b(declared|scheduled) monument"
+    reason: repeats the heritage status, which is a key fact
+  - pattern: "\\b(on|in|off|at|near) (the )?[A-Z][a-z]+ (Street|Road|Lane|Avenue|Square|Place|Hill|Row|Court|Way)\\b"
+    reason: names the street; the place page already says where it is
+
+# Key facts shown, most useful first; at most `max_shown`. Properties not listed are never shown.
+max_shown: 6
+key_fact_order: [P84, P170, P50, P287, P571, P1619, P580, P149, P1435, P2048, P186, P547, P1101, P1083]
+key_fact_labels:
+  P84: architect
+  P170: creator
+  P50: author
+  P287: designer
+  P571: built
+  P1619: opened
+  P580: started
+  P149: style
+  P1435: heritage status
+  P2048: height
+  P186: material
+  P547: commemorates
+  P1101: floors
+  P1083: capacity
+
+checks: [tool, claims, item]
+item_questions:
+  - Does the identifier name the right kind of thing, with the year and maker its key facts give?
+  - Does the About say anything its claims don't?
+  - Does the About judge or praise instead of describing?

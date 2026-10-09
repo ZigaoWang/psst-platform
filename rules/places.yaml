@@ -1,0 +1,38 @@
+# Places and tags (design.md, section 10).
+
+kinds:
+  transit: stations, stops, piers, depots, anything you board
+  crossing: bridges, tunnels, footbridges, subways
+  street: streets, alleys, roundabouts, junctions, steps, street furniture
+  building: offices, homes, hotels, shops, pubs, banks, towers
+  worship: churches, temples, mosques, synagogues, shrines
+  memorial: statues, monuments, plaques, markers, boundary stones
+  green: parks, gardens, squares, cemeteries, trees, and natural features
+  water: docks, basins, rivers, canals, lakes, fountains, wells
+  culture: museums, theaters, galleries, studios, venues, markets, stadiums
+
+sizes:
+  small: a statue, a door, a bollard
+  medium: a building, a station, a square
+  large: a skyscraper, a long bridge, a park, a hill
+
+tag_types:
+  person_or_group: Charles Dickens, The Beatles, East India Company
+  event: The Blitz, Great Fire of London
+  era: Roman Britain, Swinging Sixties
+  movement: Art Deco, Brutalism
+  theme: Lost rivers, Ghost stations, Film locations
+
+# A tag is published once it connects this many places.
+tag_min_places: 3
+
+# Coordinates: a Wikidata coordinate coarser than this many degrees (about 50 meters) can't place a pin.
+max_wikidata_precision: 0.0005
+# Places closer than this with similar names are probably the same thing.
+duplicate_meters: 150
+duplicate_name_similarity: 0.4
+
+# Coverage: the share of a cell's places with stories that a visitor would not seek out (content.md, 1.3).
+min_ordinary_share: 0.5
+# Leads known in at least this many Wikipedia editions are covered in the cell's first pass.
+well_known_sitelinks: 20

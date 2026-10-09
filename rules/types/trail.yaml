@@ -1,0 +1,35 @@
+# A trail (content.md, section 4.4).
+
+prose_fields: [title, intro]
+stop_prose_fields: [note]
+schema:
+  type: object
+  additionalProperties: false
+  required: [title, intro, stops, tags]
+  properties:
+    title: {type: string, minLength: 10, maxLength: 60}
+    intro: {type: string, minLength: 150, maxLength: 600}
+    stops:
+      type: array
+      minItems: 4
+      maxItems: 12
+      items:
+        type: object
+        additionalProperties: false
+        required: [place, note]
+        properties:
+          place: {type: string, pattern: "^pl_[0-9a-hjkmnp-tv-z]{10}$"}
+          note: {type: string, minLength: 40, maxLength: 200}
+    tags:
+      type: array
+      minItems: 1
+      maxItems: 2
+      items: {type: string, pattern: "^tg_[0-9a-hjkmnp-tv-z]{8}$"}
+
+max_leg_meters: 1000
+max_total_meters: 6000
+checks: [tool, claims, item]
+item_questions:
+  - Does the intro or any note say anything its claims don't?
+  - Does every stop belong to the theme, for the reason its note gives?
+  - Is the walking order sensible on the ground?

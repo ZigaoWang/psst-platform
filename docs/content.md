@@ -106,7 +106,7 @@ Every content type is an item with revisions, claims, and evidence (design.md, s
 | `headline` | Up to 60 characters. Names the secret plainly. No question marks, puns, or clickbait. |
 | `short` | Up to 220 characters. Stands alone on a card. Leads with the surprise. |
 | `long` | 300 to 1,000 characters. The how and why, names and dates; for a legend or dispute, what the evidence shows. |
-| `look` | 40 to 200 characters. What to look at and where to stand. Required. |
+| `look` | 40 to 190 characters. What to look at and where to stand. Required. |
 | `myth` | Optional. The popular version, in one sentence, for a story that sets the record straight. |
 | `tags` | Up to four tag ids, for threads that connect several places. |
 | `claims` | Every checkable statement, each with at least one evidence passage. |

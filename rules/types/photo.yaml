@@ -1,0 +1,40 @@
+# A photo (content.md, section 4.3).
+
+prose_fields: [alt]
+schema:
+  type: object
+  additionalProperties: false
+  required: [file, kind, alt, focus, credit]
+  properties:
+    file: {type: string, pattern: "^[0-9a-f]{24}$"}
+    kind: {enum: [photo, historic]}
+    year: {type: integer, minimum: 1826, maximum: 2100}
+    alt: {type: string, minLength: 10, maxLength: 300}
+    focus:
+      type: array
+      minItems: 2
+      maxItems: 2
+      items: {type: number, minimum: 0, maximum: 1}
+    pair: {type: string, pattern: "^it_[0-9a-hjkmnp-tv-z]{10}$"}
+    credit:
+      type: object
+      additionalProperties: false
+      required: [source, source_url, author, license]
+      properties:
+        source: {enum: [commons, geograph, flickr, archive, editor]}
+        source_url: {type: string, pattern: "^https://"}
+        title: {type: string}
+        author: {type: string, minLength: 1}
+        author_url: {type: string, pattern: "^https://"}
+        license: {type: string, minLength: 1}
+        license_url: {type: string, pattern: "^https://"}
+
+free_licenses: ["public domain", "pd", "cc0", "cc by", "cc-by", "cc by-sa", "cc-by-sa", "no known copyright restrictions"]
+alt_refuses: ["photo of", "image of", "picture of"]
+max_per_place: 6
+checks: [tool, item]
+item_questions:
+  - Does the photo show this place, as it is now (or, for a historic photo, as it was in the given year)?
+  - Does the alt text describe what a sighted reader would notice, accurately?
+  - Is the focus point on the subject?
+  - Do the license and credit match the source page?

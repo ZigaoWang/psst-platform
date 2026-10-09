@@ -1,0 +1,70 @@
+# Source kinds and what they can support (design.md, section 5.3; content.md, sections 1.2 and 4).
+
+kinds:
+  official_record:
+    role: primary
+    examples: heritage listings, gazetteers, Hansard, government archives, planning records
+  archive:
+    role: primary
+    examples: old newspapers, old maps, directories, digitized collections
+  operator:
+    role: primary
+    examples: the place's owner or operator, such as the church, the company, or the transit authority
+  scholarly:
+    role: scholarly
+    examples: museums, universities, journals, local history societies with cited research
+  press:
+    role: secondary
+    examples: newspapers and magazines, specialist sites with editorial standards
+  reference:
+    role: reference
+    examples: encyclopedias including Wikipedia, Wikidata, guidebooks, listicles
+  community:
+    role: secondary
+    examples: blogs, forums, personal sites
+
+# Hosts that are always the reference kind, whatever a writer says.
+reference_hosts:
+  - wikipedia.org
+  - wikidata.org
+  - wikimedia.org
+  - wikivoyage.org
+  - baike.baidu.com
+  - baike.sogou.com
+  - zh.wikipedia.org
+  - tripadvisor.com
+  - atlasobscura.com
+
+# Never a source: search results and generated answers.
+refused_url_patterns:
+  - "google\\.[a-z.]+/search"
+  - "bing\\.com/search"
+  - "baidu\\.com/s\\?"
+  - "chatgpt\\.com"
+  - "chat\\.openai\\.com"
+  - "perplexity\\.ai"
+
+# Source rules per content type. `non_reference_per_claim`: every claim needs a passage from a source that is
+# not `reference`. `strong_roles`: roles that count as primary or scholarly.
+strong_roles: [primary, scholarly]
+rules:
+  story:
+    min_sources: 2
+    min_strong_sources: 1
+    non_reference_per_claim: true
+  trail:
+    min_sources: 1
+    min_strong_sources: 0
+    non_reference_per_claim: true
+  guide:
+    min_sources: 1
+    min_strong_sources: 0
+    non_reference_per_claim: false
+  photo:
+    min_sources: 0
+    min_strong_sources: 0
+    non_reference_per_claim: false
+  translation:
+    min_sources: 0
+    min_strong_sources: 0
+    non_reference_per_claim: false

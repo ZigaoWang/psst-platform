@@ -1,0 +1,19 @@
+# A translation (content.md, section 4.5). Its body holds the same prose fields as the revision it translates,
+# in the target language, and nothing else.
+
+languages: [zh-Hans]
+fields:
+  story: [headline, short, long, look, myth]
+  guide: [identifier, about]
+  trail: [title, intro, stop_notes]
+# Characters a Simplified Chinese translation is held to (the writing rules for English don't apply).
+refused_characters:
+  zh-Hans:
+    "!": "an exclamation mark"
+    "！": "an exclamation mark"
+    "—": "a dash"
+    "–": "a dash"
+max_length_ratio: 1.2
+checks: [tool, translation]
+item_questions:
+  - Translated back without the English, does the text say exactly what the English claims say, no more and no less?

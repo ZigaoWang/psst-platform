@@ -115,7 +115,7 @@ Revision bodies follow content.md section 4:
 - **photo:** `file`, `kind`, `year`, `alt`, `focus`, `pair`, and the credit fields copied from the source's metadata.
 - **trail:** `title`, `intro`, `stops` (place id and `note`, in order), `tags`.
 
-A translation is its own item of type `translation`, linked to the item it translates, so each language moves through the lifecycle on its own. Each of its revisions names the English revision it was made from and is checked against that revision's claims (section 7.5). An edit creates a new revision; approving, publishing, retiring, and reverting move pointers and states and never change a revision.
+A translation is its own item of type `translation`, linked to the item it translates, so each language moves through the lifecycle on its own. Each of its revisions names the English revision it was made from and is checked against that revision's claims (section 7.3). An edit creates a new revision; approving, publishing, retiring, and reverting move pointers and states and never change a revision.
 
 ### 5.3 Claims and evidence
 
@@ -142,9 +142,9 @@ Source kinds, which drive the source rules (section 9):
 
 | table | purpose |
 | --- | --- |
-| `checks` | One verdict: `revision_id`, `claim_id` (null for a whole-item check), `kind` (`tool`, `claim_a`, `claim_b`, `item`, `escalation`, `audit`, `editor`, `translation`), `run_id`, `task_id`, `model`, `verdict` (`supported`, `unsupported`, `contradicted`, `unclear`, or `pass`/`fail` for tool and item checks), `note`, `details` (JSONB), `created_at`. |
+| `checks` | One verdict: `revision_id`, `claim_id` (null for a whole-item check), `kind` (`tool`, `review`, `audit`, `editor`, `translation`, `item` for photos; `claim_a`, `claim_b`, and `escalation` remain on checks made before decision 22), `run_id`, `task_id`, `model`, `verdict` (`supported`, `unsupported`, `contradicted`, `unclear`, or `pass`/`fail` for tool, review, and item checks), `note`, `details` (JSONB), `created_at`. |
 | `audit_batches` | Accepted revisions grouped for one audit: `id`, `type`, `city_id`, `size`, `sample_size`, `errors`, `rate`, `threshold`, `outcome` (`open`, `passed`, `failed`). Members in `audit_members`, the sample in `audit_samples`. |
-| `model_accuracy` | A view over checks: for each task kind and model, how often its verdicts were overturned by escalation, audit, or editor verdicts. |
+| `model_accuracy` | A view over checks: for each task kind and model, how often its verdicts were overturned by audit or editor verdicts. |
 
 ### 5.5 Tags, areas, and reference data
 
@@ -205,60 +205,44 @@ Rules the functions enforce:
 - A reader report or a changed source moves a published item back to checking; the published revision stays live until a replacement is accepted or an editor retires it.
 - A translation is accepted only while the revision it translates is accepted or published.
 
-## 7. Evidence and checking
+## 7. Writing, review, and audit
 
-This is the core of the design. A spot check on October 9, 2026 found 10 to 17 percent of a cheaper model's approvals wrong, and the errors were misreadings (a replica dated as the original, a closing year given as the build year), not invented sources. The mechanism catches them by structure.
+The first London day ran a loop of narrow tasks: one model researched angles, another wrote each story, two more checked each claim, another checked each item, and others escalated and audited. It cost 123 model tasks per published place and the stories that passed were accurate but flat, because nobody held the whole picture (measurements in progress.md, decision 22 in decisions.md). The loop below replaces it. It follows what worked before: one strong session researches a whole cell and writes everything in one voice, and a separate session reviews it against the sources.
 
-### 7.1 Writing with evidence
+### 7.1 The content loop
 
-A writer reads sources only through `psst fetch`, which asks the fetch service to read the page and save a snapshot. The writer returns the prose and its claims. Each claim lists its values and its evidence: the snapshot and the exact passage copied from it.
+1. **Research and write** (`research_cell`). One session takes one cell end to end. It reads the cell's leads, goes to primary sources first (heritage list entries, the Survey of London and British History Online, London Remembers, old newspapers, planning records, company and society histories; encyclopedias only to find sources), keeps the angles that pass content.md's tests, and writes every story and guide for the cell in that session, in the voice of the reference stories it is given. Each story is written naturally first; then every fact in it is bound to the exact passage it rests on, from a snapshot the session saved. Every lead it drops is recorded with the reason.
+2. **Tool checks** (section 7.2), free and deterministic, before anything is stored and again by the system worker.
+3. **Review** (`review`). One session per research submission, never the run that wrote it. For each story and guide it sees the prose, the claims, and their passages side by side, with the place's encyclopedia lead, and decides one of three things with one specific note: `approve`; `edit`, giving the corrected fields itself (the edit passes the tool checks and is then accepted); or `reject`, saying whether a revision could fix it. It rejects anything that isn't surprising once read, not only what is wrong.
+4. **One revision.** A rejection that a revision could fix goes back once, to a different run, and the revision is reviewed once. A second rejection, or a rejection that no revision could fix, retires the item with the reason.
+5. **Audit by sampling** (`audit`). When a review batch has settled, 10 percent of its accepted items (at least one) are chosen at random and rechecked from the full snapshots. A clean sample lets the whole batch publish. Any error sends the erroneous items to revision and the rest of the batch back to review.
+
+Every stage records why an angle or item was dropped, so the loss at each stage can be measured.
 
 ### 7.2 Tool checks (no model)
 
-On submit the system worker refuses a revision, with every reason listed, unless:
+On submit, and again in the system worker, a revision is refused with every reason listed unless:
 
 1. **Passages match.** Every quoted passage appears in its snapshot after Unicode, whitespace, and quotation mark normalization.
-2. **Numbers trace.** Every year and number in the prose appears among the claims' values, and every claim value appears in at least one of that claim's passages. Names and other details are language, not arithmetic, so the whole-item check traces them (section 7.4).
-3. **Writing rules hold** (section 9): lengths, banned words, US spelling, dashes, the identifier shape, `look` present.
-4. **Own words.** The prose shares no run of eight words with any snapshot it cites.
-5. **Source rules hold.** For a story: at least two distinct sources; at least one primary or scholarly source; every claim backed by a passage from a source that is not `reference`; a `myth` story cites a source for the popular version and a primary or scholarly source for the correction; an anecdote with one source is `legend`.
-6. **Structured values agree.** A guide's identifier year and maker match its key facts; a key fact without agreeing evidence is dropped.
-7. **References resolve.** Tags exist, trail stops are published places within the distance limits, a photo's pair is a current photo of the same place.
+2. **Details trace.** Every year and number in the prose is among the claims' values and in their passages; every proper name in the prose appears in one of the revision's passages or in the place's own record (its names and areas).
+3. **Own words.** The prose shares no run of eight words with any snapshot it cites, and no sentence of it repeats most of the words of a single source sentence. Guides are held to this too.
+4. **Writing rules hold** (section 9): lengths, banned words, US spelling, dashes, the identifier shape.
+5. **The look is about the story.** `look` names something it shares with the story's headline or short version: the thing the surprise is about.
+6. **Source rules hold.** For a story: at least two distinct sources; at least one primary or scholarly source; every claim backed by a passage from a source that is not `reference`; a `myth` story cites a source for the popular version and a primary or scholarly source for the correction; an anecdote with one source is `legend`.
+7. **Structured values agree.** A guide's identifier year and maker match its key facts; a key fact without agreeing evidence is dropped.
+8. **References resolve.** Tags exist, trail stops are published places within the distance limits, a photo's pair is a current photo of the same place.
 
-These checks are free and deterministic. The writer's CLI runs the same code before submitting, so most problems are fixed before anything is stored.
-
-### 7.3 Claim checks (narrow, independent)
-
-Each claim is checked twice, by different runs with different instructions. A checker sees only the claim and its passages, never the prose or the writer's reasoning.
-
-- **Check A** asks: does this passage say this? Find the mismatch.
-- **Check B** asks: what exactly does this passage say about the claim's subject? It then compares its own reading with the claim.
-
-Both answer `supported`, `unsupported`, `contradicted`, or `unclear`, with a one-line note.
-
-- Both `supported`: the claim passes.
-- Any disagreement or `unclear`: an escalation by a stronger model with the full snapshots.
-- `unsupported` or `contradicted` after escalation: the revision goes back to the writer with the reasons.
-
-### 7.4 Whole-item check
-
-Some errors live between claims: a headline that overstates, "the first" where the claim says "one of the first", a replica described as the original, a `look` pointing at the wrong thing. One check per revision reads the prose against its claim list and the place's encyclopedia lead and answers narrow questions, with structured answers: which names, dates, or details in the prose does no claim state (any entry fails the revision; the place's own name and the areas the tools placed it in count as stated, and so do a `look`'s directions for where to stand)? Does the prose say anything more strongly than its claims? Is the story's surprise already in the encyclopedia lead? Is it true of this place rather than its kind? Does `look` name something to see and where to stand? A `fail` sends the revision back with the reasons; an `unclear` escalates.
-
-### 7.5 Translations
+### 7.3 Translations
 
 A translation must preserve every claim. The tools check that every number and year matches the English and that names use the place's stored local names. A translation check then translates the text back without seeing the English and compares it claim by claim; any added, missing, or changed claim fails it.
 
-### 7.6 Guide key facts
+### 7.4 Guide key facts
 
 Key facts come from Wikidata as structured values with their property. Each becomes a claim whose evidence is the Wikidata item's snapshot and, where one exists, a passage from another source. Implausible values (future dates, an opening before the build date, impossible heights) are flagged by the tools; a flagged value without a non-Wikidata passage is dropped automatically.
 
-### 7.7 Acceptance sampling
+### 7.5 Editors' checks
 
-Accepted revisions are audited before they can publish. The system worker groups them into audit batches by type and city, each at least 30 revisions (smaller only when nothing else is waiting). It samples `min(size, 30 + 5% of the rest)` at random and creates audit tasks for a stronger model, which rechecks every claim and the item from the full snapshots. A sampled revision with any claim not `supported`, or a failed item check, is an error. If the error rate is above the type's threshold, the batch fails: its erroneous revisions go back to their writers and every other revision in the batch goes back to checking. Results feed `model_accuracy`.
-
-### 7.8 Editors' checks
-
-The console shows the same sample view: claim, passages, verdicts, and one action to mark a claim wrong. An editor's verdict outranks every model verdict and counts in the measured rates.
+The console shows each item with its claims, passages, and the review and audit notes, and one action to mark it wrong. An editor's verdict outranks every model verdict and counts in the measured rates.
 
 ## 8. Tasks and workers
 
@@ -266,33 +250,27 @@ The console shows the same sample view: claim, passages, verdicts, and one actio
 
 | type | input | output | default model |
 | --- | --- | --- | --- |
-| `research_cell` | a cell, its leads, nearby places | places to create, story angles with sources to read, leads accounted for | Haiku 5.5 |
-| `write_story` | a place and an angle | one story revision with claims and evidence | Sonnet 5.5 |
-| `write_guide` | a place, its Wikidata item, sources | one guide revision with claims and evidence | Haiku 5.5 |
-| `revise` | a revision and the problems found | a new revision | same as the writer |
-| `check_claims_a`, `check_claims_b` | a batch of claims with their passages | verdicts | Haiku 5.5 |
-| `check_item` | a revision, its claims, the encyclopedia lead | verdict and reasons | Haiku 5.5 |
-| `escalate` | disputed claims or items with full snapshots | verdicts | Sonnet 5.5 |
-| `audit` | a sample revision with full snapshots | verdicts | Sonnet 5.5 |
+| `research_cell` | a cell, its leads, nearby places, reference stories | places, their stories and guides with claims and evidence, leads accounted for | Sonnet 5.5 |
+| `review` | one research submission's stories and guides, with claims and passages | approve, edit, or reject per item | Sonnet 5.5 |
+| `revise` | a rejected revision and the review note | a new revision | Sonnet 5.5 |
+| `audit` | a sampled accepted revision with full snapshots | verdicts | Sonnet 5.5 |
+| `write_trail` | a theme and candidate places | a trail revision | Sonnet 5.5 |
 | `translate` | an accepted revision and its claims | a translated revision | Sonnet 5.5 |
 | `check_translation` | a translated revision | back translation and verdict | Haiku 5.5 |
-| `write_trail` | a theme and candidate places | a trail revision | Sonnet 5.5 |
 | `find_photos`, `check_photo` | a place; a photo | candidates; a verdict | Haiku 5.5 |
-| `recheck_source` | a source whose text changed | verdicts on its claims | Haiku 5.5 |
-| `handle_report` | a reader report | a decision | Sonnet 5.5 |
-| `system` | deterministic jobs: tool checks, place lookup, evaluation, audit planning, publish requests | results | system worker |
+| system jobs | tool checks, place lookup, queueing research, relinking places, importing photos | results | system worker |
 
 ### 8.2 Leases
 
-`psst task next --type <type> [--city <city>]` atomically leases the next task (`FOR UPDATE SKIP LOCKED`) the run may take, for the type's lease length: never its own writing, never a second check of a claim it already checked, and only types routed to its model. Two workers can never get the same task. `psst task submit <task> <result file>` validates the result against the type's schema and the rulebook, applies it through the lifecycle functions, and closes the task. An expired lease returns the task to the queue; a task that fails three times waits for an editor. Every task records its run, model, attempts, prompt version, and result.
+`psst task next [--city <city>]` atomically leases the next task (`FOR UPDATE SKIP LOCKED`) the run may take: every type routed to its model, unless `--type` narrows it; never a review or audit of its own writing. Routing is read when the task is leased, so a routing change takes effect on tasks already queued. `psst task queue --city <city>` lists what waits and says which types no open run can take. Two workers can never get the same task. `psst task submit <task> <result file>` validates the result against the type's schema and the rulebook, applies it through the lifecycle functions, and closes the task. An expired lease returns the task to the queue; a task that fails three times waits for an editor. Every task records its run, model, attempts, prompt version, and result; every run can record the tokens it used.
 
 ### 8.3 Worker protocol
 
-A worker needs one instruction: which task types to work on, and for how long. Each task arrives as a file with everything needed and the prompt for its type. Prompts live in `prompts/`, one per task type; a prompt's version is the hash of its text, recorded on every result.
+A worker needs one instruction: its role and city. Each task arrives as a file with everything needed and the prompt for its type. Prompts live in `prompts/`, one per task type; a prompt's version is the hash of its text, recorded on every result. docs/workers.md is the worker guide.
 
 ### 8.4 Model routing
 
-Each task type has a model from `settings`, starting with the defaults above. Narrow checks run on the cheapest model that meets the threshold; escalations and audits on a stronger one. The console shows measured rates per task type and model, so routing changes are made with evidence.
+Each task type has a model from `settings` (`routing.<type>`), starting with the defaults above. The console shows measured rates per task type and model, so routing changes are made with evidence.
 
 ## 9. The rulebook
 
@@ -341,10 +319,10 @@ A private SvelteKit app at `/admin/`, server-rendered, reading the database thro
 
 | section | shows | actions |
 | --- | --- | --- |
-| Home | Running workers, what needs an editor (escalations, failed audits, reports, stalled tasks), readiness per city | |
+| Home | Running workers, what needs an editor (failed audits, items rejected twice, reports, stalled tasks), readiness per city | |
 | Cities | Per city: research coverage, items by state, measured accuracy, open tasks | queue research, writing, or translation tasks |
 | Places | Search and filters; a page per place with every item, its revisions, claims, evidence passages, checks, and history | flag, retire, mark a claim wrong |
-| Checks | Escalations waiting, audit batches and results, measured accuracy per task type and model | decide an escalation, plan an audit |
+| Checks | Reviews and audit batches and their results, measured accuracy per task type and model | plan an audit |
 | Tasks | Every task by type and state, leases, attempts | release a lease, cancel, requeue |
 | Runs | Every run, its model, output, verdicts, and audits | end a stalled run |
 | Publish | What the next publish contains, what's held back and why, versions with diffs | check, publish, roll back |
@@ -430,7 +408,7 @@ psst-platform/
 ## 18. Settled decisions
 
 1. **Thresholds:** audit thresholds of 1 error in 50 for stories and trails, 1 in 30 for guides, photos, and translations. Editors change them in Settings.
-2. **Model routing defaults:** as in section 8.1: Haiku 5.5 for research, guide writing, and the claim, item, translation, and photo checks; Sonnet 5.5 for story writing, revision, escalations, audits, and translation. Changed only on measured rates.
+2. **Model routing defaults:** as in section 8.1: Sonnet 5.5 for research and writing, review, revision, audits, trails, and translation; Haiku 5.5 for the translation and photo checks. Changed only on measured rates.
 3. **Order of cities:** London, then Shanghai, Hong Kong, and Kuala Lumpur. Shanghai moves up from fourth to second because the bilingual work it needs is the hardest to get right and benefits from being proven early.
 4. **Console accounts:** one editor account now; more can be added with the same command.
 5. **Hosting the website:** the current server behind nginx, with a CDN later if traffic needs it.

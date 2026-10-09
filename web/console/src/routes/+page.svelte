@@ -16,7 +16,7 @@
 <section aria-labelledby="attention">
 	<h2 id="attention">Needs an editor</h2>
 	<div class="grid">
-		<Stat label="Escalations waiting" value={count(a.escalations)} href="/admin/checks" />
+		<Stat label="Reviews waiting" value={count(a.reviews)} href="/admin/checks" />
 		<Stat label="Failed tasks" value={count(a.failed_tasks)} href="/admin/tasks?state=failed"
 			tone={Number(a.failed_tasks) ? 'danger' : undefined} />
 		<Stat label="Open reader reports" value={count(a.open_reports)} href="/admin/reports"

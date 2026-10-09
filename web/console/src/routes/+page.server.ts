@@ -4,7 +4,7 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async () => {
 	const [attention] = await sql`
 		SELECT
-			(SELECT count(*) FROM psst.tasks WHERE type = 'escalate' AND state IN ('queued', 'leased')) AS escalations,
+			(SELECT count(*) FROM psst.tasks WHERE type = 'review' AND state IN ('queued', 'leased')) AS reviews,
 			(SELECT count(*) FROM psst.tasks WHERE state = 'failed') AS failed_tasks,
 			(SELECT count(*) FROM psst.reports WHERE state = 'open') AS open_reports,
 			(SELECT count(*) FROM psst.audit_batches WHERE outcome = 'failed'

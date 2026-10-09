@@ -230,3 +230,11 @@ def test_a_worker_learns_why_its_task_was_taken_away(database, city):
                      "problem = 'the cell was queued again' WHERE id = %s", (task["id"],))
     with pytest.raises(psycopg.Error, match="no longer yours: the cell was queued again"):
         worker.submit(task, {})
+
+
+def test_research_on_a_dense_cell_goes_to_the_dense_cell_model(database, city):
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.settings SET value = '0' WHERE key = 'research.dense_leads'")
+    queue_research(database, city)
+    assert Worker(database, SONNET).lease("research_cell") is None
+    assert Worker(database, "claude-opus-5-5").lease("research_cell") is not None

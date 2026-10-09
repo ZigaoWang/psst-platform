@@ -124,9 +124,9 @@ def test_the_queue_command_counts_a_citys_tasks(database, city, monkeypatch, cap
     queue(database, city, "research_cell", "count", task_input={"cell": sample.CELL})
     task_cli.show_queue(argparse.Namespace(city="testville"))
     shown = json.loads(capsys.readouterr().out)
-    assert shown["tasks"]["research_cell"] == {"queued": 1, "leased": 0, "waiting_for_editor": 0,
-                                               "model": SONNET}
-    assert shown["no_open_run_for"] == ["research_cell"]  # no Sonnet run is open to take it
+    assert shown["tasks"][f"research_cell ({SONNET})"] == {"queued": 1, "leased": 0, "waiting_for_editor": 0,
+                                                            "model": SONNET}
+    assert shown["no_open_run_for"] == [f"research_cell ({SONNET})"]  # no Sonnet run is open to take it
 
 
 def test_a_stopped_system_worker_gives_back_its_task(database, city):

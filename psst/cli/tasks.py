@@ -104,23 +104,25 @@ def show_queue(args: argparse.Namespace) -> int:
         if city is None:
             raise config.ConfigError(f"no city with the slug {args.city!r}")
         tasks = conn.execute("""
-            SELECT t.type, count(*) FILTER (WHERE t.state = 'queued') AS queued,
-                   count(*) FILTER (WHERE t.state = 'leased') AS leased,
-                   count(*) FILTER (WHERE t.state = 'failed') AS waiting_for_editor,
-                   y.runner, s.value #>> '{}' AS model,
-                   y.runner = 'worker' AND NOT EXISTS (
+            WITH routed AS (
+                SELECT t.type, t.state, y.runner,
+                       CASE WHEN y.runner = 'worker' THEN psst.task_model(t.type, t.input) END AS model
+                FROM psst.tasks t JOIN psst.task_types y ON y.name = t.type
+                WHERE t.city_id = %s AND t.state IN ('queued', 'leased', 'failed'))
+            SELECT type, model, count(*) FILTER (WHERE state = 'queued') AS queued,
+                   count(*) FILTER (WHERE state = 'leased') AS leased,
+                   count(*) FILTER (WHERE state = 'failed') AS waiting_for_editor,
+                   runner = 'worker' AND NOT EXISTS (
                        SELECT 1 FROM psst.runs r WHERE r.kind = 'worker' AND r.ended_at IS NULL
-                         AND r.model = s.value #>> '{}') AS no_open_run
-            FROM psst.tasks t JOIN psst.task_types y ON y.name = t.type
-            LEFT JOIN psst.settings s ON s.key = 'routing.' || t.type
-            WHERE t.city_id = %s AND t.state IN ('queued', 'leased', 'failed')
-            GROUP BY t.type, y.runner, s.value ORDER BY t.type""", (city["id"],)).fetchall()
+                         AND r.model = routed.model) AS no_open_run
+            FROM routed GROUP BY type, model, runner ORDER BY type, model""", (city["id"],)).fetchall()
         items = conn.execute("""
             SELECT type, state, count(*) AS n FROM psst.items WHERE city_id = %s
             GROUP BY type, state ORDER BY type, state""", (city["id"],)).fetchall()
     counts = ("queued", "leased", "waiting_for_editor", "model")
-    waiting = sorted(r["type"] for r in tasks if r["queued"] and r["no_open_run"])
-    print(json.dumps({"tasks": {r["type"]: {k: r[k] for k in counts} for r in tasks},
+    waiting = sorted(f"{r['type']} ({r['model']})" for r in tasks if r["queued"] and r["no_open_run"])
+    print(json.dumps({"tasks": {r["type"] + (f" ({r['model']})" if r["model"] else ""): {k: r[k] for k in counts}
+                                for r in tasks},
                       "items": {f"{r['type']} {r['state']}": r["n"] for r in items},
                       "no_open_run_for": waiting}, indent=2))
     return 0

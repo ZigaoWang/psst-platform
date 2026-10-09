@@ -10,12 +10,12 @@ export const load: PageServerLoad = async ({ url }) => {
 	const [types, stranded, tasks] = await Promise.all([
 		sql`SELECT name FROM psst.task_types WHERE active ORDER BY name`,
 		// Queued work no open run can take: its model has no worker running.
-		sql`SELECT t.type, s.value #>> '{}' AS model, count(*) AS waiting
-		    FROM psst.tasks t JOIN psst.task_types y ON y.name = t.type AND y.runner = 'worker'
-		    JOIN psst.settings s ON s.key = 'routing.' || t.type
-		    WHERE t.state = 'queued' AND NOT EXISTS (
-		        SELECT 1 FROM psst.runs r WHERE r.kind = 'worker' AND r.ended_at IS NULL AND r.model = s.value #>> '{}')
-		    GROUP BY t.type, s.value ORDER BY t.type`,
+		sql`SELECT type, model, count(*) AS waiting FROM (
+		        SELECT t.type, psst.task_model(t.type, t.input) AS model
+		        FROM psst.tasks t JOIN psst.task_types y ON y.name = t.type AND y.runner = 'worker'
+		        WHERE t.state = 'queued') q
+		    WHERE NOT EXISTS (SELECT 1 FROM psst.runs r WHERE r.kind = 'worker' AND r.ended_at IS NULL AND r.model = q.model)
+		    GROUP BY type, model ORDER BY type`,
 		sql`SELECT t.id, t.type, t.state, t.model, t.attempts, t.problem, t.created_at, t.leased_until, t.item_id,
 		           c.name AS city
 		    FROM psst.tasks t LEFT JOIN psst.cities c ON c.id = t.city_id

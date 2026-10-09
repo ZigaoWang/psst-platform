@@ -20,6 +20,7 @@ from . import prompts, results
 Connection = psycopg.Connection[dict[str, Any]]
 CONTEXT_CHARS = 500
 FULL_SNAPSHOT_CHARS = 60_000
+EXCERPT_CHARS = 3_000  # around each quoted passage, when a page is too long to send whole
 
 Lookup = Callable[[dict[str, Any]], Any]
 
@@ -89,11 +90,40 @@ def claims_with_passages(conn: Connection, revision_id: str, only: list[str] | N
 
 
 def full_snapshots(conn: Connection, revision_id: str) -> list[dict[str, Any]]:
-    return [{"snapshot": r["id"], "title": r["title"], "publisher": r["publisher"], "kind": r["kind"],
-             "url": r["url"], "text": r["text"][:FULL_SNAPSHOT_CHARS]} for r in conn.execute("""
-        SELECT DISTINCT n.id, s.title, s.publisher, s.kind, s.url, n.text
+    """Every snapshot the revision cites. A page longer than FULL_SNAPSHOT_CHARS comes as its opening and a wide
+    window around each passage the revision quotes from it, so every quote can still be read in place."""
+    rows = conn.execute("""
+        SELECT n.id, s.title, s.publisher, s.kind, s.url, n.text,
+               array_agg(e.quote ORDER BY e.id) AS quotes, array_agg(e.quote_start ORDER BY e.id) AS starts,
+               array_agg(e.quote_end ORDER BY e.id) AS ends
         FROM psst.claims c JOIN psst.evidence e ON e.claim_id = c.id JOIN psst.snapshots n ON n.id = e.snapshot_id
-        JOIN psst.sources s ON s.id = n.source_id WHERE c.revision_id = %s ORDER BY n.id""", (revision_id,))]
+        JOIN psst.sources s ON s.id = n.source_id WHERE c.revision_id = %s
+        GROUP BY n.id, s.title, s.publisher, s.kind, s.url, n.text ORDER BY n.id""", (revision_id,))
+    snapshots = []
+    for r in rows:
+        text, excerpted = r["text"], len(r["text"]) > FULL_SNAPSHOT_CHARS
+        if excerpted:
+            spans = []
+            for quote, start, end in zip(r["quotes"], r["starts"], r["ends"], strict=True):
+                found = (start, end) if start is not None else find_quote(text, quote)
+                if found:
+                    spans.append(found)
+            text = excerpt(text, spans)
+        snapshots.append({"snapshot": r["id"], "title": r["title"], "publisher": r["publisher"], "kind": r["kind"],
+                          "url": r["url"], "text": text, "excerpted": excerpted})
+    return snapshots
+
+
+def excerpt(text: str, quoted: list[tuple[int, int]], window: int = EXCERPT_CHARS) -> str:
+    """The opening of a long text and a window around each quoted span, overlapping windows merged."""
+    spans = sorted([(0, window)] + [(max(0, start - window), min(len(text), end + window)) for start, end in quoted])
+    merged: list[list[int]] = []
+    for start, end in spans:
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return "\n[...]\n".join(text[start:end] for start, end in merged)
 
 
 def other_items(conn: Connection, place_id: str | None, exclude_item: str | None) -> list[dict[str, Any]]:

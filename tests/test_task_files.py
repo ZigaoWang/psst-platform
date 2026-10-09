@@ -137,3 +137,12 @@ def test_a_stopped_system_worker_gives_back_its_task(database, city):
     with database.connect("admin") as conn:
         task = conn.execute("SELECT state FROM psst.tasks WHERE type = 'tool_check'").fetchone()
     assert task["state"] == "queued"
+
+
+
+def test_a_long_page_keeps_every_quoted_passage():
+    text = "Opening words. " + "filler " * 20000 + "built in 1871 by the engineer Ada Thorne" + " more" * 20000
+    start = text.index("built in 1871")
+    shown = files.excerpt(text, [(start, start + 40)], window=100)
+    assert shown.startswith("Opening words.") and "built in 1871 by the engineer Ada Thorne" in shown
+    assert "[...]" in shown and len(shown) < 500

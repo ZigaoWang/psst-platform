@@ -57,5 +57,5 @@ An operator watches the queue (`uv run psst task queue --city <city>`, `/admin/t
 - Revisions and escalations next, then writing, then research.
 - When fewer than about ten research cells are queued for a city, queue more from its console page (most wanted first).
 - Audits are planned by the system worker; start auditor runs when audit tasks appear.
-- Publish from the console when the publish page shows content ready and no audit batch is failing. The first publish that replaces the app's live content needs explicit approval.
+- Publish from the console when the publish page shows content ready and no audit batch is failing. Publishing writes the platform's own production channel and website and leaves the app alone; pointing the app at the platform for the first time is a separate step that needs explicit approval.
 - Read each run's closing summary. A pattern of the same problem across runs (a check that fails for a reason the standard doesn't intend, a source that keeps refusing) is a fault in a prompt or a rule, to be fixed there rather than worked around in each task.

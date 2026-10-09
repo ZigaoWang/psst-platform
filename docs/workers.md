@@ -32,7 +32,7 @@ Commands run from the repository root, with the worker settings in `~/.config/ps
 
 Rules for every run:
 
-- Write only under `work/`, and delete scratch files before ending. Never change the repository's code, rules, or prompts.
+- Write only under `work/`. Before ending, delete only the files this run created (its own task files, results, and scratch files); other runs working at the same time need theirs. Never change the repository's code, rules, or prompts.
 - Read every source with `uv run psst fetch <url> --title "..." --publisher "..." --kind <kind> --language <code> [--find "words"]`. Quotes are copied exactly from what it prints; nothing is quoted from memory or from a search summary.
 - Never run a command that waits for input.
 - Plain US English, no dashes, no exclamation marks, no hype, in notes as well as content.

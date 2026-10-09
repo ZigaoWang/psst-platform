@@ -168,3 +168,16 @@ def test_a_failed_audit_reopens_the_batch(database, city):
     assert states == ["checking", "checking", "draft"]
     assert Worker(database, SONNET).lease("revise") is not None
     assert Worker(database, kind="system").lease("tool_check") is not None
+
+
+def test_a_rule_change_rechecks_what_was_checked_under_the_old_rulebook(database, city, monkeypatch):
+    from psst.checks import rechecks
+    revision = write_and_check(database, city)
+    assert item_state(database, revision) == "accepted"
+    system = Worker(database, kind="system")
+    monkeypatch.setattr(rechecks.rules, "load", lambda: type("Rulebook", (), {"version": "fedcba987654"})())
+    with database.connect("system") as conn:
+        conn.autocommit = False
+        assert rechecks.recheck(conn, system.token) == {"rechecked": 0, "sent_back": 1}
+    assert item_state(database, revision) == "checking"
+    assert Worker(database, kind="system").lease("tool_check") is not None

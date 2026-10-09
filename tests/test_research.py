@@ -137,3 +137,14 @@ def test_research_results_account_for_every_lead(database, city):
     result = result_for(document)
     result["leads"][1] |= {"status": "later"}
     assert any("is well known" in p for p in research_problems(document["data"], result))
+
+
+def test_leads_that_are_not_places_are_skipped_by_the_system(database, city):
+    with database.connect("system") as conn:
+        cell = conn.execute("SELECT cell FROM psst.research_cells WHERE state = 'open' LIMIT 1").fetchone()["cell"]
+        conn.execute("SELECT psst.record_leads(%s, %s, %s)", (city.token, cell, json.dumps([
+            {"key": "Q9001", "origin": "wikipedia", "name": "Testville Water Company", "wikidata": "Q9001",
+             "skip": "not a place to stand in front of: a company"}])))
+    with database.connect("admin") as conn:
+        lead = conn.execute("SELECT status, reason, decided_by FROM psst.leads WHERE key = 'Q9001'").fetchone()
+    assert lead["status"] == "skipped" and lead["reason"].endswith("a company") and lead["decided_by"]

@@ -184,7 +184,9 @@ def research_brief(conn: Connection, cell: str) -> dict[str, Any]:
     leads = [dict(r) | {"well_known": (r["fame"] or 0) >= spec["well_known_sitelinks"]} for r in conn.execute("""
         SELECT id AS lead, name, origin, wikidata_id AS wikidata, osm_ref AS osm, url, what, fame, status
         FROM psst.leads WHERE cell = %s AND status IN ('open', 'later')
-        ORDER BY fame DESC NULLS LAST, name""", (cell,))]
+        ORDER BY fame DESC NULLS LAST, name LIMIT %s""", (cell, spec["max_leads_per_pass"]))]
+    waiting = conn.execute("SELECT count(*) AS n FROM psst.leads WHERE cell = %s AND status IN ('open', 'later')",
+                           (cell,)).fetchone()
     places = [dict(r) for r in conn.execute("""
         SELECT p.id, p.kind, p.h3_r7 = %s AS in_cell, p.wikidata_id AS wikidata, p.osm_ref AS osm,
                (SELECT name FROM psst.place_names n WHERE n.place_id = p.id AND n.role = 'display') AS name,
@@ -197,7 +199,9 @@ def research_brief(conn: Connection, cell: str) -> dict[str, Any]:
         SELECT DISTINCT a.name FROM psst.areas a JOIN psst.research_cells c ON c.cell = %s
         WHERE a.level = 'neighborhood' AND ST_Intersects(a.geom, c.geom) ORDER BY a.name""", (cell,))]
     return {"cell": cell, "bounds": {"south": south, "west": west, "north": north, "east": east},
-            "neighborhoods": neighborhoods, "leads": leads, "places_nearby": places,
+            "neighborhoods": neighborhoods, "leads": leads,
+            "leads_after_this_pass": max(0, int(waiting["n"] if waiting else 0) - len(leads)),
+            "places_nearby": places,
             "rules": {"kinds": spec["kinds"], "sizes": spec["sizes"],
                       "categories": rules.load().type("story")["categories"],
                       "min_ordinary_share": spec["min_ordinary_share"],

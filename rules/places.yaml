@@ -83,3 +83,37 @@ local_wikipedia:
 # Research order: cells nearest the city's middle first, every cell before any gets a second pass, and areas app
 # users looked at while empty pulled forward once they have this many views in 90 days (fewer is noise).
 demand_min_views: 10
+
+# Leads: a research pass covers at most this many, best known first; the rest wait for the next pass.
+max_leads_per_pass: 150
+# Wikidata classes that are never a place someone can stand in front of. A lead whose classes are all among these
+# is skipped automatically, with the reason kept.
+abstract_lead_classes:
+  Q5: a person
+  Q43229: an organization
+  Q4830453: a business
+  Q783794: a company
+  Q6881511: an enterprise
+  Q891723: a public company
+  Q1656682: an event
+  Q1190554: an occurrence
+  Q192611: an electoral district
+  Q2755753: an area of London
+  Q211690: a London borough
+  Q123705: a neighborhood
+  Q1115575: a civil parish
+  Q3957: a town
+  Q532: a village
+  Q515: a city
+  Q486972: a settlement
+  Q215380: a band
+  Q476028: a football club
+  Q847017: a sports club
+  Q11032: a newspaper
+  Q1002697: a periodical
+  Q2085381: a publisher
+  Q13406463: a list
+  Q4167410: a disambiguation page
+  Q7278: a political party
+  Q163740: a nonprofit organization
+  Q3918: a university (as an institution; its buildings are separate items)

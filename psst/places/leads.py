@@ -38,6 +38,19 @@ def fame(qids: list[str]) -> dict[str, int]:
     return counts
 
 
+def classes(qids: list[str]) -> dict[str, set[str]]:
+    """What each item is an instance of (P31), through the query service in batches."""
+    found: dict[str, set[str]] = {}
+    for start in range(0, len(qids), 200):
+        values = " ".join(f"wd:{q}" for q in qids[start:start + 200])
+        query = f"SELECT ?item ?class WHERE {{ VALUES ?item {{ {values} }} ?item wdt:P31 ?class . }}"
+        payload = http.get_json("https://query.wikidata.org/sparql?format=json&query=" + urllib.parse.quote(query))
+        for row in payload["results"]["bindings"]:
+            found.setdefault(row["item"]["value"].rsplit("/", 1)[-1], set()).add(
+                row["class"]["value"].rsplit("/", 1)[-1])
+    return found
+
+
 def sweep(conn: Connection, cell: str, country: str | None) -> tuple[list[dict[str, Any]], list[str]]:
     south, west, north, east = cells.bounds(cell)
     lat, lon = h3.cell_to_latlng(cell)
@@ -98,7 +111,16 @@ def sweep(conn: Connection, cell: str, country: str | None) -> tuple[list[dict[s
     except (ConnectionError, urllib.error.HTTPError) as error:
         problems.append(f"fame couldn't be read: {error}")
         counts = {}
+    abstract: dict[str, str] = rules.load().places["abstract_lead_classes"]
+    try:
+        kinds = classes(sorted({lead["wikidata"] for lead in leads if lead.get("wikidata")}))
+    except (ConnectionError, urllib.error.HTTPError) as error:
+        problems.append(f"classes couldn't be read: {error}")
+        kinds = {}
     for lead in leads:
         lead["fame"] = counts.get(lead.get("wikidata") or "")
         lead.setdefault("origin", "wikidata")
+        found_classes = kinds.get(lead.get("wikidata") or "", set())
+        if found_classes and found_classes <= set(abstract) and lead["origin"] != "legacy":
+            lead["skip"] = "not a place to stand in front of: " + abstract[sorted(found_classes)[0]]
     return leads, problems

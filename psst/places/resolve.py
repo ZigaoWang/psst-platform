@@ -16,7 +16,8 @@ from . import cells, coords, names
 Connection = psycopg.Connection[dict[str, Any]]
 
 
-def resolve(conn: Connection, token: str, place_ids: list[str]) -> dict[str, int]:
+def resolve(conn: Connection, token: str, place_ids: list[str], city_id: int | None = None) -> dict[str, int]:
+    """Resolves pending places found for a city; one whose coordinate falls outside that city is refused."""
     spec = rules.load().places
     pending = [dict(r) for r in conn.execute("""
         SELECT p.id, p.wikidata_id AS wikidata, p.osm_ref AS osm,
@@ -34,6 +35,11 @@ def resolve(conn: Connection, token: str, place_ids: list[str]) -> dict[str, int
         position = positions.get(place["id"])
         if not isinstance(position, coords.Position):
             result: dict[str, Any] = {"refused": position or "no coordinate"}
+        elif city_id is not None and not conn.execute("""
+                SELECT 1 FROM psst.area_parts WHERE area_id = %s
+                  AND ST_Intersects(geom, ST_SetSRID(ST_MakePoint(%s, %s), 4326)) LIMIT 1""",
+                (city_id, position.lon, position.lat)).fetchone():
+            result = {"refused": "its coordinate is outside the city it was researched for"}
         else:
             duplicate = conn.execute("""
                 SELECT p.id, n.name FROM psst.places p JOIN psst.place_names n ON n.place_id = p.id

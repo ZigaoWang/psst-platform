@@ -40,7 +40,7 @@ class SystemWorker:
         return {"pass": result.ok, "refusals": len(result.report.refusals)}
 
     def resolve_places(self, conn: Connection, task: dict[str, Any]) -> dict[str, Any]:
-        return resolve.resolve(conn, self.token, list(task["input"].get("places") or []))
+        return resolve.resolve(conn, self.token, list(task["input"].get("places") or []), task["city_id"])
 
     def import_photo(self, conn: Connection, task: dict[str, Any]) -> dict[str, Any]:
         return importing.import_photo(conn, self.token, task)

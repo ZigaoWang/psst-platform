@@ -162,3 +162,18 @@ def test_the_console_queues_research_for_the_system_worker(database, city, monke
     with database.connect("admin") as conn:
         queued = conn.execute("SELECT count(*) AS n FROM psst.tasks WHERE type = 'research_cell'").fetchone()["n"]
     assert queued == 4  # two from the fixture, two from the console
+
+
+def test_a_place_outside_its_city_is_refused(database, city, monkeypatch):
+    worker, task, document = lease_research(database)
+    submit_research(database, worker, task, result_for(document))
+    monkeypatch.setattr(coords, "resolve", lambda places: {
+        p["id"]: coords.Position(52.9, -1.2, "wikidata", p["wikidata"]) for p in places})  # far outside Testville
+    monkeypatch.setattr(names, "osm_tags", lambda refs: {})
+    monkeypatch.setattr("psst.places.resolve.http.wikidata_entities", lambda qids, props: {})
+    system = SystemWorker(lambda: psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row),
+                          city.token)
+    assert system.step()
+    with database.connect("admin") as conn:
+        place = conn.execute("SELECT state, state_reason FROM psst.places WHERE id = %s", (LEGACY_ID,)).fetchone()
+    assert place == {"state": "refused", "state_reason": "its coordinate is outside the city it was researched for"}

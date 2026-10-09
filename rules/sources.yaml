@@ -23,17 +23,24 @@ kinds:
     role: secondary
     examples: blogs, forums, personal sites
 
-# Hosts that are always the reference kind, whatever a writer says.
-reference_hosts:
-  - wikipedia.org
-  - wikidata.org
-  - wikimedia.org
-  - wikivoyage.org
-  - baike.baidu.com
-  - baike.sogou.com
-  - zh.wikipedia.org
-  - tripadvisor.com
-  - atlasobscura.com
+# Hosts whose kind is fixed, whatever a writer says. A subdomain takes its parent's kind.
+host_kinds:
+  reference:
+    - wikipedia.org
+    - wikidata.org
+    - wikimedia.org
+    - wikivoyage.org
+    - baike.baidu.com
+    - baike.sogou.com
+    - tripadvisor.com
+    - atlasobscura.com
+  community:
+    - subbrit.org.uk
+    - londonremembers.com
+    - flickr.com
+    - medium.com
+    - blogspot.com
+    - wordpress.com
 
 # Never a source: search results and generated answers.
 refused_url_patterns:

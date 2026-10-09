@@ -44,7 +44,7 @@ class FetchService:
         if problem:
             raise RequestError(problem)
         kinds = rules.load().sources["kinds"]
-        kind = "reference" if urls.is_reference_host(address) else str(request.get("kind") or "")
+        kind = urls.host_kind(address) or str(request.get("kind") or "")
         if kind not in kinds:
             raise RequestError(f"kind must be one of {', '.join(kinds)}")
         title = str(request.get("title") or "").strip()

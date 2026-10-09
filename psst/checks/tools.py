@@ -280,9 +280,7 @@ def _look(report: Report, body: dict[str, Any]) -> None:
 # Source rules -----------------------------------------------------------------------------------------------
 
 def _role(snapshot: Snapshot, rulebook: Rulebook) -> str:
-    if urls.is_reference_host(snapshot.url):
-        return "reference"
-    return str(rulebook.sources["kinds"][snapshot.kind]["role"])
+    return str(rulebook.sources["kinds"][urls.host_kind(snapshot.url) or snapshot.kind]["role"])
 
 
 def _sources(report: Report, item_type: str, body: dict[str, Any], claims: list[Claim],

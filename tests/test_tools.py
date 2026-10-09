@@ -4,6 +4,7 @@ places, and people here are invented."""
 from __future__ import annotations
 
 import copy
+import dataclasses
 
 import pytest
 
@@ -244,3 +245,13 @@ def test_a_sentence_said_twice_is_refused():
     repeated = LONG + " Readers now sit under the original boiler beams."
     result = check("story", story(long=repeated), claims(), SNAPSHOTS)
     assert "says again what long already says" in refusals(result)
+
+
+def test_a_host_with_a_fixed_kind_overrides_the_writer_label():
+    from psst.evidence import urls
+    assert urls.host_kind("https://en.wikipedia.org/wiki/Old_Pump_House") == "reference"
+    assert urls.host_kind("https://www.subbrit.org.uk/sites/old-pump-house") == "community"
+    assert urls.host_kind("https://records.example.org/old-pump-house") is None
+    blog = dataclasses.replace(RECORD, url="https://www.subbrit.org.uk/sites/old-pump-house", kind="scholarly")
+    result = check("story", story(), claims(), SNAPSHOTS | {RECORD.id: blog})
+    assert "needs a primary record or scholarly source" in refusals(result)

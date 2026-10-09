@@ -45,6 +45,10 @@ def problem(url: str) -> str | None:
     return None
 
 
-def is_reference_host(url: str) -> bool:
+def host_kind(url: str) -> str | None:
+    """The source kind fixed for the address's host, or None when the writer's label stands."""
     host = urllib.parse.urlsplit(original(url)).netloc.lower().removeprefix("www.")
-    return any(host == h or host.endswith("." + h) for h in rules.load().sources["reference_hosts"])
+    for kind, hosts in rules.load().sources["host_kinds"].items():
+        if any(host == h or host.endswith("." + h) for h in hosts):
+            return str(kind)
+    return None

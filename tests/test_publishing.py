@@ -117,3 +117,22 @@ def test_a_checked_translation_is_published_with_its_story(database, city, site)
     run_publish(database, site)
     fact = production_city(site)[1]["places"][0]["facts"][0]
     assert fact["translations"]["zh-Hans"]["headline"] == "曾为全镇供水的图书馆"
+
+
+def test_a_revision_whose_own_audit_passed_publishes_when_its_batch_fails(database, city, site):
+    from tests.flow import SONNET, Worker, claim_ids, verdicts
+    first, _ = ready(database, city)
+    with database.connect("admin") as conn:
+        other = sample.place(conn, city["admin"], wikidata="Q900002")
+    second, _ = ready(database, city, 1, place=other)
+    with database.connect("system") as conn:
+        conn.execute("SELECT psst.plan_audits(%s, true)", (Worker(database, kind="system").token,))
+    while (task := (auditor := Worker(database, SONNET)).lease("audit")) is not None:
+        verdict = "unsupported" if task["revision_id"] == second else "supported"
+        auditor.submit(task, verdicts(claim_ids(database, task["revision_id"]), verdict)
+                       | {"item": {"verdict": "pass", "note": "read against the full snapshots"}})
+    assert item_state(database, second) == "draft"  # the audit found it wrong
+    assert item_state(database, first) == "accepted"  # its own audit passed
+    outcome = run_publish(database, site)
+    assert outcome.promoted and outcome.counts["places"] >= 1
+    assert item_state(database, first) == "published"

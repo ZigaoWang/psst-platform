@@ -9,14 +9,16 @@ import h3
 import psycopg
 from psycopg.types.json import Jsonb
 
-from . import cells, leads
+from . import cells, coords, leads
 
 Connection = psycopg.Connection[dict[str, Any]]
 
 
-def setup_city(conn: Connection, token: str, area_id: int, slug: str, languages: list[str], order: int) -> int:
-    """Register the city and plan every research cell that touches its boundary."""
-    conn.execute("SELECT psst.add_city(%s, %s, %s, %s, %s)", (token, area_id, slug, languages, order))
+def setup_city(conn: Connection, token: str, area_id: int, slug: str, languages: list[str], order: int,
+               wikidata: str | None = None) -> int:
+    """Register the city and plan every research cell that touches its boundary. `wikidata` names the city's own
+    item when the boundary data doesn't link one; its coordinate is the city's middle."""
+    conn.execute("SELECT psst.add_city(%s, %s, %s, %s, %s, %s)", (token, area_id, slug, languages, order, wikidata))
     box = conn.execute("""
         SELECT ST_YMin(geom) AS south, ST_XMin(geom) AS west, ST_YMax(geom) AS north, ST_XMax(geom) AS east
         FROM psst.areas WHERE id = %s""", (area_id,)).fetchone()
@@ -58,10 +60,17 @@ def order(conn: Connection, city: dict[str, Any]) -> list[str]:
 def queue(conn: Connection, token: str, slug: str, count: int) -> dict[str, Any]:
     """Sweep leads for the next `count` cells and queue a research task for each."""
     city = conn.execute("""
-        SELECT c.id, c.country_code, ST_Y(ST_PointOnSurface(a.geom)) AS lat, ST_X(ST_PointOnSurface(a.geom)) AS lon
+        SELECT c.id, c.country_code, coalesce(c.wikidata_id, a.wikidata_id) AS wikidata_id,
+               ST_Y(ST_Centroid(a.geom)) AS lat, ST_X(ST_Centroid(a.geom)) AS lon
         FROM psst.cities c JOIN psst.areas a ON a.id = c.id WHERE c.slug = %s""", (slug,)).fetchone()
     if city is None:
         raise LookupError(f"no city with the slug {slug!r}")
+    # The city's middle is its own coordinate on Wikidata (Charing Cross, People's Square), not the middle of its
+    # boundary, which can lie in a country park.
+    if city["wikidata_id"]:
+        middle = coords.wikidata([city["wikidata_id"]]).get(city["wikidata_id"]) or []
+        if len(middle) == 1:
+            city = {**city, "lat": middle[0][0], "lon": middle[0][1]}
     chosen = order(conn, city)[:count]
     problems: list[str] = []
     entries = []

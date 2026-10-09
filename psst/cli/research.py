@@ -21,6 +21,7 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     city.add_argument("--slug", required=True, help="its short name in links, such as london")
     city.add_argument("--languages", default="", help="local languages, comma separated, such as zh-Hans")
     city.add_argument("--order", type=int, required=True, help="its place in the research order")
+    city.add_argument("--wikidata", help="the city's Wikidata item, when the boundary data doesn't link one")
     city.set_defaults(run=setup_city)
     queue = commands.add_parser("queue", help="sweep leads for the most wanted open cells and queue research")
     queue.add_argument("--city", required=True)
@@ -37,7 +38,8 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
 def setup_city(args: argparse.Namespace) -> int:
     with db.open_connection(db.conninfo("system")) as conn:
         planned = research.setup_city(conn, start(conn, "system", "city setup"), args.area, args.slug,
-                                      [lang for lang in args.languages.split(",") if lang], args.order)
+                                      [lang for lang in args.languages.split(",") if lang], args.order,
+                                      args.wikidata)
         conn.commit()
     print(f"{args.slug} is set up; {planned} new research cells planned")
     return 0

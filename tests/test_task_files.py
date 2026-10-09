@@ -82,3 +82,18 @@ def test_every_prompt_loads_with_the_shared_instructions():
         assert "uv run psst task submit" in prompt.text
         assert "—" not in prompt.text and "–" not in prompt.text
 
+
+
+def test_a_guide_revision_sees_the_wikidata_lines_and_the_lead(database, city):
+    from tests import sample
+    from tests.flow import write_and_check
+    guide = write_and_check(database, city, kind="guide")
+    with database.connect("admin") as conn:
+        item = conn.execute("SELECT item_id FROM psst.revisions WHERE id = %s", (guide,)).fetchone()["item_id"]
+        conn.execute("SELECT psst.enqueue(%s, 'revise', 'revise:test', '{\"problems\": [\"fix it\"]}', %s, %s, %s, %s)",
+                     (city["admin"], sample.CITY_ID, city["place"], item, guide))
+    task = Worker(database, SONNET).lease("revise")
+    lookups = files.Lookups(key_facts=lambda place: {"lines": ["built (P571): 1871"]}, lead=lambda place: "A lead.")
+    with database.connect("worker") as conn:
+        data = files.build(conn, task, lookups)["data"]
+    assert data["wikidata"] == {"lines": ["built (P571): 1871"]} and data["encyclopedia_lead"] == "A lead."

@@ -153,9 +153,8 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
         item_type = kind.removeprefix("write_")
         data |= {"brief": task["input"], "other_stories": other_items(conn, task["place_id"], None),
                  "rules": rulebook.type(item_type)}
-        if kind == "write_guide" and data["place"]:
-            data |= {"wikidata": lookups.key_facts(data["place"]) if lookups.key_facts else None,
-                     "encyclopedia_lead": lookups.lead(data["place"]) if lookups.lead else None}
+        if kind == "write_guide":
+            data |= guide_references(lookups, data["place"])
     elif kind == "research_cell":
         data = research_brief(conn, task["input"]["cell"])
     elif kind == "find_photos":
@@ -175,6 +174,8 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
                  "check_notes": earlier_verdicts(conn, task["revision_id"]),
                  "other_stories": other_items(conn, task["place_id"], task["item_id"]),
                  "rules": rulebook.type(str(item_type)) if item_type != "translation" else rulebook.type("translation")}
+        if item_type == "guide":
+            data |= guide_references(lookups, data["place"])
     elif kind == "translate":
         assert revision
         data |= {"type": item_type, "language": "zh-Hans", "body": revision["body"],
@@ -190,6 +191,14 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
         "prompt": prompt.text, "prompt_version": prompt.version, "rulebook": rulebook.version,
         "data": data, "result_schema": results.schema(kind, item_type),
     }
+
+
+def guide_references(lookups: Lookups, place: dict[str, Any] | None) -> dict[str, Any]:
+    """The place's Wikidata lines and encyclopedia lead, for writing a guide and for revising one."""
+    if not place:
+        return {}
+    return {"wikidata": lookups.key_facts(place) if lookups.key_facts else None,
+            "encyclopedia_lead": lookups.lead(place) if lookups.lead else None}
 
 
 def research_brief(conn: Connection, cell: str) -> dict[str, Any]:

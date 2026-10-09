@@ -1,0 +1,10 @@
+[Unit]
+Description=Check every minute for a publish or rollback asked for in the console
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,20 @@
+[Unit]
+Description=Psst platform admin console
+After=network-online.target postgresql.service
+
+[Service]
+User=psst-platform
+Group=psst-platform
+EnvironmentFile=/www/wwwroot/psst-platform/env/console.env
+Environment=HOST=127.0.0.1 PORT=4317 NODE_ENV=production
+WorkingDirectory=/www/wwwroot/psst-platform/app/web/console
+ExecStart=/usr/bin/env node build
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+[Unit]
+Description=Psst platform backup at 03:47 UTC
+
+[Timer]
+OnCalendar=*-*-* 03:47:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

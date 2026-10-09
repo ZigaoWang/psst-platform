@@ -1,0 +1,7 @@
+[Unit]
+Description=Psst platform weekly restore test
+After=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /www/wwwroot/psst-platform/app/server/restore-test.sh

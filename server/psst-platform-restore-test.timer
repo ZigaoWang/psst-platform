@@ -1,0 +1,9 @@
+[Unit]
+Description=Psst platform restore test, Sundays at 05:17 UTC
+
+[Timer]
+OnCalendar=Sun *-*-* 05:17:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

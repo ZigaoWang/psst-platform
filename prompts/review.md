@@ -13,18 +13,21 @@ article (`encyclopedia_lead`). If you need more of a source than the passage sho
 
 ## Marks
 
-- `good`: one physical thing, a real surprise in the first sentence, specific (names, numbers, a detail you can
-  check on the spot), told plainly, ending on the payoff, and true to its sources. A reader standing there would
-  show it to a friend.
-- `weak`: true and worth something, but one fixable thing keeps it from good: background before the surprise, an
-  ending that drifts into speculation or an unanswered question, a tangent, a look at nothing visible, a claim that
-  contradicts another, thin sourcing a second source would fix. Your reason names that one thing so the revision can
-  fix exactly it.
-- `bad`: not a story, or not worth fixing: the surprise is already in the encyclopedia's first paragraph, it is a
-  statistic or a list of facts, it is true of every place of its kind, it says more than its sources and can't be
-  rescued, or there is nothing to stand in front of.
+A mark judges the core of the story: the surprise, the thing you can stand in front of, the specifics, the telling.
+Small polish does not lower a mark. If a good story would be better with a sentence cut, a tangent removed, or a
+cleaner ending, it is still good: say the fix in your reason.
 
-Mark bad or weak whatever the facts, when:
+- `good`: one physical thing, a real surprise (ideally in the first sentence), something a reader can see or check on
+  the spot, and specific names, numbers, or details. A reader standing there would show it to a friend.
+- `weak`: the core is not there yet: the surprise is mild or familiar (a closed-station or Titanic-style hook any
+  place could have), it is buried under background, the story stops right after the hook with nothing more, its
+  conclusion is an unanswered question, it contradicts itself (two accounts stated as if both were true), or it is
+  thin on the place itself. Your reason names the one thing a revision must fix.
+- `bad`: not a story: a single record line, a list of dates or owners, a planning or legal detail with nothing to
+  stand in front of, a statistic, a surprise already in the encyclopedia's first paragraph, or something true of
+  every place of its kind.
+
+Mark weak or bad, however good the angle, when:
 - a sentence is repeated, or two sentences say the same thing, anywhere in the item;
 - any sentence doesn't read cleanly aloud;
 - a guide's About restates the encyclopedia's first sentence in other words;

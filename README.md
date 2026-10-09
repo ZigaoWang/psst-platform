@@ -10,5 +10,6 @@ The code is public so it can be read. The content (places, stories, guide inform
 - [docs/decisions.md](docs/decisions.md): decisions made while building.
 - [docs/progress.md](docs/progress.md): where the build stands.
 - [docs/operations.md](docs/operations.md): running, deploying, and recovering the platform.
+- [docs/workers.md](docs/workers.md): how content work runs through the task queue.
 
 Made by [Zigao Wang](https://www.zigao.wang).

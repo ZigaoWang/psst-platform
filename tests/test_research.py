@@ -14,7 +14,7 @@ from psst.places import coords, leads, names, research
 from psst.services.system_worker import SystemWorker
 from psst.tasks import files
 from tests import sample
-from tests.flow import HAIKU, SONNET, Worker
+from tests.flow import SONNET, Worker, tool_checks
 
 LEGACY_ID = "pl_0123456789"
 
@@ -47,23 +47,58 @@ def city(database, monkeypatch):
 
 
 def lease_research(database):
-    worker = Worker(database, HAIKU)
+    worker = Worker(database, SONNET)
     task = worker.lease("research_cell")
     with database.connect("worker") as conn:
         document = files.build(conn, task)
     return worker, task, document
 
 
-def result_for(document, wikidata="Q900010"):
+MILL = ("The Old Mill on River Lane closed in 1890, but its wheel pit survives under the iron pavement grate by the "
+        "door, where the millstream still runs.")
+
+
+def result_for(database, document, wikidata="Q900010"):
+    """A researcher's result: the Old Mill with one story and its guide, and every lead accounted for."""
+    with database.connect("admin") as conn:
+        record = _snapshot(conn, MILL, "https://records.example.org/mill", "official_record")
+        paper = _snapshot(conn, "Walkers on River Lane can still hear the millstream below the grate.",
+                          "https://news.example.com/mill", "press")
+    claims = [{"text": "The mill closed in 1890.", "kind": "date", "values": [{"value": "1890"}],
+               "evidence": [{"snapshot": record, "quote": "The Old Mill on River Lane closed in 1890"}]},
+              {"text": "Its wheel pit survives under the pavement grate by the door.", "kind": "attribute",
+               "values": [], "evidence": [{"snapshot": record, "quote": "its wheel pit survives under the iron "
+                                                                         "pavement grate by the door"},
+                                          {"snapshot": paper, "quote": "can still hear the millstream below the "
+                                                                       "grate"}]}]
+    story = {"body": sample.story_body() | {
+        "headline": "The mill wheel pit under the pavement",
+        "short": "Milling on River Lane ended in 1890, yet the wheel pit is still down there under a grate.",
+        "long": " ".join(["y"] * 160),
+        "look": "Stand at the door and look down through the iron grate into the wheel pit.",
+        "category": "hidden"}, "claims": claims}
+    guide = {"body": {"identifier": "Former watermill",
+                      "about": "A watermill on River Lane that closed in 1890. The pit that held its wheel is still "
+                               "below a grate outside, with water flowing through it.",
+                      "key_facts": []}, "claims": claims[:1]}
     return {
         "places": [{"wikidata": wikidata, "name": "Old Mill", "kind": "building", "size": "medium", "ordinary": True,
-                    "angles": [{"angle": "The mill's wheel pit is still under the pavement grate by the door.",
-                                "category": "hidden", "sources": ["https://records.example.org/mill"]}]}],
+                    "stories": [story], "guide": guide}],
         "leads": [{"lead": lead["lead"], "status": "added" if n == 0 else "skipped", "place": 0,
                    "reason": "an office block with nothing surprising in any source"}
                   for n, lead in enumerate(document["data"]["leads"])],
         "notes": "Covered the mill and the two leads.",
+        "rulebook": sample.RULEBOOK,
     }
+
+
+def _snapshot(conn, text, url, kind):
+    found = conn.execute("SELECT n.id FROM psst.snapshots n JOIN psst.sources s ON s.id = n.source_id "
+                         "WHERE s.url = %s", (url,)).fetchone()
+    if found:
+        return found["id"]
+    run = conn.execute("SELECT id FROM psst.runs ORDER BY started_at LIMIT 1").fetchone()["id"]
+    return sample.snapshot(conn, run, text, url, kind)
 
 
 def submit_research(database, worker, task, result):
@@ -72,27 +107,30 @@ def submit_research(database, worker, task, result):
                             (worker.token, task["id"], json.dumps(result))).fetchone()["r"]
 
 
-def test_research_creates_places_and_writing_tasks(database, city):
+def test_research_creates_places_stories_and_guides(database, city):
     worker, task, document = lease_research(database)
     assert [lead["name"] for lead in document["data"]["leads"]] == ["Lead 0", "Lead 1"]
-    outcome = submit_research(database, worker, task, result_for(document))
-    assert outcome == {"places": 1, "new_places": 1, "stories_queued": 1, "leads_open": 0}
+    outcome = submit_research(database, worker, task, result_for(database, document))
+    assert outcome == {"places": 1, "new_places": 1, "stories": 1, "guides": 1, "leads_open": 0}
     with database.connect("admin") as conn:
         place = conn.execute("SELECT id, state FROM psst.places WHERE wikidata_id = 'Q900010'").fetchone()
         identity = {r["legacy_id"] for r in conn.execute("SELECT legacy_id FROM psst.place_identity")}
         cell = conn.execute("SELECT state, passes FROM psst.research_cells WHERE cell = %s",
                             (task["input"]["cell"],)).fetchone()
+        items = {r["type"]: r["state"] for r in conn.execute("SELECT type, state FROM psst.items")}
         queued = {r["type"] for r in conn.execute("SELECT type FROM psst.tasks WHERE state = 'queued'")}
     assert place == {"id": LEGACY_ID, "state": "pending"}  # the previous id carries over
     assert identity == {LEGACY_ID, "testville/old-mill"}
     assert cell == {"state": "researched", "passes": 1}
-    assert {"write_story", "write_guide", "resolve_places"} <= queued
+    assert items == {"story": "checking", "guide": "checking"}
+    assert {"tool_check", "resolve_places"} <= queued
 
 
-def test_writing_waits_until_the_place_is_resolved(database, city, monkeypatch):
+def test_review_waits_until_the_place_is_resolved(database, city, monkeypatch):
     worker, task, document = lease_research(database)
-    submit_research(database, worker, task, result_for(document))
-    assert Worker(database, SONNET).lease("write_story") is None
+    submit_research(database, worker, task, result_for(database, document))
+    assert all(r.ok for r in tool_checks(database))
+    assert Worker(database, SONNET).lease("review") is None
     monkeypatch.setattr(coords, "resolve", lambda places: {
         p["id"]: coords.Position(51.5, -0.05, "wikidata", p["wikidata"]) for p in places})
     monkeypatch.setattr(names, "osm_tags", lambda refs: {})
@@ -107,13 +145,12 @@ def test_writing_waits_until_the_place_is_resolved(database, city, monkeypatch):
                            (LEGACY_ID,)).fetchone()
     assert place["state"] == "active" and place["city_id"] == sample.CITY_ID and place["h3_r7"]
     assert alt["name"] == "旧磨坊"
-    assert Worker(database, SONNET).lease("write_story")["input"]["category"] == "hidden"
-    assert Worker(database, HAIKU).lease("write_guide") is not None
+    assert len(Worker(database, SONNET).lease("review")["input"]["revisions"]) == 2  # the story and its guide
 
 
 def test_a_place_without_a_coordinate_is_refused_and_its_work_cancelled(database, city, monkeypatch):
     worker, task, document = lease_research(database)
-    submit_research(database, worker, task, result_for(document, wikidata="Q900099"))
+    submit_research(database, worker, task, result_for(database, document, wikidata="Q900099"))
     monkeypatch.setattr(coords, "resolve", lambda places: {p["id"]: "Q900099 has no coordinate on Wikidata"
                                                            for p in places})
     monkeypatch.setattr(names, "osm_tags", lambda refs: {})
@@ -131,10 +168,10 @@ def test_a_place_without_a_coordinate_is_refused_and_its_work_cancelled(database
 
 def test_research_results_account_for_every_lead(database, city):
     _, _, document = lease_research(database)
-    result = result_for(document)
+    result = result_for(database, document)
     result["leads"] = result["leads"][:1]
     assert any("isn't accounted for" in p for p in research_problems(document["data"], result))
-    result = result_for(document)
+    result = result_for(database, document)
     result["leads"][1] |= {"status": "later"}
     assert any("is well known" in p for p in research_problems(document["data"], result))
 
@@ -166,7 +203,7 @@ def test_the_console_queues_research_for_the_system_worker(database, city, monke
 
 def test_a_place_outside_its_city_is_refused(database, city, monkeypatch):
     worker, task, document = lease_research(database)
-    submit_research(database, worker, task, result_for(document))
+    submit_research(database, worker, task, result_for(database, document))
     monkeypatch.setattr(coords, "resolve", lambda places: {
         p["id"]: coords.Position(52.9, -1.2, "wikidata", p["wikidata"]) for p in places})  # far outside Testville
     monkeypatch.setattr(names, "osm_tags", lambda refs: {})

@@ -10,7 +10,8 @@ import psycopg
 from psst.cli import tasks as task_cli
 from psst.services.system_worker import SystemWorker
 from psst.tasks import files, prompts
-from tests.flow import HAIKU, SONNET, Worker, queue_story, story_result
+from tests import sample
+from tests.flow import SONNET, Worker, queue, research, story_result
 
 
 def leased(database, worker, *types):
@@ -20,9 +21,8 @@ def leased(database, worker, *types):
 
 
 def written(database, city):
-    queue_story(database, city)
-    writer = Worker(database, SONNET)
-    revision = writer.submit(writer.lease("write_story"), story_result(city))["revision"]
+    """A story researched for the city's place, through the system worker's tool check."""
+    (revision,) = research(database, city, guide=False)
     system = Worker(database, kind="system")
     worker = SystemWorker(lambda: psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row),
                           system.token)
@@ -30,26 +30,33 @@ def written(database, city):
     return revision
 
 
-def test_claim_checkers_see_claims_and_passages_but_never_the_prose(database, city):
-    written(database, city)
-    item = Worker(database, HAIKU)
-    item.submit(item.lease("check_item"), {"verdict": "pass", "note": "fine", "untraced": []})
-    document = leased(database, Worker(database, HAIKU), "check_claims_a")
-    text = json.dumps(document)
-    assert "Ada Thorne designed the pump house" not in text  # the story's own words
-    first = document["data"]["claims"][0]
-    assert first["passages"][0]["quote"] == "built in 1871 by the engineer Ada Thorne"
-    assert first["passages"][0]["before"].endswith("was ")
-    assert document["prompt_version"] == prompts.load("check_claims_a").version
+def add_reference(database):
+    with database.connect("admin") as conn:
+        conn.execute("""INSERT INTO psst.style_references (id, city_id, place, headline, short, long, look, why, origin)
+                        VALUES (psst.new_id('sr'), %s, 'Old Pump House', 'A library that pumped water',
+                                'The reading room was the engine house.', 'An invented reference story.',
+                                'Look up at the chimney.', 'specific and told plainly', 'invented')""",
+                     (sample.CITY_ID,))
 
 
-def test_the_item_check_sees_the_prose_and_the_questions(database, city):
+def test_the_reviewer_sees_the_prose_beside_its_claims_and_passages(database, city):
+    add_reference(database)
     written(database, city)
-    document = leased(database, Worker(database, HAIKU), "check_item")
-    assert document["data"]["body"]["headline"]
-    assert document["data"]["questions"][0].startswith("List every name")
-    assert "passages" not in document["data"]["claims"][0]
-    assert document["data"]["claims"][0]["sources"]  # who it comes from, for "the listing says"
+    document = leased(database, Worker(database, SONNET), "review")
+    item = document["data"]["items"][0]
+    assert item["body"]["headline"] and item["type"] == "story"
+    assert item["claims"][0]["passages"][0]["quote"] == "built in 1871 by the engineer Ada Thorne"
+    assert item["claims"][0]["passages"][0]["before"].endswith("was ")
+    assert document["data"]["reference_stories"][0]["headline"] == "A library that pumped water"
+    assert document["prompt_version"] == prompts.load("review").version
+
+
+def test_research_sees_the_reference_stories_and_the_rules(database, city):
+    add_reference(database)
+    queue(database, city, "research_cell", "files", task_input={"cell": sample.CELL})
+    document = leased(database, Worker(database, SONNET), "research_cell")
+    assert document["data"]["reference_stories"][0]["why"] == "specific and told plainly"
+    assert {"story", "guide", "kinds"} <= set(document["data"]["rules"])
 
 
 def test_the_system_worker_runs_queued_tool_checks(database, city):
@@ -59,22 +66,23 @@ def test_the_system_worker_runs_queued_tool_checks(database, city):
                                (revision,)).fetchone()["verdict"]
         queued = {r["type"] for r in conn.execute("SELECT type FROM psst.tasks WHERE state = 'queued'")}
     assert verdict == "pass"
-    assert queued == {"check_item"}  # the claim checks follow once it passes
+    assert queued == {"review"}
 
 
 def test_a_result_is_refused_before_submitting_when_it_breaks_the_rules(database, city, monkeypatch):
     monkeypatch.setenv("PSST_DATABASE_URL_WORKER", database.url("worker"))
-    queue_story(database, city)
-    document = leased(database, Worker(database, SONNET), "write_story")
+    queue(database, city, "research_cell", "refused", task_input={"cell": sample.CELL})
+    document = leased(database, Worker(database, SONNET), "research_cell")
     wrong = story_result(city, year="1872")
-    found = task_cli.problems(document, {k: wrong[k] for k in ("body", "claims", "reason")})
-    assert any("'1872' isn't among the claims' values" in p for p in found)
-    assert task_cli.problems(document, {"body": {}, "claims": [], "reason": "x"})
+    result = {"places": [{"existing": city["place"], "ordinary": True,
+                          "stories": [{k: wrong[k] for k in ("body", "claims")}]}],
+              "leads": [], "notes": "one story"}
+    assert any("'1872' isn't among the claims' values" in p for p in task_cli.problems(document, result))
 
 
-def test_escalations_must_decide(database, city, monkeypatch):
+def test_audits_must_decide(database, city, monkeypatch):
     monkeypatch.setenv("PSST_DATABASE_URL_WORKER", database.url("worker"))
-    document = {"type": "escalate", "data": {}, "result_schema": {"type": "object"}}
+    document = {"type": "audit", "data": {}, "result_schema": {"type": "object"}}
     found = task_cli.problems(document, {"verdicts": [{"claim": "cl_x", "verdict": "unclear", "note": "hard"}]})
     assert found == ["claim cl_x: decide; 'unclear' isn't an option here"]
 
@@ -84,7 +92,6 @@ def test_every_prompt_loads_with_the_shared_instructions():
         prompt = prompts.load(path.stem)
         assert "uv run psst task submit" in prompt.text
         assert "—" not in prompt.text and "–" not in prompt.text
-
 
 
 def test_a_guide_revision_sees_the_wikidata_lines_and_the_lead(database, city):
@@ -114,17 +121,17 @@ def test_the_queue_command_counts_a_citys_tasks(database, city, monkeypatch, cap
             yield conn
 
     monkeypatch.setattr(db, "connect", connect)
-    queue_story(database, city)
+    queue(database, city, "research_cell", "count", task_input={"cell": sample.CELL})
     task_cli.show_queue(argparse.Namespace(city="testville"))
     shown = json.loads(capsys.readouterr().out)
-    assert shown["tasks"]["write_story"] == {"queued": 1, "leased": 0, "waiting_for_editor": 0}
+    assert shown["tasks"]["research_cell"] == {"queued": 1, "leased": 0, "waiting_for_editor": 0,
+                                               "model": SONNET}
+    assert shown["no_open_run_for"] == ["research_cell"]  # no Sonnet run is open to take it
 
 
 def test_a_stopped_system_worker_gives_back_its_task(database, city):
     import pytest
-    queue_story(database, city)
-    writer = Worker(database, SONNET)
-    writer.submit(writer.lease("write_story"), story_result(city))
+    research(database, city, guide=False)
     system = SystemWorker(lambda: psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row),
                           Worker(database, kind="system").token)
 
@@ -137,7 +144,6 @@ def test_a_stopped_system_worker_gives_back_its_task(database, city):
     with database.connect("admin") as conn:
         task = conn.execute("SELECT state FROM psst.tasks WHERE type = 'tool_check'").fetchone()
     assert task["state"] == "queued"
-
 
 
 def test_a_long_page_keeps_every_quoted_passage():

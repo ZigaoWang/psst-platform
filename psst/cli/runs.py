@@ -25,6 +25,10 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     end.add_argument("--notes", default="")
     end.add_argument("--kind", choices=sorted(ROLE_FOR), default="worker")
     end.set_defaults(run=end_run)
+    usage = commands.add_parser("tokens", help="record the tokens an ended worker run used")
+    usage.add_argument("run_id")
+    usage.add_argument("tokens", type=int)
+    usage.set_defaults(run=record_tokens)
 
 
 def start_run(args: argparse.Namespace) -> int:
@@ -44,6 +48,13 @@ def end_run(args: argparse.Namespace) -> int:
         row = conn.execute("SELECT psst.end_run(%s, %s) AS id", (token(), args.notes)).fetchone()
     assert row
     print(f"ended {row['id']}")
+    return 0
+
+
+def record_tokens(args: argparse.Namespace) -> int:
+    with db.connect("worker") as conn:
+        conn.execute("SELECT psst.record_run_tokens(%s, %s)", (args.run_id, args.tokens))
+    print(f"{args.run_id}: {args.tokens} tokens")
     return 0
 
 

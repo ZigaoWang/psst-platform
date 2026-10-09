@@ -7,7 +7,7 @@ import psycopg
 import pytest
 
 from psst.services.intake import Intake
-from tests.flow import HAIKU, Worker, audit_everything, claim_ids, item_state, run_publish, verdicts, write_and_check
+from tests.flow import audit_everything, item_state, review, run_publish, tool_checks, write_and_check
 
 
 @pytest.fixture
@@ -39,11 +39,8 @@ def test_a_report_sends_a_published_item_back_to_checking_and_it_stays_live(data
 def test_reports_are_resolved_when_the_item_is_published_again(database, city, site, intake):
     revision, item = published(database, city, site)
     intake.report({"factId": item, "reason": "outdated"})
-    Worker(database, kind="system").tool_check()
-    for task_type in ("check_item", "check_claims_a", "check_claims_b"):
-        checker = Worker(database, HAIKU)
-        checker.submit(checker.lease(task_type), verdicts(claim_ids(database, revision)) if task_type != "check_item"
-                       else {"verdict": "pass", "note": "still right", "untraced": []})
+    tool_checks(database)
+    review(database)  # the reviewer reads the report's item again
     assert item_state(database, revision) == "accepted"
     run_publish(database, site)
     assert item_state(database, revision) == "published"

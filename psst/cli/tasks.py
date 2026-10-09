@@ -21,14 +21,15 @@ from . import fetching
 from .runs import token
 
 WORK = config.ROOT / "work" / "tasks"
-WRITING = {"write_story": "story", "write_guide": "guide", "write_trail": "trail"}
+WRITING = {"write_trail": "trail"}
 
 
 def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     group = groups.add_parser("task", help="lease, submit, or give back tasks")
     commands = group.add_subparsers(dest="command", required=True, metavar="<task command>")
     lease = commands.add_parser("next", help="lease the next task and write its task file")
-    lease.add_argument("--type", action="append", required=True, dest="types", help="a task type (repeatable)")
+    lease.add_argument("--type", action="append", dest="types",
+                       help="only this task type (repeatable); by default every type routed to the run's model")
     lease.add_argument("--city", help="only tasks in this city (its slug, such as london)")
     lease.add_argument("--out", type=Path, default=WORK, help="where to write the task file")
     lease.set_defaults(run=lease_next)
@@ -103,17 +104,25 @@ def show_queue(args: argparse.Namespace) -> int:
         if city is None:
             raise config.ConfigError(f"no city with the slug {args.city!r}")
         tasks = conn.execute("""
-            SELECT type, count(*) FILTER (WHERE state = 'queued') AS queued,
-                   count(*) FILTER (WHERE state = 'leased') AS leased,
-                   count(*) FILTER (WHERE state = 'failed') AS waiting_for_editor
-            FROM psst.tasks WHERE city_id = %s AND state IN ('queued', 'leased', 'failed')
-            GROUP BY type ORDER BY type""", (city["id"],)).fetchall()
+            SELECT t.type, count(*) FILTER (WHERE t.state = 'queued') AS queued,
+                   count(*) FILTER (WHERE t.state = 'leased') AS leased,
+                   count(*) FILTER (WHERE t.state = 'failed') AS waiting_for_editor,
+                   y.runner, s.value #>> '{}' AS model,
+                   y.runner = 'worker' AND NOT EXISTS (
+                       SELECT 1 FROM psst.runs r WHERE r.kind = 'worker' AND r.ended_at IS NULL
+                         AND r.model = s.value #>> '{}') AS no_open_run
+            FROM psst.tasks t JOIN psst.task_types y ON y.name = t.type
+            LEFT JOIN psst.settings s ON s.key = 'routing.' || t.type
+            WHERE t.city_id = %s AND t.state IN ('queued', 'leased', 'failed')
+            GROUP BY t.type, y.runner, s.value ORDER BY t.type""", (city["id"],)).fetchall()
         items = conn.execute("""
             SELECT type, state, count(*) AS n FROM psst.items WHERE city_id = %s
             GROUP BY type, state ORDER BY type, state""", (city["id"],)).fetchall()
-    counts = ("queued", "leased", "waiting_for_editor")
+    counts = ("queued", "leased", "waiting_for_editor", "model")
+    waiting = sorted(r["type"] for r in tasks if r["queued"] and r["no_open_run"])
     print(json.dumps({"tasks": {r["type"]: {k: r[k] for k in counts} for r in tasks},
-                      "items": {f"{r['type']} {r['state']}": r["n"] for r in items}}, indent=2))
+                      "items": {f"{r['type']} {r['state']}": r["n"] for r in items},
+                      "no_open_run_for": waiting}, indent=2))
     return 0
 
 
@@ -125,7 +134,9 @@ def lease_next(args: argparse.Namespace) -> int:
             if row is None:
                 raise config.ConfigError(f"no city with the slug {args.city!r}")
             city = row["id"]
-        task = conn.execute("SELECT * FROM psst.lease_task(%s, %s, %s)", (token(), args.types, city)).fetchone()
+        types = args.types or [r["name"] for r in conn.execute(
+            "SELECT name FROM psst.task_types WHERE runner = 'worker' AND active ORDER BY name")]
+        task = conn.execute("SELECT * FROM psst.lease_task(%s, %s, %s)", (token(), types, city)).fetchone()
         if task is None:
             print("no task waiting")
             return 3
@@ -144,11 +155,20 @@ def problems(document: dict[str, Any], result: dict[str, Any]) -> list[str]:
     if found:
         return found
     kind = document["type"]
-    if kind in ("escalate", "audit"):
+    if kind == "audit":
         found += [f"claim {v['claim']}: decide; 'unclear' isn't an option here"
                   for v in result.get("verdicts", []) if v["verdict"] == "unclear"]
     if kind == "research_cell":
         found += research_problems(document["data"], result)
+        with db.connect("worker") as conn:
+            for index, place in enumerate(result["places"]):
+                written = [("story", n, s) for n, s in enumerate(place["stories"], 1)]
+                written += [("guide", 1, place["guide"])] if place.get("guide") else []
+                for written_type, n, item in written:
+                    check = runner.preflight(conn, written_type, place.get("existing"), item)
+                    found += [f"place {index} {written_type} {n}: {r}" for r in check.report.refusals]
+    if kind == "review":
+        found += review_problems(document["data"], result)
     if kind == "find_photos":
         room = rules.load().type("photo")["max_per_place"] - len(document["data"]["existing_photos"])
         if len(result["choices"]) > room:
@@ -159,6 +179,23 @@ def problems(document: dict[str, Any], result: dict[str, Any]) -> list[str]:
         with db.connect("worker") as conn:
             check = runner.preflight(conn, item_type, place, result)
         found += check.report.refusals
+    return found
+
+
+def review_problems(data: dict[str, Any], result: dict[str, Any]) -> list[str]:
+    """Every item decided once, and every edit passing the tool checks."""
+    items = {i["revision"]: i for i in data["items"]}
+    decided = [d["revision"] for d in result["decisions"]]
+    found = [f"decide {r} ({items[r]['place']['name'] if items[r]['place'] else r})"
+             for r in items if r not in decided]
+    found += [f"{r} isn't in this review" for r in decided if r not in items]
+    found += [f"{r} is decided twice" for r in set(decided) if decided.count(r) > 1]
+    with db.connect("worker") as conn:
+        for decision in result["decisions"]:
+            item = items.get(decision["revision"])
+            if decision["decision"] == "edit" and item:
+                check = runner.preflight(conn, item["type"], (item["place"] or {}).get("id"), decision)
+                found += [f"edit of {decision['revision']}: {r}" for r in check.report.refusals]
     return found
 
 
@@ -182,10 +219,9 @@ def research_problems(brief: dict[str, Any], result: dict[str, Any]) -> list[str
             found.append(f"lead {lead_id}: 'place' is the index of the place it became")
         if status == "known" and not decision.get("existing"):
             found.append(f"lead {lead_id}: 'existing' is the place it already is")
-    with_angles = [p for p in places if p["angles"]]
     share = rules.load().places["min_ordinary_share"]
-    if len(with_angles) >= 4 and sum(p["ordinary"] for p in with_angles) < share * len(with_angles):
-        found.append(f"fewer than {share:.0%} of the places with story angles are ordinary places; look for them")
+    if len(places) >= 4 and sum(p["ordinary"] for p in places) < share * len(places):
+        found.append(f"fewer than {share:.0%} of the places are ordinary places; look for them")
     return found
 
 
@@ -198,7 +234,7 @@ def submit_result(args: argparse.Namespace) -> int:
         return 1
     function = {"research_cell": "submit_research", "find_photos": "submit_photos"}.get(document["type"],
                                                                                        "submit_task")
-    if function == "submit_task":
+    if function != "submit_photos":
         result = result | {"rulebook": document["rulebook"]}
     with db.connect("worker") as conn:
         outcome = conn.execute(f"SELECT psst.{function}(%s, %s, %s, %s) AS r",

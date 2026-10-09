@@ -50,22 +50,18 @@ def writing(item_type: str) -> dict[str, Any]:
 
 
 def schema(task_type: str, item_type: str | None = None) -> dict[str, Any]:
-    if task_type in ("check_claims_a", "check_claims_b", "escalate"):
-        result = {"type": "object", "additionalProperties": False, "required": ["verdicts"],
-                  "properties": {"verdicts": CLAIM_VERDICTS, "item": ITEM_VERDICT}}
-        return result
     if task_type == "audit":
         return {"type": "object", "additionalProperties": False, "required": ["verdicts", "item"],
                 "properties": {"verdicts": CLAIM_VERDICTS, "item": ITEM_VERDICT}}
-    if task_type in ("check_item", "check_photo", "check_translation"):
+    if task_type in ("check_photo", "check_translation"):
         return {"type": "object", "additionalProperties": False, "required": ["verdict", "note", "untraced", "answers"],
                 "properties": {
-                    "verdict": {"enum": ["pass", "fail", "unclear"]}, "note": NOTE,
+                    "verdict": {"enum": ["pass", "fail"]}, "note": NOTE,
                     "untraced": {"type": "array", "items": {"type": "string"}},
                     "answers": {"type": "array", "items": {"type": "string"}},
                     "back_translation": {"type": "string"}}}
-    if task_type in ("write_story", "write_guide", "write_trail"):
-        return writing(task_type.removeprefix("write_"))
+    if task_type == "write_trail":
+        return writing("trail")
     if task_type == "revise":
         assert item_type
         if item_type == "translation":
@@ -75,6 +71,8 @@ def schema(task_type: str, item_type: str | None = None) -> dict[str, Any]:
         return translation()
     if task_type == "research_cell":
         return research()
+    if task_type == "review":
+        return review()
     if task_type == "find_photos":
         return photos()
     raise KeyError(f"no result schema for {task_type}")
@@ -88,28 +86,29 @@ def translation() -> dict[str, Any]:
 
 
 def research() -> dict[str, Any]:
+    """Places found in the cell, each with its stories and (for a new place) its guide, and every lead accounted
+    for."""
     spec = rules.load()
-    angle = {"type": "object", "additionalProperties": False, "required": ["angle", "category", "sources"],
-             "properties": {"angle": {"type": "string", "minLength": 20, "maxLength": 500},
-                            "category": {"enum": spec.type("story")["categories"]},
-                            "sources": {"type": "array", "minItems": 1, "items": {"type": "string",
-                                                                                  "pattern": "^https://"}}}}
-    new_place = {"type": "object", "additionalProperties": False, "required": ["name", "kind", "size", "ordinary",
-                                                                              "angles"],
-                 "anyOf": [{"required": ["wikidata"]}, {"required": ["osm"]}],
-                 "properties": {"wikidata": {"type": "string", "pattern": "^Q[1-9][0-9]*$"},
-                                "osm": {"type": "string", "pattern": "^(node|way|relation)/[1-9][0-9]*$"},
-                                "name": {"type": "string", "minLength": 2, "maxLength": 120},
-                                "local_name": {"type": "object", "additionalProperties": False,
-                                               "required": ["lang", "name"],
-                                               "properties": {"lang": {"type": "string"}, "name": {"type": "string"}}},
-                                "kind": {"enum": list(spec.places["kinds"])},
-                                "size": {"enum": list(spec.places["sizes"])},
-                                "ordinary": {"type": "boolean"},
-                                "angles": {"type": "array", "items": angle}}}
-    existing = {"type": "object", "additionalProperties": False, "required": ["existing", "ordinary", "angles"],
+    item = {"story": {"type": "object", "additionalProperties": False, "required": ["body", "claims"],
+                      "properties": {"body": spec.type("story")["schema"], "claims": CLAIMS}},
+            "guide": {"type": "object", "additionalProperties": False, "required": ["body", "claims"],
+                      "properties": {"body": spec.type("guide")["schema"], "claims": CLAIMS}}}
+    place = {"wikidata": {"type": "string", "pattern": "^Q[1-9][0-9]*$"},
+             "osm": {"type": "string", "pattern": "^(node|way|relation)/[1-9][0-9]*$"},
+             "name": {"type": "string", "minLength": 2, "maxLength": 120},
+             "local_name": {"type": "object", "additionalProperties": False, "required": ["lang", "name"],
+                            "properties": {"lang": {"type": "string"}, "name": {"type": "string"}}},
+             "kind": {"enum": list(spec.places["kinds"])},
+             "size": {"enum": list(spec.places["sizes"])},
+             "ordinary": {"type": "boolean"},
+             "stories": {"type": "array", "minItems": 1, "items": item["story"]},
+             "guide": item["guide"]}
+    new_place = {"type": "object", "additionalProperties": False,
+                 "required": ["name", "kind", "size", "ordinary", "stories", "guide"],
+                 "anyOf": [{"required": ["wikidata"]}, {"required": ["osm"]}], "properties": place}
+    existing = {"type": "object", "additionalProperties": False, "required": ["existing", "ordinary", "stories"],
                 "properties": {"existing": {"type": "string", "pattern": "^pl_"}, "ordinary": {"type": "boolean"},
-                               "angles": {"type": "array", "minItems": 1, "items": angle}}}
+                               "stories": place["stories"], "guide": item["guide"]}}
     lead = {"type": "object", "additionalProperties": False, "required": ["lead", "status"],
             "properties": {"lead": {"type": "string", "pattern": "^ld_"},
                            "status": {"enum": ["added", "known", "skipped", "later"]},
@@ -119,6 +118,24 @@ def research() -> dict[str, Any]:
     return {"type": "object", "additionalProperties": False, "required": ["places", "leads", "notes"],
             "properties": {"places": {"type": "array", "items": {"oneOf": [new_place, existing]}},
                            "leads": {"type": "array", "items": lead}, "notes": NOTE}}
+
+
+def review() -> dict[str, Any]:
+    """One decision per item: approve, edit (with the corrected body and claims), or reject (saying whether one
+    revision could fix it)."""
+    decision = {
+        "type": "object", "additionalProperties": False, "required": ["revision", "decision", "note"],
+        "properties": {"revision": {"type": "string", "pattern": "^rv_"},
+                       "decision": {"enum": ["approve", "edit", "reject"]},
+                       "note": NOTE, "revisable": {"type": "boolean"},
+                       "body": {"type": "object"}, "claims": CLAIMS},
+        "allOf": [{"if": {"properties": {"decision": {"const": "edit"}}},
+                   "then": {"required": ["body", "claims"]}},
+                  {"if": {"properties": {"decision": {"const": "reject"}}},
+                   "then": {"required": ["revisable"]}}],
+    }
+    return {"type": "object", "additionalProperties": False, "required": ["decisions", "notes"],
+            "properties": {"decisions": {"type": "array", "items": decision}, "notes": NOTE}}
 
 
 def photos() -> dict[str, Any]:

@@ -4,6 +4,7 @@ claims. Everything here is invented."""
 from __future__ import annotations
 
 import gzip
+import itertools
 import json
 
 from psst.checks import runner
@@ -11,6 +12,7 @@ from psst.publish.run import publish
 from tests import sample
 
 SONNET, HAIKU = "claude-sonnet-5-5", "claude-haiku-5-5"
+SESSIONS = itertools.count()  # each research session is its own task
 
 
 class Worker:
@@ -78,15 +80,55 @@ def guide_result(city):
     return {"body": body, "claims": claims, "rulebook": sample.RULEBOOK, "reason": "first draft"}
 
 
-def queue(database, city, task_type="write_story", n=0, place=None):
+def queue(database, city, task_type, n=0, place=None, task_input=None):
     with database.connect("admin") as conn:
-        return conn.execute("SELECT psst.enqueue(%s, %s, %s, '{}', %s, %s, NULL, NULL) AS id",
-                            (city["admin"], task_type, f"{task_type}:test:{n}", sample.CITY_ID,
-                             place or city["place"])).fetchone()["id"]
+        return conn.execute("SELECT psst.enqueue(%s, %s, %s, %s, %s, %s, NULL, NULL) AS id",
+                            (city["admin"], task_type, f"{task_type}:test:{n}", json.dumps(task_input or {}),
+                             sample.CITY_ID, place)).fetchone()["id"]
 
 
-def queue_story(database, city, n=0):
-    return queue(database, city, "write_story", n)
+def research(database, city, stories=1, guide=True, place=None, n=0, writer=None, story=None):
+    """A research session writes stories (and guide information) for a place. Returns the revisions, stories
+    first."""
+    queue(database, city, "research_cell", f"{n}:{next(SESSIONS)}", task_input={"cell": sample.CELL})
+    writer = writer or Worker(database, SONNET)
+    task = writer.lease("research_cell")
+    assert task, "no research task"
+    entry = {"existing": place or city["place"], "ordinary": True,
+             "stories": [story or story_result(city) for _ in range(stories)]}
+    if guide:
+        entry["guide"] = guide_result(city)
+    with database.connect("worker") as conn:
+        conn.execute("SELECT psst.submit_research(%s, %s, %s, 'test')", (writer.token, task["id"], json.dumps(
+            {"places": [entry], "leads": [], "notes": "covered the place", "rulebook": sample.RULEBOOK})))
+        return [r["id"] for r in conn.execute("""
+            SELECT r.id FROM psst.revisions r JOIN psst.items i ON i.id = r.item_id
+            WHERE r.created_by_task = %s ORDER BY i.type DESC, r.id""", (task["id"],))]
+
+
+def tool_checks(database, system=None):
+    """Run every queued tool check, as the system worker does."""
+    system = system or Worker(database, kind="system")
+    results = []
+    while (task := system.lease("tool_check")) is not None:
+        with database.connect("system") as conn:
+            result = runner.run(conn, system.token, task["revision_id"], task["id"])
+        system.submit(task, {"pass": result.ok})
+        results.append(result)
+    return results
+
+
+def approve(revision):
+    return {"decision": "approve", "note": "the records say this, and it is worth telling"}
+
+
+def review(database, decide=approve, reviewer=None):
+    """Lease the next review and decide every item in it."""
+    reviewer = reviewer or Worker(database, SONNET)
+    task = reviewer.lease("review")
+    assert task, "no review queued"
+    decisions = [{"revision": r} | decide(r) for r in task["input"]["revisions"]]
+    return reviewer.submit(task, {"decisions": decisions, "notes": "reviewed the batch", "rulebook": sample.RULEBOOK})
 
 
 def claim_ids(database, revision):
@@ -105,22 +147,12 @@ def verdicts(ids, verdict="supported"):
     return {"verdicts": [{"claim": c, "verdict": verdict, "note": "the passage says this"} for c in ids]}
 
 
-def write_and_check(database, city, n=0, writer=None, system=None, kind="story", place=None):
-    """Write a story or guide through the queue and take it through every check to acceptance."""
-    queue(database, city, f"write_{kind}", n, place)
-    writer = writer or Worker(database, HAIKU if kind == "guide" else SONNET)
-    system = system or Worker(database, kind="system")
-    result = story_result(city) if kind == "story" else guide_result(city)
-    revision = writer.submit(writer.lease(f"write_{kind}"), result)["revision"]
-    assert system.tool_check().ok
-    ids = claim_ids(database, revision)
-    for task_type in ("check_item", "check_claims_a", "check_claims_b"):
-        checker = Worker(database, HAIKU)
-        task = checker.lease(task_type)
-        assert task, f"no {task_type} task"
-        checker.submit(task, verdicts(ids) if task_type != "check_item"
-                       else {"verdict": "pass", "note": "nothing beyond the claims", "untraced": []})
-    return revision
+def write_and_check(database, city, n=0, kind="story", place=None):
+    """Research a story or a guide for a place and take it through the tool checks and review to acceptance."""
+    revisions = research(database, city, stories=1 if kind == "story" else 0, guide=kind == "guide", place=place, n=n)
+    assert all(r.ok for r in tool_checks(database))
+    review(database)
+    return revisions[0]
 
 
 def audit_everything(database, verdict="supported"):

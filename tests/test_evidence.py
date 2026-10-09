@@ -119,7 +119,7 @@ def tool_check(database, revision):
     return result, state
 
 
-def test_a_sound_story_passes_the_tool_check_and_waits_for_claim_checks(database, service):
+def test_a_sound_story_passes_the_tool_check_and_waits_for_review(database, service):
     result, state = tool_check(database, submit(database, service))
     assert result.ok, result.report.refusals
     assert state == "checking"

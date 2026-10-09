@@ -224,10 +224,10 @@ Every stage records why an angle or item was dropped, so the loss at each stage 
 On submit, and again in the system worker, a revision is refused with every reason listed unless:
 
 1. **Passages match.** Every quoted passage appears in its snapshot after Unicode, whitespace, and quotation mark normalization.
-2. **Details trace.** Every year and number in the prose is among the claims' values and in their passages; every proper name in the prose appears in one of the revision's passages or in the place's own record (its names and areas).
+2. **Details trace.** Every year and number in the prose is among the claims' values and in their passages; every proper name in the prose appears in a snapshot the revision cites or in the place's own record (its names and areas).
 3. **Own words.** The prose shares no run of eight words with any snapshot it cites, and no sentence of it repeats most of the words of a single source sentence. Guides are held to this too.
 4. **Writing rules hold** (section 9): lengths, banned words, US spelling, dashes, the identifier shape.
-5. **The look is about the story.** `look` names something it shares with the story's headline or short version: the thing the surprise is about.
+5. **The look is about the story.** `look` names something the story itself mentions; whether it is the right thing to look at is for review.
 6. **Source rules hold.** For a story: at least two distinct sources; at least one primary or scholarly source; every claim backed by a passage from a source that is not `reference`; a `myth` story cites a source for the popular version and a primary or scholarly source for the correction; an anecdote with one source is `legend`.
 7. **Structured values agree.** A guide's identifier year and maker match its key facts; a key fact without agreeing evidence is dropped.
 8. **References resolve.** Tags exist, trail stops are published places within the distance limits, a photo's pair is a current photo of the same place.

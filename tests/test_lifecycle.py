@@ -12,7 +12,7 @@ from tests import sample
 
 @pytest.fixture
 def story(database):
-    """A story revision under check, written by a worker run, with a system run and two checker runs."""
+    """A story revision under check, written by a worker run, with a system run and two reviewer runs."""
     writer, _ = database.start_run("worker", "claude-sonnet-5-5")
     system, _ = database.start_run("system")
     checker_a, _ = database.start_run("worker", "claude-haiku-5-5")
@@ -43,10 +43,11 @@ def settle(conn, story):
 
 def pass_everything(conn, story):
     check(conn, story["system"], story, "tool", "pass")
-    for claim in story["claims"]:
-        check(conn, story["a"], story, "claim_a", "supported", claim)
-        check(conn, story["b"], story, "claim_b", "supported", claim)
-    check(conn, story["a"], story, "item", "pass")
+    check(conn, story["a"], story, "review", "pass")
+
+
+def evaluate(conn, story):
+    return conn.execute("SELECT psst.evaluate(%s) AS r", (story["revision"],)).fetchone()["r"]
 
 
 def test_submitting_creates_the_item_claims_evidence_and_history(database, story):
@@ -70,12 +71,15 @@ def test_everything_passing_accepts(database, story):
 
 def test_nothing_is_accepted_before_the_tool_check(database, story):
     with database.connect("admin") as conn:
-        for claim in story["claims"]:
-            check(conn, story["a"], story, "claim_a", "supported", claim)
-            check(conn, story["b"], story, "claim_b", "supported", claim)
-        check(conn, story["a"], story, "item", "pass")
+        check(conn, story["a"], story, "review", "pass")
         assert settle(conn, story) == {"outcome": "wait", "missing": "tool"}
         assert state(conn, story["item"]) == "checking"
+
+
+def test_a_passing_tool_check_waits_for_review(database, story):
+    with database.connect("admin") as conn:
+        check(conn, story["system"], story, "tool", "pass")
+        assert evaluate(conn, story) == {"outcome": "wait", "missing": "review"}
 
 
 def test_a_failed_tool_check_sends_the_revision_back(database, story):
@@ -85,40 +89,19 @@ def test_a_failed_tool_check_sends_the_revision_back(database, story):
         assert state(conn, story["item"]) == "draft"
 
 
-def test_disagreeing_checks_escalate_and_the_escalation_decides(database, story):
-    escalator, _ = database.start_run("worker", "claude-sonnet-5-5")
+def test_a_rejection_says_whether_a_revision_could_fix_it(database, story):
     with database.connect("admin") as conn:
         check(conn, story["system"], story, "tool", "pass")
-        first, second = story["claims"]
-        check(conn, story["a"], story, "claim_a", "supported", first)
-        check(conn, story["b"], story, "claim_b", "unsupported", first)
-        check(conn, story["a"], story, "claim_a", "supported", second)
-        check(conn, story["b"], story, "claim_b", "supported", second)
-        check(conn, story["a"], story, "item", "pass")
-        result = settle(conn, story)
-        assert result["outcome"] == "escalate" and result["claims"] == [first]
-        check(conn, escalator, story, "escalation", "contradicted", first, "the record says 1872")
-        assert settle(conn, story)["outcome"] == "revise"
-        assert state(conn, story["item"]) == "draft"
+        conn.execute("SELECT psst.record_check(%s, NULL, %s, NULL, 'review', 'fail', %s, %s)",
+                     (story["a"], story["revision"], "the chimney is the 1902 rebuild",
+                      json.dumps({"decision": "reject", "revisable": True})))
+        assert evaluate(conn, story) == {"outcome": "reject", "problems": ["the chimney is the 1902 rebuild"],
+                                         "revisable": True}
 
 
-def test_an_unclear_item_check_escalates(database, story):
-    with database.connect("admin") as conn:
-        pass_everything(conn, story)
-        check(conn, story["b"], story, "item", "unclear", note="can't tell which chimney")
-        assert settle(conn, story) == {"outcome": "escalate", "claims": [], "item": True}
-
-
-def test_a_run_never_checks_its_own_writing(database, story):
+def test_a_run_never_reviews_its_own_writing(database, story):
     with database.connect("admin") as conn, pytest.raises(psycopg.errors.InsufficientPrivilege, match="own writing"):
-        check(conn, story["writer"], story, "claim_a", "supported", story["claims"][0])
-
-
-def test_the_two_claim_checks_come_from_different_runs(database, story):
-    with database.connect("admin") as conn:
-        check(conn, story["a"], story, "claim_a", "supported", story["claims"][0])
-        with pytest.raises(psycopg.errors.InsufficientPrivilege, match="different runs"):
-            check(conn, story["a"], story, "claim_b", "supported", story["claims"][0])
+        check(conn, story["writer"], story, "review", "pass")
 
 
 def test_only_the_system_records_tool_checks(database, story):

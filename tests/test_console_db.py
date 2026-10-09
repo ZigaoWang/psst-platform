@@ -7,7 +7,18 @@ import psycopg
 import pytest
 
 from tests import sample
-from tests.flow import HAIKU, SONNET, Worker, claim_ids, item_state, queue_story, story_result, write_and_check
+from tests.flow import (
+    SONNET,
+    Worker,
+    claim_ids,
+    item_state,
+    queue,
+    research,
+    review,
+    tool_checks,
+    verdicts,
+    write_and_check,
+)
 
 PASSWORD = "a long test password"
 
@@ -71,22 +82,22 @@ def test_an_editor_can_retire_and_recheck(database, session, city):
 
 
 def test_task_controls(database, session, city):
-    queue_story(database, city)
-    task = Worker(database, SONNET).lease("write_story")
+    queue(database, city, "research_cell", "controls", task_input={"cell": sample.CELL})
+    task = Worker(database, SONNET).lease("research_cell")
     assert console(database, "SELECT psst.console_task(%s, %s, 'release') AS s", session, task["id"])["s"] == "queued"
     assert console(database, "SELECT psst.console_task(%s, %s, 'cancel') AS s", session, task["id"])["s"] == "cancelled"
     assert console(database, "SELECT psst.console_task(%s, %s, 'requeue') AS s", session, task["id"])["s"] == "queued"
 
 
 def test_settings_change_with_a_reason_and_keep_their_history(database, session):
-    console(database, "SELECT psst.console_change_setting(%s, 'audit.threshold.story', '0.01', 'tighter for launch')",
+    console(database, "SELECT psst.console_change_setting(%s, 'audit.sample_rate', '0.2', 'more sampling for launch')",
             session)
-    assert console(database, "SELECT psst.setting('audit.threshold.story') AS v")["v"] == 0.01
+    assert console(database, "SELECT psst.setting('audit.sample_rate') AS v")["v"] == 0.2
     with pytest.raises(psycopg.errors.InvalidParameterValue):
-        console(database, "SELECT psst.console_change_setting(%s, 'audit.threshold.story', '\"low\"', 'why')", session)
+        console(database, "SELECT psst.console_change_setting(%s, 'audit.sample_rate', '\"many\"', 'why')", session)
     with database.connect("console") as conn:
         change = conn.execute("SELECT old_value, new_value, reason FROM psst.setting_changes").fetchone()
-    assert change == {"old_value": 0.02, "new_value": 0.01, "reason": "tighter for launch"}
+    assert change == {"old_value": 0.1, "new_value": 0.2, "reason": "more sampling for launch"}
 
 
 def test_one_publish_request_at_a_time(database, session):
@@ -96,26 +107,16 @@ def test_one_publish_request_at_a_time(database, session):
 
 
 def test_accuracy_counts_overturned_verdicts(database, session, city):
-    queue_story(database, city)
-    writer = Worker(database, SONNET)
-    revision = writer.submit(writer.lease("write_story"), story_result(city))["revision"]
-    Worker(database, kind="system").tool_check()
-    ids = claim_ids(database, revision)
-    item = Worker(database, HAIKU)
-    item.submit(item.lease("check_item"), {"verdict": "pass", "note": "fine", "untraced": []})
-    first, second = Worker(database, HAIKU), Worker(database, HAIKU)
-    first.submit(first.lease("check_claims_a"), {"verdicts": [
-        {"claim": c, "verdict": "supported", "note": "says so"} for c in ids]})
-    second.submit(second.lease("check_claims_b"), {"verdicts": [
-        {"claim": c, "verdict": "unsupported" if c == ids[0] else "supported", "note": "checked"} for c in ids]})
-    escalator = Worker(database, SONNET)
-    escalator.submit(escalator.lease("escalate"), {"verdicts": [
-        {"claim": ids[0], "verdict": "supported", "note": "the record says 1871"}]})
+    research(database, city, guide=False)
+    tool_checks(database)
+    review(database)
+    auditor = Worker(database, SONNET)
+    task = auditor.lease("audit")
+    auditor.submit(task, verdicts(claim_ids(database, task["revision_id"]))
+                   | {"item": {"verdict": "fail", "note": "the look points at the wrong chimney"}})
     with database.connect("console") as conn:
         rows = {r["kind"]: r for r in conn.execute("SELECT * FROM psst.model_accuracy")}
-    assert rows["claim_b"]["overturned"] == 1 and rows["claim_b"]["judged"] == 1
-    assert rows["claim_a"]["overturned"] == 0
-
+    assert rows["review"]["overturned"] == 1 and rows["review"]["judged"] == 1
 
 
 def test_an_editor_corrects_a_place_link_and_its_guide_is_revised(database, city, monkeypatch):

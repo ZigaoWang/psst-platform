@@ -146,29 +146,14 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
     revision = revision_of(conn, task["revision_id"]) if task["revision_id"] else None
     item_type = revision["type"] if revision else None
 
-    if kind in ("check_claims_a", "check_claims_b"):
-        data = {"claims": claims_with_passages(conn, task["revision_id"])}
-    elif kind == "escalate":
-        assert revision
-        data |= {"claims": claims_with_passages(conn, task["revision_id"], task["input"].get("claims") or None),
-                 "snapshots": full_snapshots(conn, task["revision_id"]),
-                 "earlier_verdicts": earlier_verdicts(conn, task["revision_id"])}
-        if task["input"].get("item"):
-            data |= {"type": item_type, "body": revision["body"],
-                     "questions": rulebook.type(str(item_type)).get("item_questions", [])}
-    elif kind in ("check_item", "check_photo"):
+    if kind == "check_photo":
         assert revision
         data |= {"type": item_type, "body": revision["body"],
-                 # Who each claim comes from, so "the listing says" can be traced, but never the passages.
-                 "claims": [{**{k: c[k] for k in ("claim", "n", "text", "values", "role")},
-                             "sources": sorted({f"{p['source']['publisher']} ({p['source']['kind']})"
-                                                for p in c["passages"]})}
+                 "claims": [{k: c[k] for k in ("claim", "n", "text", "values", "role")}
                             for c in claims_with_passages(conn, task["revision_id"])],
-                 "questions": rulebook.type(str(item_type))["item_questions"],
+                 "questions": rulebook.type("photo")["item_questions"],
                  "other_stories": other_items(conn, task["place_id"], task["item_id"]),
-                 "encyclopedia_lead": lookups.lead(data["place"]) if lookups.lead and data["place"] else None}
-        if kind == "check_photo":
-            data["photo_file"] = lookups.photo_file(revision["body"]) if lookups.photo_file else None
+                 "photo_file": lookups.photo_file(revision["body"]) if lookups.photo_file else None}
     elif kind == "check_translation":
         assert revision
         source = revision_of(conn, revision["translation_of"])
@@ -182,14 +167,18 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
                  "claims": claims_with_passages(conn, task["revision_id"]),
                  "snapshots": full_snapshots(conn, task["revision_id"]),
                  "questions": rulebook.type(str(item_type)).get("item_questions", [])}
-    elif kind in ("write_story", "write_guide", "write_trail"):
-        item_type = kind.removeprefix("write_")
-        data |= {"brief": task["input"], "other_stories": other_items(conn, task["place_id"], None),
-                 "rules": rulebook.type(item_type)}
-        if kind == "write_guide":
-            data |= guide_references(lookups, data["place"])
+    elif kind == "write_trail":
+        item_type = "trail"
+        data |= {"brief": task["input"], "rules": rulebook.type("trail")}
     elif kind == "research_cell":
         data = research_brief(conn, task["input"]["cell"])
+        data["rules"] |= {"story": rulebook.type("story"), "guide": rulebook.type("guide")}
+        data["reference_stories"] = style_references(conn, task["city_id"])
+    elif kind == "review":
+        data = {"items": [review_item(conn, lookups, revision_id)
+                          for revision_id in task["input"]["revisions"] if being_checked(conn, revision_id)],
+                "reference_stories": style_references(conn, task["city_id"]),
+                "rules": {"story": rulebook.type("story"), "guide": rulebook.type("guide")}}
     elif kind == "find_photos":
         existing = [{"item": r["id"], "kind": r["body"]["kind"], "alt": r["body"]["alt"], "state": r["state"]}
                     for r in conn.execute("""
@@ -224,6 +213,31 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
         "prompt": prompt.text, "prompt_version": prompt.version, "rulebook": rulebook.version,
         "data": data, "result_schema": results.schema(kind, item_type),
     }
+
+
+def being_checked(conn: Connection, revision_id: str) -> bool:
+    return conn.execute("SELECT 1 FROM psst.items WHERE current_revision = %s AND state = 'checking'",
+                        (revision_id,)).fetchone() is not None
+
+
+def review_item(conn: Connection, lookups: Lookups, revision_id: str) -> dict[str, Any]:
+    """One story or guide as the reviewer sees it: the prose, each claim beside its passages, and what the reader
+    may already know about the place."""
+    revision = revision_of(conn, revision_id)
+    item = conn.execute("SELECT id, place_id FROM psst.items WHERE current_revision = %s", (revision_id,)).fetchone()
+    assert item
+    place = place_summary(conn, item["place_id"])
+    return {"revision": revision_id, "type": revision["type"], "place": place, "body": revision["body"],
+            "claims": claims_with_passages(conn, revision_id),
+            "other_stories": other_items(conn, item["place_id"], item["id"]),
+            "encyclopedia_lead": lookups.lead(place) if lookups.lead and place else None}
+
+
+def style_references(conn: Connection, city_id: int | None) -> list[dict[str, Any]]:
+    """The stories an editor chose as the standard for voice and surprise, the city's own first."""
+    return [dict(r) for r in conn.execute("""
+        SELECT place, headline, short, long, look, why FROM psst.style_references
+        ORDER BY city_id IS NOT DISTINCT FROM %s DESC, created_at, id""", (city_id,))]
 
 
 def guide_references(lookups: Lookups, place: dict[str, Any] | None) -> dict[str, Any]:

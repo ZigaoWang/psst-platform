@@ -23,6 +23,11 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
+	photos: async (event) => {
+		const [city] = await sql`SELECT id FROM psst.cities WHERE slug = ${event.params.slug}`;
+		return act(event, (s) => sql`SELECT psst.console_queue_photos(${s}, ${city?.id ?? 0}, 50)`,
+			'Photo searches are queued for places with stories and no photo.');
+	},
 	research: async (event) => {
 		const cells = Number((await event.request.formData()).get('cells') ?? 0);
 		const [city] = await sql`SELECT id FROM psst.cities WHERE slug = ${event.params.slug}`;

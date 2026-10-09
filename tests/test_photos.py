@@ -97,3 +97,15 @@ def test_published_places_carry_their_photos(database, city, commons_stub, site)
     assert run_publish(database, site).promoted
     image = production_city(site)[1]["places"][0]["images"][0]
     assert image["credit"]["license"] == "CC BY-SA 4.0" and image["full"]["file"].endswith(".jpg")
+
+
+def test_the_console_queues_photo_searches_for_places_with_stories(database, city):
+    write_and_check(database, city, kind="story")
+    with database.connect("admin") as conn:
+        conn.execute("SELECT psst.console_add_account('editor', 'a long test password')")
+    with database.connect("console") as conn:
+        session = conn.execute("SELECT psst.console_sign_in('editor', 'a long test password') AS t").fetchone()["t"]
+        assert conn.execute("SELECT psst.console_queue_photos(%s, %s, 10) AS n",
+                            (session, sample.CITY_ID)).fetchone()["n"] == 1
+        assert conn.execute("SELECT psst.console_queue_photos(%s, %s, 10) AS n",
+                            (session, sample.CITY_ID)).fetchone()["n"] == 0

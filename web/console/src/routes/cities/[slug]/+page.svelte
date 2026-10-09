@@ -61,6 +61,11 @@
 </section>
 
 <section>
+	<h2>Photos</h2>
+	<form method="POST" action="?/photos"><button type="submit">Queue photo searches</button></form>
+</section>
+
+<section>
 	<h2>Open tasks</h2>
 	{#if data.tasks.length}
 		<div class="table-wrap">

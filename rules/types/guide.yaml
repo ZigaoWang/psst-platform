@@ -29,24 +29,31 @@ identifier_refuses:
   - pattern: "\\b(on|in|off|at|near) (the )?[A-Z][a-z]+ (Street|Road|Lane|Avenue|Square|Place|Hill|Row|Court|Way)\\b"
     reason: names the street; the place page already says where it is
 
-# Key facts shown, most useful first; at most `max_shown`. Properties not listed are never shown.
+# Key facts read from Wikidata, most useful first; at most `max_shown` are shown. `kind` says how the value is
+# read: a person or item (by its English label), a date, a length or area (converted to metric), or a count.
 max_shown: 6
-key_fact_order: [P84, P170, P50, P287, P571, P1619, P580, P149, P1435, P2048, P186, P547, P1101, P1083]
-key_fact_labels:
-  P84: architect
-  P170: creator
-  P50: author
-  P287: designer
-  P571: built
-  P1619: opened
-  P580: started
-  P149: style
-  P1435: heritage status
-  P2048: height
-  P186: material
-  P547: commemorates
-  P1101: floors
-  P1083: capacity
+key_facts:
+  - {property: P170, label: creator, kind: person}
+  - {property: P84, label: architect, kind: person}
+  - {property: P571, label: built, kind: date}
+  - {property: P1619, label: opened, kind: date}
+  - {property: P149, label: style, kind: item}
+  - {property: P1435, label: heritage status, kind: item}
+  - {property: P2048, label: height, kind: length}
+  - {property: P186, label: material, kind: item}
+  - {property: P547, label: commemorates, kind: item}
+  - {property: P825, label: dedicated to, kind: item}
+  - {property: P1083, label: capacity, kind: count}
+  - {property: P2043, label: length, kind: length}
+  - {property: P2046, label: area, kind: area}
+  - {property: P1101, label: floors, kind: count}
+  - {property: P2044, label: elevation, kind: length}
+  - {property: P631, label: structural engineer, kind: person}
+  - {property: P193, label: builder, kind: person}
+  - {property: P88, label: commissioned by, kind: item}
+  - {property: P138, label: named after, kind: item}
+# The date a memorial, a museum, or a park was "built" is better called what it is.
+built_label: {memorial: made, culture: founded, green: established}
 
 checks: [tool, claims, item]
 item_questions:

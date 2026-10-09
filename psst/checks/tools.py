@@ -211,6 +211,8 @@ def _sources(report: Report, item_type: str, body: dict[str, Any], claims: list[
         roles = {_role(s, rulebook) for s, _ in passages}
         if need["non_reference_per_claim"] and passages and roles <= {"reference"}:
             report.refuse(f"claim {claim.n}", "rests only on reference works; find the record they draw on")
+    if item_type == "guide":
+        _key_facts(report, body, claims, quotes, rulebook)
     if item_type != "story":
         return
     myths = [c for c in claims if c.role == "myth"]
@@ -231,6 +233,32 @@ def _sources(report: Report, item_type: str, body: dict[str, Any], claims: list[
             if not any(_role(s, rulebook) in strong for s, _ in passages) and len({s.source for s, _ in passages}) < 2:
                 report.refuse(f"claim {claim.n}", "an event with one press or community source is a legend: "
                                                   "corroborate it or mark the story 'legend'")
+
+
+def _key_facts(report: Report, body: dict[str, Any], claims: list[Claim],
+               quotes: dict[int, list[tuple[Snapshot, str]]], rulebook: Rulebook) -> None:
+    """Each key fact names the claim that backs it, with the same value. A value Wikidata's sanity checks flagged
+    needs a passage from another source too (design.md, section 7.6)."""
+    by_n = {c.n: c for c in claims}
+    for index, fact in enumerate(body["key_facts"]):
+        claim = by_n.get(fact["claim"])
+        where = f"key_facts[{index}]"
+        if claim is None:
+            report.refuse(where, f"names claim {fact['claim']}, which doesn't exist")
+            continue
+        if not any(contains(v["value"], fact["value"]) or contains(fact["value"], v["value"]) for v in claim.values):
+            report.refuse(where, f"'{fact['value']}' isn't among claim {claim.n}'s values")
+        passages = quotes.get(claim.n, [])
+        flagged = any("[flagged" in _line(snapshot.text, passage) for snapshot, passage in passages)
+        if flagged and all(_role(snapshot, rulebook) == "reference" for snapshot, _ in passages):
+            report.refuse(where, "Wikidata's value is flagged as implausible; back it with another source or drop it")
+
+
+def _line(text: str, passage: str) -> str:
+    at = text.find(passage)
+    if at < 0:
+        return ""
+    return text[text.rfind("\n", 0, at) + 1:(text.find("\n", at) + 1 or len(text) + 1) - 1]
 
 
 # Type shapes ------------------------------------------------------------------------------------------------

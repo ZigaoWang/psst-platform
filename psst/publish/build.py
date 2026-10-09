@@ -164,7 +164,8 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
     published_tags = {t["id"] for t in tag_rows}
 
     guide_spec = rulebook.type("guide")
-    order = {p: i for i, p in enumerate(guide_spec["key_fact_order"])}
+    order = {kf["property"]: i for i, kf in enumerate(guide_spec["key_facts"])}
+    labels = {kf["property"]: kf["label"] for kf in guide_spec["key_facts"]}
 
     def story_entry(story: dict[str, Any]) -> dict[str, Any]:
         body, (sources, claims) = story["body"], evidence.get(story["revision_id"], ([], []))
@@ -181,7 +182,7 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
             entry["translations"] = translations[story["item_id"]]
         return entry
 
-    def guide_entry(guide: dict[str, Any], wikidata_id: str | None) -> dict[str, Any]:
+    def guide_entry(guide: dict[str, Any], wikidata_id: str | None, kind: str) -> dict[str, Any]:
         body, (sources, claims) = guide["body"], evidence.get(guide["revision_id"], ([], []))
         facts = sorted((kf for kf in body["key_facts"] if kf["property"] in order),
                        key=lambda kf: order[kf["property"]])
@@ -189,7 +190,9 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
             "id": guide["item_id"], "identifier": body["identifier"], "about": body["about"],
             "wikidataId": wikidata_id, "lastVerified": _date(guide["verified_on"]), "sources": sources,
             "claims": claims,
-            "keyFacts": [{"property": kf["property"], "label": guide_spec["key_fact_labels"][kf["property"]],
+            "keyFacts": [{"property": kf["property"],
+                          "label": guide_spec["built_label"].get(kind, labels[kf["property"]])
+                          if kf["property"] == "P571" else labels[kf["property"]],
                           "value": kf["value"]} for kf in facts[:guide_spec["max_shown"]]],
         }
         if translations.get(guide["item_id"]):
@@ -211,7 +214,7 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
             "districtId": str(place["district_id"]) if place["district_id"] else None,
             "neighborhoodId": str(place["neighborhood_id"]) if place["neighborhood_id"] else None,
             "facts": [story_entry(s) for s in stories],
-            "guide": guide_entry(guides[place_id], place["wikidata_id"]),
+            "guide": guide_entry(guides[place_id], place["wikidata_id"], place["kind"]),
         }
         by_group[place["group_id"]].append(entry)
 

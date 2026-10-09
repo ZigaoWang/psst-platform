@@ -17,7 +17,7 @@ from typing import Any
 import psycopg
 
 from psst import rules
-from psst.evidence import fetch, urls
+from psst.evidence import fetch, urls, wikidata
 
 PORT = 8471
 MAX_REQUEST_BYTES = 16_384
@@ -53,7 +53,7 @@ class FetchService:
         if not (title and publisher and language):
             raise RequestError("a source needs its title, publisher, and language")
         with self.slots:
-            page = self.reader.read(url, archive=bool(request.get("archive")))
+            page = self.read_page(url, bool(request.get("archive")))
         if not page.ok:
             raise RequestError(page.note or f"the page answered {page.status}")
         with self.connect() as conn:
@@ -67,6 +67,19 @@ class FetchService:
                 "new": row["is_new"], "url": address, "read_url": page.url, "via": page.via,
                 "archived_at": page.archived_at, "title": page.title, "note": page.note, "text": page.text,
                 "links": page.links[:500]}
+
+
+    def read_page(self, url: str, archive: bool) -> fetch.Page:
+        """A Wikidata item is saved as its key-fact lines (psst/evidence/wikidata.py); anything else as page text."""
+        entity = wikidata.ENTITY_URL.match(url)
+        if entity:
+            try:
+                item, values = wikidata.fetch(entity.group(1))
+            except (LookupError, ConnectionError) as error:
+                raise RequestError(str(error)) from None
+            return fetch.Page(url, 200, wikidata.label(item) or entity.group(1),
+                              wikidata.render(entity.group(1), item, values))
+        return self.reader.read(url, archive=archive)
 
 
 def handler(service: FetchService) -> type[BaseHTTPRequestHandler]:

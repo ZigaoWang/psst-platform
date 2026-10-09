@@ -23,8 +23,15 @@ def snapshots_for(conn: Connection, ids: list[str]) -> dict[str, Snapshot]:
 
 
 def context_for(conn: Connection, item_type: str, place_id: str | None, body: dict[str, Any],
-                translation_of: str | None) -> Context:
+                translation_of: str | None, item_id: str | None = None) -> Context:
     context = Context()
+    if place_id and item_type == "story":
+        context.siblings = [r["told"] for r in conn.execute("""
+            SELECT concat_ws(' ', r.body ->> 'headline', r.body ->> 'short') AS told
+            FROM psst.items i JOIN psst.revisions r ON r.id = i.current_revision
+            WHERE i.place_id = %(place)s AND i.type = 'story' AND i.state <> 'retired'
+              AND (%(item)s::text IS NULL OR i.created_at < (SELECT created_at FROM psst.items WHERE id = %(item)s))
+            ORDER BY i.created_at""", {"place": place_id, "item": item_id})]  # an earlier story keeps its angle
     if place_id:
         context.names = [r["name"] for r in conn.execute("""
             SELECT name FROM psst.place_names WHERE place_id = %(p)s
@@ -74,7 +81,7 @@ def preflight(conn: Connection, item_type: str, place_id: str | None, result: di
 def load(conn: Connection, revision_id: str) -> tuple[str, dict[str, Any], list[Claim], dict[str, Snapshot], Context]:
     """Everything the tool checks need for one stored revision."""
     revision = conn.execute("""
-        SELECT r.body, r.translation_of, i.type, i.place_id
+        SELECT r.body, r.translation_of, i.id, i.type, i.place_id
         FROM psst.revisions r JOIN psst.items i ON i.id = r.item_id WHERE r.id = %s""", (revision_id,)).fetchone()
     if revision is None:
         raise LookupError(f"unknown revision {revision_id}")
@@ -86,7 +93,8 @@ def load(conn: Connection, revision_id: str) -> tuple[str, dict[str, Any], list[
         claim = claims.setdefault(row["id"], Claim(row["n"], row["text"], row["kind"], row["values"], [], row["role"]))
         claim.evidence.append(Evidence(row["snapshot_id"], row["quote"], row["evidence_id"]))
     snapshots = snapshots_for(conn, sorted({e.snapshot for c in claims.values() for e in c.evidence}))
-    context = context_for(conn, revision["type"], revision["place_id"], revision["body"], revision["translation_of"])
+    context = context_for(conn, revision["type"], revision["place_id"], revision["body"], revision["translation_of"],
+                          revision["id"])
     return revision["type"], revision["body"], list(claims.values()), snapshots, context
 
 

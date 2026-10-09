@@ -61,6 +61,7 @@ class Context:
     photo_pairs: set[str] = field(default_factory=set)       # current photo items of the same place
     source_type: str | None = None                           # for a translation: the type it translates
     source_body: dict[str, Any] | None = None                # for a translation: the body it translates
+    siblings: list[str] = field(default_factory=list)        # headline and short of the place's other stories
 
 
 @dataclass
@@ -99,6 +100,8 @@ def check(item_type: str, body: dict[str, Any], claims: list[Claim], snapshots: 
         _own_words(report, prose, claims, snapshots, rulebook)
         _paraphrase(report, prose, claims, snapshots, rulebook)
         _repeats(report, prose)
+    if item_type == "story":
+        _same_angle(report, body, context)
     if item_type == "story":
         _look(report, body)
     _sources(report, item_type, body, claims, quotes_by_claim, snapshots, rulebook)
@@ -266,6 +269,21 @@ def _repeats(report: Report, prose: dict[str, str]) -> None:
             shared = len(own & other)
             if shared >= 0.8 * len(own) and shared >= 0.8 * len(other):
                 report.refuse(other_where, f"\"{other_text}\" says again what {where} already says; say it once")
+
+
+def _same_angle(report: Report, body: dict[str, Any], context: Context) -> None:
+    """One story per angle: a story whose headline and short share most of their telling words with another story on
+    the same place tells that story again. The place's own names don't count."""
+    names = {w for n in context.names for w in words(n)}
+
+    def telling(text: str) -> set[str]:
+        return {w for w in words(text) if len(w) >= 5 and w.isalpha()} - names
+    own = telling(f"{body.get('headline', '')} {body.get('short', '')}")
+    for other in context.siblings:
+        theirs = telling(other)
+        if min(len(own), len(theirs)) >= 5 and len(own & theirs) >= 0.5 * min(len(own), len(theirs)):
+            report.refuse("short", f"tells the same story as \"{other[:80]}\" on this place; find another angle "
+                                   "or drop it")
 
 
 def _look(report: Report, body: dict[str, Any]) -> None:

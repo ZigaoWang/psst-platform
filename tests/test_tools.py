@@ -255,3 +255,13 @@ def test_a_host_with_a_fixed_kind_overrides_the_writer_label():
     blog = dataclasses.replace(RECORD, url="https://www.subbrit.org.uk/sites/old-pump-house", kind="scholarly")
     result = check("story", story(), claims(), SNAPSHOTS | {RECORD.id: blog})
     assert "needs a primary record or scholarly source" in refusals(result)
+
+
+def test_a_second_story_on_the_same_angle_is_refused():
+    earlier = ("Readers in a former pumping station. Mill Lane's library began in 1871 pumping water, and its readers "
+               "still sit beneath the boiler beams.")
+    result = check("story", story(), claims(), SNAPSHOTS, Context(names=["Old Pump House"], siblings=[earlier]))
+    assert "tells the same story as" in refusals(result)
+    other = "Ada Thorne won the commission at twenty three, the youngest engineer the water company ever hired."
+    result = check("story", story(), claims(), SNAPSHOTS, Context(names=["Old Pump House"], siblings=[other]))
+    assert "tells the same story as" not in refusals(result)

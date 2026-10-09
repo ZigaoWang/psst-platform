@@ -1,0 +1,20 @@
+# Never committed: content, research work, exports, and secrets live in the database, on the server, and in
+# the private backup repository only.
+/work/
+/export/
+/snapshots/
+*.env
+.env*
+!.env.example
+
+# Tooling
+.DS_Store
+__pycache__/
+*.pyc
+/.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+node_modules/
+.svelte-kit/
+/build/

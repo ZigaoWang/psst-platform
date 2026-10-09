@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Story from '#lib/Story.svelte';
 	import Report from '#lib/Report.svelte';
-	import { field, name, t } from '#lib/i18n.ts';
+	import { field, keyFactLabel, name, t } from '#lib/i18n.ts';
 	import { link } from '#lib/links.ts';
 	import type { PageProps } from './$types';
 
@@ -54,7 +54,7 @@
 		<p>{field(language, place.guide, 'about')}</p>
 		{#if place.guide.keyFacts.length}
 			<dl class="facts">
-				{#each place.guide.keyFacts as fact (fact.property)}<dt>{fact.label}</dt><dd>{fact.value}</dd>{/each}
+				{#each place.guide.keyFacts as fact (fact.property)}<dt>{keyFactLabel(language, fact)}</dt><dd>{fact.value}</dd>{/each}
 			</dl>
 		{/if}
 		<details>

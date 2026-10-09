@@ -49,6 +49,8 @@ const zh: Record<string, string> = {
 	'中文': '中文',
 	'Location from': '位置来自',
 	'Skip to content': '跳到内容',
+	'Map data © OpenStreetMap contributors.': '地图数据 © OpenStreetMap 贡献者。',
+	'Content version': '内容版本',
 	'Places with this tag': '带有这个标签的地方',
 	'About Psst': '关于 Psst',
 	'name': '名字由来',
@@ -93,4 +95,15 @@ export function name(language: Language, place: { name: string; localName?: { la
 	names?: Record<string, string> }): string {
 	if (language === 'zh-Hans') return place.names?.['zh-Hans'] ?? (place.localName?.lang === 'zh-Hans' ? place.localName.name : place.name);
 	return place.name;
+}
+
+// Key-fact labels by Wikidata property; English labels come with the content.
+const keyFactsZh: Record<string, string> = {
+	P170: '作者', P84: '建筑师', P571: '建成', P1619: '启用', P149: '风格', P1435: '保护级别', P2048: '高度',
+	P186: '材料', P547: '纪念', P825: '献给', P1083: '容量', P2043: '长度', P2046: '面积', P1101: '楼层',
+	P2044: '海拔', P631: '结构工程师', P193: '建造者', P88: '委托方', P138: '名称来源'
+};
+
+export function keyFactLabel(language: Language, fact: { property: string; label: string }): string {
+	return language === 'zh-Hans' ? (keyFactsZh[fact.property] ?? fact.label) : fact.label;
 }

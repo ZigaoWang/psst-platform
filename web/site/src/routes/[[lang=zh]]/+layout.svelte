@@ -28,7 +28,7 @@
 
 <footer>
 	<p>{t(language, 'Surprising, sourced stories about places you can stand in front of.')}</p>
-	<p class="small">Map data © OpenStreetMap contributors. Content version {data.version}.</p>
+	<p class="small">{t(language, 'Map data © OpenStreetMap contributors.')} {t(language, 'Content version')} {data.version}.</p>
 </footer>
 
 <style>

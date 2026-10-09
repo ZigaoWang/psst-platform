@@ -31,6 +31,7 @@ class SystemWorker:
             "resolve_places": self.resolve_places,
             "import_photo": self.import_photo,
             "queue_research": self.queue_research,
+            "relink_place": self.relink_place,
         }
         self._audits_planned = 0.0
 
@@ -46,6 +47,9 @@ class SystemWorker:
 
     def queue_research(self, conn: Connection, task: dict[str, Any]) -> dict[str, Any]:
         return research.queue(conn, self.token, task["input"]["city"], int(task["input"]["cells"]))
+
+    def relink_place(self, conn: Connection, task: dict[str, Any]) -> dict[str, Any]:
+        return resolve.relink(conn, self.token, task)
 
     def step(self) -> bool:
         """Do one task, if one is waiting. Returns whether there was one."""

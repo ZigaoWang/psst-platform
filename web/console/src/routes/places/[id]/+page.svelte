@@ -2,9 +2,10 @@
 	import PageHeader from '@psst/ui/PageHeader.svelte';
 	import Badge from '@psst/ui/Badge.svelte';
 	import Empty from '@psst/ui/Empty.svelte';
+	import Notice from '@psst/ui/Notice.svelte';
 	import type { PageProps } from './$types';
 
-	let { data }: PageProps = $props();
+	let { data, form }: PageProps = $props();
 	const p = $derived(data.place);
 	const display = $derived(data.names.find((n) => n.role === 'display')?.name ?? p.id);
 
@@ -16,6 +17,9 @@
 
 <svelte:head><title>{display} · Psst console</title></svelte:head>
 <PageHeader title={display} subtitle={[p.neighborhood, p.district, p.city].filter(Boolean).join(', ')} />
+
+{#if form?.error}<Notice tone="danger">{form.error}</Notice>{/if}
+{#if form?.done}<Notice tone="ok">{form.done}</Notice>{/if}
 
 <section>
 	<dl class="facts">
@@ -59,4 +63,13 @@
 	{:else}
 		<Empty>No content yet.</Empty>
 	{/if}
+</section>
+
+<section>
+	<h2>Correct the Wikidata link</h2>
+	<form method="POST" action="?/relink" class="filters">
+		<label>Wikidata item <input name="wikidata" required pattern={'Q[1-9][0-9]*'} placeholder="Q42" /></label>
+		<label>Because <input name="reason" required /></label>
+		<button type="submit">Correct the link</button>
+	</form>
 </section>

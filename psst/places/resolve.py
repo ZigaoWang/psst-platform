@@ -64,9 +64,38 @@ def resolve(conn: Connection, token: str, place_ids: list[str]) -> dict[str, int
         if state["s"] == "active":
             resolved.append(place["id"])
     if resolved:
-        areas = spec["areas"]
-        conn.execute("SELECT psst.assign_areas(%s, %s, %s)",
-                     (token, resolved, Jsonb({"excluded_areas": [int(a) for a in areas["excluded_areas"]],
-                                              "preferred_source": areas["preferred_source"],
-                                              "nearest_neighborhood_meters": areas["nearest_neighborhood_meters"]})))
+        assign_areas(conn, token, resolved)
     return outcome
+
+
+def assign_areas(conn: Connection, token: str, place_ids: list[str]) -> None:
+    areas = rules.load().places["areas"]
+    conn.execute("SELECT psst.assign_areas(%s, %s, %s)",
+                 (token, place_ids, Jsonb({"excluded_areas": [int(a) for a in areas["excluded_areas"]],
+                                           "preferred_source": areas["preferred_source"],
+                                           "nearest_neighborhood_meters": areas["nearest_neighborhood_meters"]})))
+
+
+def relink(conn: Connection, token: str, task: dict[str, Any]) -> dict[str, Any]:
+    """Links a place to the Wikidata item an editor named: its coordinate (from the new item, or the OSM element
+    when the item has none) and its names in other languages, then sends its guide back for revision."""
+    qid = task["input"]["wikidata"]
+    place = conn.execute("""
+        SELECT p.osm_ref AS osm, p.country_code,
+               (SELECT name FROM psst.place_names WHERE place_id = p.id AND role = 'display') AS display,
+               (SELECT name FROM psst.place_names WHERE place_id = p.id AND role = 'local') AS local
+        FROM psst.places p WHERE p.id = %s""", (task["place_id"],)).fetchone()
+    assert place
+    position = coords.resolve([{"id": task["place_id"], "wikidata": qid, "osm": place["osm"]}]).get(task["place_id"])
+    if not isinstance(position, coords.Position):
+        raise ValueError(f"{qid} gives no usable coordinate: {position or 'none'}")
+    labels = http.wikidata_entities([qid], props="labels").get(qid, {}).get("labels", {})
+    tags = names.osm_tags([place["osm"]]).get(place["osm"], {}) if place["osm"] else {}
+    rows = names.collect({"display": place["display"], "local": place["local"], "country": place["country_code"]},
+                         labels, tags)
+    result = {"lat": position.lat, "lon": position.lon, "source": position.source, "ref": position.ref,
+              "cell": cells.cell_for(position.lat, position.lon), "names": rows}
+    sent = conn.execute("SELECT psst.relink_place(%s, %s, %s) AS n", (token, task["id"], Jsonb(result))).fetchone()
+    assert sent
+    assign_areas(conn, token, [task["place_id"]])
+    return {"wikidata": qid, "coordinate": position.source, "guides_sent_back": sent["n"]}

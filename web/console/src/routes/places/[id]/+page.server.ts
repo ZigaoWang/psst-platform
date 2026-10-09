@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { sql } from '#lib/server/db.ts';
-import type { PageServerLoad } from './$types';
+import { act, field } from '#lib/server/act.ts';
+import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const [place] = await sql`
@@ -19,4 +20,13 @@ export const load: PageServerLoad = async ({ params }) => {
 		sql`SELECT legacy_id, kind FROM psst.place_identity WHERE place_id = ${place.id} ORDER BY legacy_id`
 	]);
 	return { place, names, items, identity };
+};
+
+export const actions: Actions = {
+	relink: async (event) => {
+		const form = await event.request.formData();
+		return act(event,
+			(s) => sql`SELECT psst.console_relink_place(${s}, ${event.params.id}, ${field(form, 'wikidata')}, ${field(form, 'reason')})`,
+			'Queued: the system worker reads the new item within a few minutes and sends the guide back for revision.');
+	}
 };

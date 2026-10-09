@@ -6,6 +6,7 @@ from __future__ import annotations
 import psycopg
 import pytest
 
+from tests import sample
 from tests.flow import HAIKU, SONNET, Worker, claim_ids, item_state, queue_story, story_result, write_and_check
 
 PASSWORD = "a long test password"
@@ -112,3 +113,36 @@ def test_accuracy_counts_overturned_verdicts(database, session, city):
         rows = {r["kind"]: r for r in conn.execute("SELECT * FROM psst.model_accuracy")}
     assert rows["claim_b"]["overturned"] == 1 and rows["claim_b"]["judged"] == 1
     assert rows["claim_a"]["overturned"] == 0
+
+
+
+def test_an_editor_corrects_a_place_link_and_its_guide_is_revised(database, city, monkeypatch):
+    from psst.core import http
+    from psst.places import coords, names
+    from psst.services.system_worker import SystemWorker
+    guide = write_and_check(database, city, kind="guide")
+    with database.connect("admin") as conn:
+        conn.execute("SELECT psst.console_add_account('editor', 'a long test password')")
+        other = sample.place(conn, city["admin"], wikidata="Q900002")
+    with database.connect("console") as conn:
+        session = conn.execute("SELECT psst.console_sign_in('editor', 'a long test password') AS t").fetchone()["t"]
+        with pytest.raises(psycopg.Error, match=f"already the item of place {other}"):
+            conn.execute("SELECT psst.console_relink_place(%s, %s, 'Q900002', 'wrong item')", (session, city["place"]))
+    with database.connect("console") as conn:
+        conn.execute("SELECT psst.console_relink_place(%s, %s, 'Q900003', 'the item is the estate')",
+                     (session, city["place"]))
+    monkeypatch.setattr(coords, "resolve", lambda places: {
+        places[0]["id"]: coords.Position(51.5002, -0.0501, "wikidata", "Q900003")})
+    monkeypatch.setattr(http, "wikidata_entities", lambda qids, props: {
+        "Q900003": {"labels": {"fr": {"value": "Station de pompage"}}}})
+    monkeypatch.setattr(names, "osm_tags", lambda refs: {})
+    system = SystemWorker(lambda: psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row),
+                          Worker(database, kind="system").token)
+    assert system.step()
+    assert item_state(database, guide) == "draft"
+    with database.connect("admin") as conn:
+        place = conn.execute("SELECT wikidata_id, coord_ref FROM psst.places WHERE id = %s",
+                             (city["place"],)).fetchone()
+        task = conn.execute("SELECT input FROM psst.tasks WHERE type = 'revise'").fetchone()
+    assert place == {"wikidata_id": "Q900003", "coord_ref": "Q900003"}
+    assert "from Q900001 to Q900003" in task["input"]["problems"][0]

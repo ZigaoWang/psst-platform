@@ -27,7 +27,9 @@ already in or around it (`data.places_nearby`, with their stories' headlines).
 4. **Name new places precisely.** One physical thing someone can point at, with its Wikidata item (`wikidata`) or
    OpenStreetMap element (`osm`), never a district or a whole street network. Give the name people use on the
    ground, in English where one exists, and the name on the signs in `local_name` when it differs. Choose `kind`
-   and `size` from `data.rules`. Coordinates are looked up by the tools; never give them.
+   and `size` from `data.rules`. Coordinates are looked up by the tools; never give them. For a place you found
+   outside the leads, `uv run psst place find "<name>" --near <lat>,<lon>` (the cell's middle) lists the Wikidata
+   items and OpenStreetMap elements nearby with that name.
 5. **To add angles to a place that already exists**, list it with `existing` and the new angles. Check its
    existing headlines first so nothing is repeated.
 

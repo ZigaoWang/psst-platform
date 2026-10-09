@@ -85,7 +85,7 @@ local_wikipedia:
 demand_min_views: 10
 
 # Leads: a research pass covers at most this many, best known first; the rest wait for the next pass.
-max_leads_per_pass: 150
+max_leads_per_pass: 60
 # Wikidata classes that are never a place someone can stand in front of. A lead whose classes are all among these
 # is skipped automatically, with the reason kept.
 abstract_lead_classes:

@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 
+import psycopg
+
 from psst.core import db
-from psst.places import research
+from psst.places import reference, research
 
 from .runs import start
 
@@ -24,6 +26,11 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     queue.add_argument("--city", required=True)
     queue.add_argument("--cells", type=int, default=10)
     queue.set_defaults(run=queue_cells)
+    imported = commands.add_parser("import-reference",
+                                   help="copy boundaries, tags, demand, and the previous place list (once)")
+    imported.add_argument("--from", dest="source", required=True,
+                          help="connection string of the previous database (opened read-only)")
+    imported.set_defaults(run=import_reference)
 
 
 
@@ -41,4 +48,11 @@ def queue_cells(args: argparse.Namespace) -> int:
         token = start(conn, "system", "research planning")
         outcome = research.queue(conn, token, args.city, args.cells)
     print(json.dumps(outcome, indent=2))
+    return 0
+
+
+def import_reference(args: argparse.Namespace) -> int:
+    with psycopg.connect(args.source) as old, psycopg.connect(db.conninfo("admin")) as new:
+        counts = reference.import_reference(old, new)
+    print(json.dumps(counts, indent=2))
     return 0

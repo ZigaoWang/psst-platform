@@ -212,3 +212,19 @@ def test_a_worker_learns_why_its_task_was_taken_away(database, city):
                      "problem = 'the revision is no longer being checked' WHERE id = %s", (task["id"],))
     with pytest.raises(psycopg.Error, match="no longer yours: the revision is no longer being checked"):
         worker.submit(task, {})
+
+
+def test_an_item_failing_after_its_last_revision_waits_for_an_editor(database, city):
+    queue_story(database, city)
+    writer = Worker(database, SONNET)
+    writer.submit(writer.lease("write_story"), story_result(city))
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.settings SET value = '0' WHERE key = 'revise.max_rounds'")
+    Worker(database, kind="system").tool_check()
+    checker = Worker(database, HAIKU)
+    checker.submit(checker.lease("check_item"), {"verdict": "fail", "note": "the surprise is in the lead",
+                                                 "untraced": []})
+    with database.connect("admin") as conn:
+        task = conn.execute("SELECT state, problem FROM psst.tasks WHERE type = 'revise'").fetchone()
+    assert task["state"] == "failed" and "an editor decides" in task["problem"]
+    assert Worker(database, SONNET).lease("revise") is None

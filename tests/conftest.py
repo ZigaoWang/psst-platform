@@ -121,3 +121,9 @@ def database(template: tuple[str, str]) -> Iterator[Database]:
     yield Database(name, superuser)
     with psycopg.connect(superuser, autocommit=True) as conn:
         conn.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')  # type: ignore[arg-type]
+
+
+@pytest.fixture
+def city(database: Database) -> dict[str, str]:
+    from tests.flow import setup_city
+    return setup_city(database)

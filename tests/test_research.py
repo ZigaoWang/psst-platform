@@ -561,3 +561,18 @@ def test_a_cell_swept_this_week_is_queued_without_sweeping_again(database, city,
     with database.connect("system") as conn:
         conn.autocommit = False
         assert research.queue(conn, city.token, "testville", 1)["queued"] == 1
+
+
+def test_a_cell_whose_research_failed_is_opened_and_queued_again(database, city):
+    with database.connect("admin") as conn:
+        task = conn.execute("SELECT id, input ->> 'cell' AS cell FROM psst.tasks WHERE type = 'research_cell' "
+                            "ORDER BY id LIMIT 1").fetchone()
+        conn.execute("UPDATE psst.tasks SET state = 'failed' WHERE id = %s", (task["id"],))
+        assert conn.execute("SELECT state FROM psst.research_cells WHERE cell = %s",
+                            (task["cell"],)).fetchone()["state"] == "open"
+    with database.connect("system") as conn:
+        assert conn.execute("SELECT psst.queue_research(%s, %s) AS n",
+                            (city.token, json.dumps([{"cell": task["cell"], "priority": 5}]))).fetchone()["n"] == 1
+    with database.connect("admin") as conn:
+        again = conn.execute("SELECT state, attempts FROM psst.tasks WHERE id = %s", (task["id"],)).fetchone()
+    assert again["state"] == "queued" and again["attempts"] == 0

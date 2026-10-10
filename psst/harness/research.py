@@ -213,7 +213,15 @@ def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any],
     ctx.read.update(page["snapshot"] for page in gathered)
     kept: dict[str, Any] = {}
 
+    on_record = any(page["kind"] == "official_record" for page in gathered)
+
     def accept(answer: dict[str, Any]) -> dict[str, Any]:
+        if answer.get("skip") and on_record and not kept.get("asked"):
+            # A record is enough for a guide, and a place without a story still gets one: a skip over a record is
+            # asked for the facts once before it stands.
+            kept["asked"] = True
+            raise task_cli.NotSubmitted(["the official record is enough, and a place without a story still gets a "
+                                         "guide: pick the facts the record gives"])
         if answer.get("skip"):
             return {"skip": str(answer["skip"])[:300]}
         found = results.problems(EVIDENCE_SCHEMA, answer)
@@ -242,6 +250,7 @@ def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any],
         answer = dict(executor.converse("evidence", system, user, task, version(prompt), accept, ctx, spend))
     finally:
         ctx.conn.close()
+    kept.pop("asked", None)
     return answer | kept
 
 

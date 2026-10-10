@@ -206,6 +206,14 @@ def review_problems(data: dict[str, Any], result: dict[str, Any]) -> list[str]:
     found += [f"{r} is decided twice" for r in set(decided) if decided.count(r) > 1]
     found += [f"{d['revision']}: only a good mark names a cut in fix; a weak or bad reason says what is wrong"
               for d in result["decisions"] if d["fix"] is not None and d["mark"] != "good"]
+    for d in result["decisions"]:
+        if "tier" not in d:
+            continue  # a task file from before tiers
+        story = d["revision"] in items and items[d["revision"]].get("type") == "story"
+        if story and d["mark"] == "good" and d["tier"] is None:
+            found.append(f"{d['revision']}: a good story is featured or map; set its tier")
+        if d["tier"] is not None and not (story and d["mark"] == "good"):
+            found.append(f"{d['revision']}: only a good story has a tier")
     return found
 
 

@@ -97,8 +97,18 @@ def test_a_good_story_needing_a_cut_gets_one_revision_for_it(database, city):
 def test_only_a_good_mark_names_a_cut():
     from psst.cli.tasks import review_problems
     data = {"items": [{"revision": "rv_1", "place": None}]}
-    result = {"decisions": [{"revision": "rv_1", "mark": "weak", "reason": "thin", "fix": "cut the end"}]}
+    result = {"decisions": [{"revision": "rv_1", "mark": "weak", "reason": "thin", "fix": "cut the end", "tier": None}]}
     assert any("only a good mark names a cut" in p for p in review_problems(data, result))
+
+
+def test_a_good_story_has_a_tier_and_a_guide_none():
+    from psst.cli.tasks import review_problems
+    data = {"items": [{"revision": "rv_1", "place": None, "type": "story"},
+                      {"revision": "rv_2", "place": None, "type": "guide"}]}
+    result = {"decisions": [{"revision": "rv_1", "mark": "good", "reason": "fine", "fix": None, "tier": None},
+                            {"revision": "rv_2", "mark": "good", "reason": "fine", "fix": None, "tier": "map"}]}
+    found = review_problems(data, result)
+    assert any("set its tier" in p for p in found) and any("only a good story has a tier" in p for p in found)
 
 
 def test_a_bad_story_is_dropped(database, city):

@@ -20,11 +20,11 @@ def golden(database, city):
         conn.execute("UPDATE psst.settings SET value = 'false' WHERE key = 'gate.open'")
         for n, mark in enumerate(MARKS):
             conn.execute("""INSERT INTO psst.golden_stories (id, city_id, place, headline, short, long, sources, mark,
-                            reason, origin, marked_by) VALUES (psst.new_id('gs'), %s, %s, %s, %s, %s, 'Records Office',
-                            %s, %s, 'invented', 'editor')""",
+                            tier, reason, origin, marked_by) VALUES (psst.new_id('gs'), %s, %s, %s, %s, %s,
+                            'Records Office', %s, %s, %s, 'invented', 'editor')""",
                          (sample.CITY_ID, f"Place {n}", f"Headline {n}", f"Short {n}.", f"Long {n}.", mark,
-                          f"Reason {n}."))
-        return {r["id"]: r["mark"] for r in conn.execute("SELECT id, mark FROM psst.golden_stories")}
+                          ("featured" if n % 2 else "map") if mark == "good" else None, f"Reason {n}."))
+        return {r["id"]: (r["mark"], r["tier"]) for r in conn.execute("SELECT id, mark, tier FROM psst.golden_stories")}
 
 
 def refresh(database, city):
@@ -37,12 +37,16 @@ def calibrate(database, golden, wrong=0):
     """Mark both folds, getting `wrong` of the editor's marks wrong."""
     flips = {"good": "weak", "weak": "bad", "bad": "good"}
     misses = set(sorted(golden)[:wrong])
+
+    def mark(g):
+        editor, tier = golden[g]
+        given = flips[editor] if g in misses else editor
+        return {"golden": g, "mark": given, "tier": (tier or "map") if given == "good" else None, "reason": "read it"}
     while (task := (worker := Worker(database, SONNET)).lease("calibrate")) is not None:
         with database.connect("admin") as conn:
             fold = [r["id"] for r in conn.execute("SELECT id FROM psst.golden_stories WHERE psst.golden_fold(id) = %s",
                                                   (task["input"]["fold"],))]
-        marks = [{"golden": g, "mark": flips[golden[g]] if g in misses else golden[g], "reason": "read it"}
-                 for g in fold]
+        marks = [mark(g) for g in fold]
         with database.connect("worker") as conn:
             conn.execute("SELECT psst.submit_calibration(%s, %s, %s, %s)",
                          (worker.token, task["id"], psycopg.types.json.Jsonb({"marks": marks, "notes": "n"}),
@@ -64,6 +68,14 @@ def test_the_gate_opens_when_both_folds_agree_with_the_editor(database, city, go
     research(database, city)
     tool_checks(database)
     assert Worker(database, SONNET).lease("review") is not None
+
+
+def test_a_good_mark_in_the_wrong_tier_disagrees(database, city, golden):
+    refresh(database, city)
+    good = sorted(g for g, (mark, _) in golden.items() if mark == "good")[:2]
+    swapped = {g: ("good", "map" if golden[g][1] == "featured" else "featured") for g in good}
+    calibrate(database, golden | swapped)
+    assert float(refresh(database, city)["agreement"]) == 0.8
 
 
 def test_the_gate_stays_closed_below_the_agreement_required(database, city, golden):

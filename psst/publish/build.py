@@ -97,6 +97,7 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
     items = _rows(conn, """
         SELECT p.item_id, p.type, p.place_id, p.city_id, p.translates, p.language, p.position, p.revision_id,
                r.body, r.translation_of, r.created_at::date AS written_on,
+               (SELECT tier FROM psst.items WHERE id = p.item_id) AS tier,
                (SELECT max(t.at)::date FROM psst.transitions t
                 WHERE t.item_id = p.item_id AND t.revision_id = p.revision_id
                   AND t.to_state = 'accepted') AS verified_on
@@ -188,6 +189,8 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
         }
         if body.get("myth"):
             entry["myth"] = body["myth"]
+        entry["featured"] = (story["tier"] or body.get("tier") or "featured") == "featured"
+        entry["form"] = body.get("form", "story")
         if translations.get(story["item_id"]):
             entry["translations"] = translations[story["item_id"]]
         return entry

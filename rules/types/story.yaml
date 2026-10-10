@@ -14,14 +14,20 @@ schema:
     veracity: {enum: [fact, legend, disputed]}
     headline: {type: string, minLength: 10, maxLength: 60}
     short: {type: string, minLength: 40, maxLength: 220}
-    long: {type: string, minLength: 300, maxLength: 1000}
+    long: {type: string, minLength: 120, maxLength: 1000}
     look: {type: string, minLength: 40, maxLength: 190}
     myth: {type: string, minLength: 20, maxLength: 200}
+    # The writer's proposal (decision 27); the reviewer sets the tier that publishes. A story without one is featured.
+    tier: {enum: [featured, map]}
+    form: {enum: [story, street_name, plaque]}
     tags:
       type: array
       maxItems: 4
       uniqueItems: true
       items: {type: string, pattern: "^tg_[0-9a-hjkmnp-tv-z]{8}$"}
+  # A featured story (or one written before tiers) tells the whole story; a map story may be shorter.
+  if: {properties: {tier: {const: featured}}}
+  then: {properties: {long: {minLength: 300}}}
 
 # Shape rules the tools check beyond the schema.
 headline_refuses: ["?"]

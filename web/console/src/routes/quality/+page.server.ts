@@ -27,7 +27,8 @@ export const actions: Actions = {
 	mark: async (event) => {
 		const form = await event.request.formData();
 		return act(event,
-			(s) => sql`SELECT psst.console_mark_story(${s}, ${field(form, 'item')}, ${field(form, 'mark')}, ${field(form, 'reason')})`,
+			(s) => sql`SELECT psst.console_mark_story(${s}, ${field(form, 'item')}, ${field(form, 'mark')}, ${field(form, 'reason')},
+				${field(form, 'mark') === 'good' ? field(form, 'tier') : null})`,
 			'Marked; it joins the golden set and the next calibration uses it.');
 	}
 };

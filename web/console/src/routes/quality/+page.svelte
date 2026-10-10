@@ -55,6 +55,7 @@
 			<form method="POST" action="?/mark" class="filters">
 				<input type="hidden" name="item" value={s.id} />
 				<label>Mark <select name="mark"><option>good</option><option>weak</option><option>bad</option></select></label>
+				<label>Tier, if good <select name="tier"><option value="featured">featured</option><option value="map">map story</option></select></label>
 				<label>Why <input name="reason" required /></label>
 				<button type="submit">Save mark</button>
 			</form>

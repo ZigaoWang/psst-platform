@@ -74,6 +74,7 @@ def test_a_result_is_refused_before_submitting_when_it_breaks_the_rules(database
     queue(database, city, "research_cell", "refused", task_input={"cell": sample.CELL})
     document = leased(database, Worker(database, SONNET), "research_cell")
     wrong = story_result(city, year="1872")
+    wrong["body"] = wrong["body"] | {"tier": "featured", "form": "story"}
     result = {"places": [{"existing": city["place"], "ordinary": True,
                           "stories": [{k: wrong[k] for k in ("body", "claims")}]}],
               "leads": [], "notes": "one story"}

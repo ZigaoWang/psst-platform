@@ -479,6 +479,18 @@
                   "type": "string",
                   "description": "Optional: the popular version a story sets straight."
                 },
+                "featured": {
+                  "type": "boolean",
+                  "description": "Optional: true for a featured story, which leads the feed; false for a map story, which fills the map."
+                },
+                "form": {
+                  "enum": [
+                    "story",
+                    "street_name",
+                    "plaque"
+                  ],
+                  "description": "Optional: a story, a street name's origin, or what a plaque leaves out."
+                },
                 "claims": {
                   "type": "array",
                   "description": "Optional: each claim the text makes and the sources (by index) that back it.",

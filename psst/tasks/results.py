@@ -9,6 +9,8 @@ from psst import rules
 
 VERDICT = {"enum": ["supported", "unsupported", "contradicted", "unclear"]}
 NOTE = {"type": "string", "minLength": 3, "maxLength": 600}
+# A good story's tier (decision 27); null for a guide and for anything not marked good.
+TIER = {"enum": ["featured", "map", None]}
 CLAIM_VERDICTS = {
     "type": "array",
     "items": {
@@ -74,9 +76,9 @@ def schema(task_type: str, item_type: str | None = None) -> dict[str, Any]:
     if task_type == "review":
         return review()
     if task_type == "calibrate":
-        mark = {"type": "object", "additionalProperties": False, "required": ["golden", "mark", "reason"],
+        mark = {"type": "object", "additionalProperties": False, "required": ["golden", "mark", "tier", "reason"],
                 "properties": {"golden": {"type": "string", "pattern": "^gs_"},
-                               "mark": {"enum": ["good", "weak", "bad"]}, "reason": NOTE}}
+                               "mark": {"enum": ["good", "weak", "bad"]}, "tier": TIER, "reason": NOTE}}
         return {"type": "object", "additionalProperties": False, "required": ["marks", "notes"],
                 "properties": {"marks": {"type": "array", "items": mark}, "notes": NOTE}}
     if task_type == "find_photos":
@@ -115,8 +117,10 @@ def research() -> dict[str, Any]:
 def _place() -> dict[str, Any]:
     """A new place with its stories and guide, or more stories (and a missing guide) for a place that exists."""
     spec = rules.load()
+    story_body = spec.type("story")["schema"]
+    story_body = story_body | {"required": story_body["required"] + ["tier", "form"]}  # new writing proposes both
     item = {"story": {"type": "object", "additionalProperties": False, "required": ["body", "claims"],
-                      "properties": {"body": spec.type("story")["schema"], "claims": CLAIMS}},
+                      "properties": {"body": story_body, "claims": CLAIMS}},
             "guide": {"type": "object", "additionalProperties": False, "required": ["body", "claims"],
                       "properties": {"body": spec.type("guide")["schema"], "claims": CLAIMS}}}
     place = {"wikidata": {"type": "string", "pattern": "^Q[1-9][0-9]*$"},
@@ -140,9 +144,10 @@ def _place() -> dict[str, Any]:
 
 def review() -> dict[str, Any]:
     """One mark per item, good, weak, or bad, with the reason, and for a good item the cut it needs, if any."""
-    decision = {"type": "object", "additionalProperties": False, "required": ["revision", "mark", "reason", "fix"],
+    decision = {"type": "object", "additionalProperties": False,
+                "required": ["revision", "mark", "tier", "reason", "fix"],
                 "properties": {"revision": {"type": "string", "pattern": "^rv_"},
-                               "mark": {"enum": ["good", "weak", "bad"]}, "reason": NOTE,
+                               "mark": {"enum": ["good", "weak", "bad"]}, "tier": TIER, "reason": NOTE,
                                "fix": {"anyOf": [NOTE, {"type": "null"}]}}}
     return {"type": "object", "additionalProperties": False, "required": ["decisions", "notes"],
             "properties": {"decisions": {"type": "array", "items": decision}, "notes": NOTE}}

@@ -158,9 +158,13 @@ def test_an_editor_mark_joins_the_golden_set(database, session, city):
         item = conn.execute("""UPDATE psst.items SET published_revision = current_revision, state = 'published'
                                WHERE current_revision = %s RETURNING id""", (revision,)).fetchone()["id"]
     with pytest.raises(psycopg.errors.InvalidParameterValue):
-        console(database, "SELECT psst.console_mark_story(%s, %s, 'fine', 'a reason')", session, item)
-    console(database, "SELECT psst.console_mark_story(%s, %s, 'weak', 'ends after the hook')", session, item)
-    console(database, "SELECT psst.console_mark_story(%s, %s, 'good', 'on reflection, it holds')", session, item)
+        console(database, "SELECT psst.console_mark_story(%s, %s, 'fine', 'a reason', NULL)", session, item)
+    with pytest.raises(psycopg.errors.InvalidParameterValue):
+        console(database, "SELECT psst.console_mark_story(%s, %s, 'good', 'no tier given', NULL)", session, item)
+    console(database, "SELECT psst.console_mark_story(%s, %s, 'weak', 'ends after the hook', NULL)", session, item)
+    console(database, "SELECT psst.console_mark_story(%s, %s, 'good', 'on reflection, it holds', 'map')", session,
+            item)
     with database.connect("admin") as conn:
-        rows = conn.execute("SELECT mark, reason FROM psst.golden_stories WHERE item_id = %s", (item,)).fetchall()
-    assert [(r["mark"], r["reason"]) for r in rows] == [("good", "on reflection, it holds")]
+        rows = conn.execute("SELECT mark, tier, reason FROM psst.golden_stories WHERE item_id = %s",
+                            (item,)).fetchall()
+    assert [(r["mark"], r["tier"], r["reason"]) for r in rows] == [("good", "map", "on reflection, it holds")]

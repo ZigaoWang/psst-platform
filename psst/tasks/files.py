@@ -301,8 +301,8 @@ def guide_references(lookups: Lookups, place: dict[str, Any] | None) -> dict[str
 
 
 def research_brief(conn: Connection, cell: str) -> dict[str, Any]:
-    """Everything a researcher needs for one cell: where it is, its leads (best known first), and the places
-    already in it and around it, so nothing is added twice."""
+    """Everything a researcher needs for one cell: where it is, its leads (the previous app's places first, then the
+    best known), and the places already in it and around it, so nothing is added twice."""
     import h3
 
     from psst.places import cells
@@ -313,7 +313,8 @@ def research_brief(conn: Connection, cell: str) -> dict[str, Any]:
     leads = [dict(r) | {"well_known": (r["fame"] or 0) >= spec["well_known_sitelinks"]} for r in conn.execute("""
         SELECT id AS lead, name, origin, wikidata_id AS wikidata, osm_ref AS osm, url, what, fame, status
         FROM psst.leads WHERE cell = %s AND status IN ('open', 'later')
-        ORDER BY status = 'later', fame DESC NULLS LAST, name LIMIT %s""", (cell, spec["max_leads_per_pass"]))]
+        ORDER BY status = 'later', origin <> 'legacy', fame DESC NULLS LAST, name LIMIT %s""",
+        (cell, spec["max_leads_per_pass"]))]  # places the previous app had come first, then the best known
     waiting = conn.execute("SELECT count(*) AS n FROM psst.leads WHERE cell = %s AND status IN ('open', 'later')",
                            (cell,)).fetchone()
     places = [dict(r) for r in conn.execute("""

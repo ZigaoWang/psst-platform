@@ -608,3 +608,15 @@ def test_a_fact_saying_more_than_its_quotes_is_dropped():
     fact["evidence"].append({"quote": "in the style of the late C16"})
     fact["values"] = harness_research.values_in(fact)
     assert not harness_research.unquoted(fact)
+
+
+def test_a_pass_offers_the_previous_apps_places_first(database, city):
+    with database.connect("admin") as conn:
+        cell = conn.execute("SELECT input ->> 'cell' AS c FROM psst.tasks WHERE type = 'research_cell' LIMIT 1"
+                            ).fetchone()["c"]
+    with database.connect("system") as conn:
+        conn.execute("SELECT psst.record_leads(%s, %s, %s)", (city.token, cell, json.dumps(
+            [{"key": "legacy:old-pump", "origin": "legacy", "name": "Old Pump", "legacy": LEGACY_ID}])))
+    with database.connect("worker") as conn:
+        leads = files.research_brief(conn, cell)["leads"]
+    assert leads[0]["name"] == "Old Pump" and leads[0]["origin"] == "legacy"

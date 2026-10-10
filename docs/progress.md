@@ -18,22 +18,23 @@ None open. Sources for map stories: answered (decision 35). Budget: total 18 USD
 
 ## In progress
 
-- M7 Content: the content loop of decisions 22 to 25 is live. Research cells write stories and guides; tool checks; a review marks each item good, weak, or bad against the editor's golden set; one revision at most; a 10 percent audit gates publishing. Dense cells route research to Opus 5.5, everything else to Sonnet 5.5.
-- The review gate (decision 25) is live and closed. Calibration agreement with the editor's 26 marked stories, by review prompt version: 65, 81, 88.5, 84.6, 88.5, 88.5 percent; it needs 90. Reviews and publishing wait until it passes.
-- Golden bar version `4c675466e16b` is live in the database, carried by every research, review, and calibration task, and shown in the console under Quality with the gate's history and a monthly sample for the editor to mark.
+- M7 Content through the harness (decisions 32 to 36). Research runs on Claude Haiku 5.5 through OpenRouter: triage over 60 leads a pass, code gathers each lead's record and references, one call picks the facts, one call writes. Review runs on DeepSeek V4.1 Flash with reasoning off and no tools, and passes the gate under review prompt version of 2026-10-10 (24 of 24 good stories published, 44 of 44 constructed defects caught). Revision runs on Haiku in one call. Publishing waits for the editor.
+- An unattended run started 2026-10-10 22:17 UTC on London's densest cells: window 3 USD, stops at 0.02 USD per place still standing or when more than half of a pass's places fail. London's 8 USD budget ends it first, at about 2.26 USD. Nothing is published. Report: `psst harness report --since 2026-10-10T22:17:34Z`.
+- The proof cell (87195da69ffffff, 37 places in the previous app) ran under the earlier rules: 14 places, mostly guide-only, and the reviewer then judged guides as stories. Both fixed since (decision 35, review prompt).
 - M8 Website: frozen until London has 50 places the editor is happy with; the map is the center when it resumes.
 
 ## Next
 
-1. Open the gate: settle how to reach 90 percent agreement (see open issues), then calibrate again.
-2. Review the overnight drafts through the gate; scale research only if they pass.
-3. London to 50 good places, then Shanghai, Hong Kong, and Kuala Lumpur; translations into Simplified Chinese once stories are published.
-4. The first publish that replaces the app's live content needs explicit approval; the previous system keeps serving the app until then.
-5. Later: reader signals (saves, read-through, reports) as a second check on the reviewer.
+1. Read the night run's report; the editor checks samples. Then a per-city monthly budget for the harness service.
+2. Shanghai proof cell (87309959dffffff), with Chinese heritage record properties added to `record_properties`.
+3. The first publish that replaces the app's live content needs explicit approval; the previous system keeps serving the app until then.
+4. Later: reader signals (saves, read-through, reports) as a second check on the reviewer.
 
 ## Open issues
 
-- Calibration sits at 85 to 88.5 percent. Two stories disagree in most rounds (the reviewer marks weak what the editor marked good with a cut), and the rest move from round to round. With 26 stories one mark is 3.8 points, so part of the gap is noise; more editor marks (the console sample) would steady it.
+- Places close together can be merged as one (the George IV statue was refused as the same place as the Charles I statue nearby).
+- About half of chosen leads end as guide-only or skipped: listed buildings whose record holds no story. Their count against the previous app's places is in the night report.
+- Old revise tasks from before the harness (about 170) are routed to Haiku with the rest and are revised as the service reaches them.
 
 ## Measurements
 

@@ -285,12 +285,31 @@ def assemble(place: dict[str, Any], answer: dict[str, Any], facts: dict[str, dic
         if not isinstance(ids, list) or any(i not in facts for i in ids):
             raise task_cli.NotSubmitted([f"name facts by their ids ({', '.join(facts)}); got {ids}"])
         return [{k: facts[i][k] for k in ("text", "kind", "values", "evidence") if k in facts[i]} for i in ids]
+    def with_needed(body: dict[str, Any], ids: list[str]) -> list[str]:
+        """The facts named, plus any other verified fact that states a number or name the prose uses."""
+        if not isinstance(ids, list):
+            return ids
+        prose = " ".join(v for v in body.values() if isinstance(v, str))
+        wanted = set(NUMBER.findall(prose)) | set(NAME.findall(prose))
+        named = " ".join(json.dumps(facts[i], ensure_ascii=False) for i in ids if i in facts)
+        for value in sorted(wanted):
+            if value in named:
+                continue
+            for fid, fact in facts.items():
+                if fid not in ids and value in json.dumps(fact, ensure_ascii=False):
+                    ids = [*ids, fid]
+                    named += " " + json.dumps(fact, ensure_ascii=False)
+                    break
+        return ids
+
     built = dict(place)
     try:
-        built["stories"] = [{"body": s["body"], "claims": claims(s["facts"])} for s in answer["stories"]]
+        built["stories"] = [{"body": s["body"], "claims": claims(with_needed(s["body"], s["facts"]))}
+                            for s in answer["stories"]]
         if answer.get("guide") and "existing" not in place:
-            built["guide"] = {"body": answer["guide"]["body"], "claims": claims(answer["guide"]["facts"])}
-    except (KeyError, TypeError):
+            guide = answer["guide"]
+            built["guide"] = {"body": guide["body"], "claims": claims(with_needed(guide["body"], guide["facts"]))}
+    except (KeyError, TypeError, AttributeError):
         raise task_cli.NotSubmitted(["answer {stories: [{body, facts}], guide: {body, facts}}"]) from None
     return built
 

@@ -454,3 +454,14 @@ def test_a_facts_values_come_from_its_quotes():
         {"snapshot": "sn_1", "quote": "House, c.1800, No.33 Peckham Road, listed at Grade: II in 1954"}]}
     values = [v["value"] for v in harness_research.values_in(fact)]
     assert values == ["1800", "33", "1954", "House", "No", "Peckham Road", "Grade"]
+
+
+def test_a_verified_fact_the_writer_forgot_to_name_is_attached():
+    from psst.harness import research as harness_research
+    facts = {"f1": {"text": "The mill closed in 1890.", "kind": "date", "values": [{"value": "1890"}],
+                    "evidence": [{"snapshot": "sn_1", "quote": "closed in 1890"}]},
+             "f2": {"text": "It was rebuilt in 1902.", "kind": "date", "values": [{"value": "1902"}],
+                    "evidence": [{"snapshot": "sn_2", "quote": "rebuilt in 1902"}]}}
+    answer = {"stories": [{"body": {"short": "The mill closed in 1890 and was rebuilt in 1902."}, "facts": ["f1"]}]}
+    built = harness_research.assemble({"existing": "pl_x", "ordinary": True}, answer, facts)
+    assert [c["text"] for c in built["stories"][0]["claims"]] == ["The mill closed in 1890.", "It was rebuilt in 1902."]

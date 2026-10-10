@@ -52,7 +52,7 @@ STEP_LIMITS = {
     # The reviewer marks as it was measured: with reasoning off. Left to the provider, one model spent every reply
     # token reasoning over a batch and never answered.
     "calibrate": Limits(tool_calls=0, fixes=2, tokens=400_000, reply_tokens=16000, reasoning="off"),
-    "review": Limits(tool_calls=6, fixes=2, tokens=500_000, reply_tokens=12000, reasoning="off"),
+    "review": Limits(tool_calls=0, fixes=2, tokens=500_000, reply_tokens=12000, reasoning="off"),
     "audit": Limits(tool_calls=4, fixes=2, tokens=500_000, reply_tokens=8000),
     "revise": Limits(tool_calls=10, fixes=3, tokens=400_000, reply_tokens=8000),
     "triage": Limits(tool_calls=0, fixes=1, tokens=200_000, reply_tokens=32000, reasoning="off"),
@@ -62,7 +62,7 @@ STEP_LIMITS = {
 STEP_TOOLS = {
     "tier_check": [],
     "calibrate": [],
-    "review": ["search_snapshot", "fetch_source"],
+    "review": [],  # each item carries its passages; the gate measured the reviewer without tools
     "audit": ["search_snapshot"],
     "revise": ["search_snapshot", "fetch_source", "check_draft"],
     "triage": [],

@@ -589,3 +589,22 @@ def test_one_named_cell_can_be_queued(database, city, monkeypatch):
     with database.connect("admin") as conn:
         assert conn.execute("SELECT state FROM psst.research_cells WHERE cell = %s", (cell,)).fetchone()["state"] \
             == "queued"
+
+
+def test_a_records_shorthand_gives_the_values_the_prose_will_use():
+    from psst.harness import research as harness_research
+    values = harness_research.values_in({"evidence": [{"quote": "rebuilt in the late C16, restored in 1907-8"}]})
+    assert values == [{"value": "16th", "source_form": "C16"}, {"value": "1907"},
+                      {"value": "1908", "source_form": "1907-8"}]
+
+
+def test_a_fact_saying_more_than_its_quotes_is_dropped():
+    from psst.harness import research as harness_research
+    fact = {"text": "It was listed in 1954 and restored in 1908.",
+            "evidence": [{"quote": "restored in 1907-8"}]}
+    fact["values"] = harness_research.values_in(fact)
+    assert harness_research.unquoted(fact)
+    fact["text"] = "It was restored in 1908, in the late 16th century style."
+    fact["evidence"].append({"quote": "in the style of the late C16"})
+    fact["values"] = harness_research.values_in(fact)
+    assert not harness_research.unquoted(fact)

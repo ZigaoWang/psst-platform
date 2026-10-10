@@ -205,8 +205,9 @@ def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any],
                          (executor.token, task["id"], executor.model, spend.trace[-1], Jsonb(stats)))
         for fact in answer.get("facts") or []:
             fact["values"] = values_in(fact)  # the exact numbers and names its quotes state, never the model's own
-        # A fact resting only on a reference work can't stand in a story: it is dropped, not sent back.
-        answer["facts"] = [f for f in answer.get("facts") or [] if not reference_only(ctx.conn, f)]
+        # A fact resting only on a reference work, or saying more than its quotes, can't stand in a story: it is
+        # dropped, not sent back.
+        answer["facts"] = [f for f in answer.get("facts") or [] if not reference_only(ctx.conn, f) and not unquoted(f)]
         found = verify(ctx.conn, answer["facts"], "story" if answer.get("story", True) else "guide")
         if found:
             raise task_cli.NotSubmitted(found)
@@ -221,14 +222,37 @@ def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any],
 
 def values_in(fact: dict[str, Any]) -> list[dict[str, str]]:
     """A fact's values, taken from the words of its quotes: every number and every capitalized name, as written
-    there, so each value is in its passage by construction and the prose can use only these forms."""
-    found: list[str] = []
+    there, so each value is in its passage by construction and the prose can use only these forms. A record's
+    shorthand is read as the prose will say it, with the shorthand kept as the form in the source: C19 is the
+    19th century, and 1907-8 ends in 1908."""
+    found: dict[str, str | None] = {}
     for evidence in fact.get("evidence", []):
         quote = evidence.get("quote", "")
-        for value in VALUE_NUMBER.findall(quote) + NAME.findall(quote):
-            if value not in found and value not in COMMON:
-                found.append(value)
-    return [{"value": v} for v in found[:12]]
+        for m in CENTURY.finditer(quote):
+            found.setdefault(ordinal(int(m.group(1))), m.group(0))
+        for m in YEAR_RANGE.finditer(quote):
+            start, end = m.group(1), m.group(2)
+            found.setdefault(start, None)
+            found.setdefault(start[:4 - len(end)] + end, m.group(0))
+        plain = CENTURY.sub(" ", YEAR_RANGE.sub(lambda m: m.group(1) + " ", quote))  # no fragments of shorthand
+        for value in VALUE_NUMBER.findall(plain) + NAME.findall(plain):
+            if value not in COMMON:
+                found.setdefault(value, None)
+    return [{"value": v} | ({"source_form": form} if form else {}) for v, form in list(found.items())[:16]]
+
+
+CENTURY = re.compile(r"\bC(\d{1,2})\b")  # a heritage record's shorthand for a century
+YEAR_RANGE = re.compile(r"\b(1\d{3}|20\d{2})\s*-\s*(\d{1,2})\b(?!\d)")  # 1907-8, 1840-45
+
+
+def ordinal(n: int) -> str:
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+def unquoted(fact: dict[str, Any]) -> bool:
+    """Whether the fact's own words state a number its quotes don't: the fact says more than its source."""
+    stated = {v["value"] for v in fact.get("values", [])}
+    return any(n not in stated and not any(n in s for s in stated) for n in VALUE_NUMBER.findall(fact.get("text", "")))
 
 
 def single_source(facts: dict[str, dict[str, Any]]) -> bool:

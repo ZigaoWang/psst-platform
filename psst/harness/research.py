@@ -63,6 +63,7 @@ def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], s
     leads = {lead["lead"]: lead for lead in brief["leads"]}
 
     storyless = {p["id"] for p in brief["places_nearby"] if not p["stories"]}
+    nearby_ids = {p["id"] for p in brief["places_nearby"]}
 
     def accept(answer: dict[str, Any]) -> dict[str, Any]:
         found = results.problems(TRIAGE_SCHEMA, answer)
@@ -84,6 +85,8 @@ def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], s
                     found.append(f"lead {d['lead']} is well known; write it or skip it with a reason")
                 if d["action"] == "known" and not d.get("existing"):
                     found.append(f"lead {d['lead']}: 'existing' is the place it already is")
+                if d.get("existing") and d["existing"] not in nearby_ids:
+                    found.append(f"lead {d['lead']}: {d['existing']} isn't among places_nearby; use one of their ids")
         if found:
             raise task_cli.NotSubmitted(found)
         return answer

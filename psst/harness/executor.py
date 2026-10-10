@@ -30,6 +30,8 @@ PREAMBLE = """You work inside an automated pipeline, not a terminal. Where the i
 use the tools instead: fetch_source reads and saves a page (`psst fetch`), search_snapshot finds a passage in a saved
 page, lookup_wikidata and find_osm identify a place (`psst place find`), nearby_places shows what the platform already
 has nearby, and check_draft runs the tool checks on a draft. Quote only from snapshots you fetched or were given.
+Never guess a web address: read the pages you were given and follow the links they list, such as an article's
+references to heritage listings, archives, and histories.
 When you are done, reply with only the JSON result, in the shape `result_schema` gives, and nothing else. It is
 checked exactly as a submission is; if anything must be fixed you will be told, and you fix it and answer again."""
 

@@ -193,3 +193,14 @@ def test_a_panel_calibrates_as_one_model(database, golden, monkeypatch):
     with database.connect("admin") as conn:
         row = conn.execute("SELECT model, agreed, marked FROM psst.calibrations").fetchone()
     assert row["model"] == panel and row["agreed"] == row["marked"]
+
+
+def test_a_namespaced_tool_name_reaches_the_tool(database, city, roles):
+    from psst.harness import tools
+    worker = Worker(database, MODEL)
+    with database.connect("admin") as conn:
+        snapshot = conn.execute("SELECT id FROM psst.snapshots LIMIT 1").fetchone()["id"]
+    ctx = tools.Context(conn=psycopg.connect(database.url("worker"), row_factory=psycopg.rows.dict_row,
+                                             autocommit=True), token=worker.token)
+    found = tools.call(ctx, "psst:search_snapshot", {"snapshot": snapshot, "words": "1871"})
+    assert "error" not in found and "1871" in found["passages"]

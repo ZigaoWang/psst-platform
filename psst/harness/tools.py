@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import urllib.parse
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -21,6 +22,7 @@ from psst.places import lookup
 Connection = psycopg.Connection[dict[str, Any]]
 
 TEXT_LIMIT = 12000  # characters of a page shown at once; search_snapshot finds the rest
+LINK_LIMIT = 60
 
 
 @dataclass
@@ -38,7 +40,8 @@ def _string(description: str) -> dict[str, Any]:
 DEFINITIONS: dict[str, dict[str, Any]] = {
     "fetch_source": {
         "description": "Read a web page or PDF and save a snapshot of it. Quote only from snapshots. Returns the "
-                       "snapshot id and the text (or the passages around `find`).",
+                       "snapshot id, the text (or the passages around `find`), and the page's links to other sites. "
+                       "Never guess an address: follow a link from a page you read, such as an article's references.",
         "parameters": {"type": "object", "required": ["url", "title", "publisher", "kind", "language"],
                        "properties": {"url": _string("the full https address"), "title": _string("the page title"),
                                       "publisher": _string("who publishes it"),
@@ -84,8 +87,13 @@ def fetch_source(ctx: Context, url: str, title: str, publisher: str, kind: str, 
                                "language": language, "archive": False})
     text = result["text"]
     shown = reading.passages(text, find, TEXT_LIMIT) if find else text[:TEXT_LIMIT]
+    # The page's own links to other sites: an article's references are the way to the records it rests on, so the
+    # writer follows real citations instead of guessing addresses.
+    links = [{"text": label, "url": href} for label, href in result.get("links") or []
+             if href.startswith("https://") and urllib.parse.urlsplit(href).netloc != urllib.parse.urlsplit(url).netloc
+             and "wikipedia.org" not in href and "wikimedia.org" not in href][:LINK_LIMIT]
     return {"snapshot": result["snapshot"], "kind": result["kind"], "url": result["url"],
-            "characters": len(text), "text": shown}
+            "characters": len(text), "text": shown, "links": links}
 
 
 def search_snapshot(ctx: Context, snapshot: str, words: str) -> dict[str, Any]:
@@ -139,6 +147,7 @@ IMPLEMENTATIONS: dict[str, Callable[..., dict[str, Any]]] = {
 
 def call(ctx: Context, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """Run one tool; a failure comes back as an error for the model to read, never as an exception."""
+    name = name.rpartition(":")[2].rpartition(".")[2]  # some models prefix a namespace ("psst:check_draft")
     if name not in IMPLEMENTATIONS:
         return {"error": f"no tool {name}"}
     try:

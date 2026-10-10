@@ -161,3 +161,19 @@ def test_a_page_names_itself_over_typed_values(database):
     with database.connect("admin") as conn:
         source = conn.execute("SELECT title, publisher FROM psst.sources WHERE id = %s", (result["source"],)).fetchone()
     assert source == {"title": "The Pump House", "publisher": "Mill Lane Archive"}
+
+
+def test_a_page_read_recently_is_reused_without_reading_the_site_again(database):
+    reads = []
+
+    class CountingReader(FakeReader):
+        def read(self, url: str, archive: bool = False) -> Page:
+            reads.append(url)
+            return super().read(url, archive)
+    _, system_token = database.start_run("system")
+    service = FetchService(lambda: psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row),
+                           system_token, CountingReader())
+    _, token = database.start_run("worker", "claude-sonnet-5-5")
+    first = read(service, token, "https://records.example.org/pump-house")
+    again = read(service, token, "https://records.example.org/pump-house")
+    assert len(reads) == 1 and again["snapshot"] == first["snapshot"] and not again["new"]

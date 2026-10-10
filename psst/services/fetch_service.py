@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
+import urllib.parse
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -20,6 +22,8 @@ from psst import rules
 from psst.evidence import fetch, urls, wikidata
 
 PORT = 8471
+CACHE_DAYS = 30
+SITE_PAUSE_SECONDS = 1.0
 MAX_REQUEST_BYTES = 16_384
 log = logging.getLogger("psst.fetch")
 
@@ -34,7 +38,9 @@ class FetchService:
         self.connect = connect
         self.system_token = system_token
         self.reader = reader or fetch.Reader()
-        self.slots = threading.BoundedSemaphore(4)  # pages read at once, so no site sees a burst from us
+        self.slots = threading.BoundedSemaphore(16)  # pages read at once, across all sites
+        self.sites: dict[str, threading.Lock] = {}     # one page at a time from any one site
+        self.sites_lock = threading.Lock()
 
     def read(self, request: dict[str, Any]) -> dict[str, Any]:
         url = str(request.get("url") or "").strip()
@@ -52,8 +58,12 @@ class FetchService:
         language = str(request.get("language") or "").strip()
         if not (title and publisher and language):
             raise RequestError("a source needs its title, publisher, and language")
-        with self.slots:
+        recent = self.recent(urls.key(address))
+        if recent:
+            return recent
+        with self.slots, self.site(address):
             page = self.read_page(url, bool(request.get("archive")))
+            time.sleep(SITE_PAUSE_SECONDS)  # the polite pause belongs to the site, not to every read
         if not page.ok:
             raise RequestError(page.note or f"the page answered {page.status}")
         # A web page's own title and site name beat typed ones; PDFs and plain text keep what the worker typed.
@@ -70,6 +80,27 @@ class FetchService:
                 "archived_at": page.archived_at, "title": page.title, "note": page.note, "text": page.text,
                 "links": page.links[:500]}
 
+
+    def site(self, address: str) -> threading.Lock:
+        host = urllib.parse.urlsplit(address).netloc.lower()
+        with self.sites_lock:
+            return self.sites.setdefault(host, threading.Lock())
+
+    def recent(self, key: str) -> dict[str, Any] | None:
+        """A page read in the last CACHE_DAYS is reused, not read again: the same snapshot, so every claim on it
+        cites the same text."""
+        with self.connect() as conn:
+            row = conn.execute("""
+                SELECT n.id AS snapshot, s.id AS source, s.kind, s.url, n.read_url, n.via, n.title, n.text
+                FROM psst.snapshots n JOIN psst.sources s ON s.id = n.source_id
+                WHERE s.url_key = %s AND n.fetched_at > now() - make_interval(days => %s) AND n.http_status < 400
+                ORDER BY n.fetched_at DESC LIMIT 1""", (key, CACHE_DAYS)).fetchone()
+        if row is None:
+            return None
+        return {"source": row["source"], "kind": row["kind"], "snapshot": row["snapshot"], "new": False,
+                "url": row["url"], "read_url": row["read_url"], "via": row["via"], "archived_at": None,
+                "title": row["title"], "note": "read earlier; the saved snapshot is reused", "text": row["text"],
+                "links": []}  # a snapshot keeps its text, not its links
 
     def read_page(self, url: str, archive: bool) -> fetch.Page:
         """A Wikidata item is saved as its key-fact lines (psst/evidence/wikidata.py); anything else as page text."""

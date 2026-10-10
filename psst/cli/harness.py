@@ -8,6 +8,7 @@ import json
 import logging
 from typing import Any
 
+import psycopg
 from psycopg.types.json import Jsonb
 
 from psst.core import db
@@ -242,6 +243,12 @@ def run_work(args: argparse.Namespace) -> int:
                         executor.give_back({"task": task["id"]}, f"the harness stopped: {reason}")
                         log.info("stopping: %s", reason)
                         return 0
+                    except (psycopg.Error, OSError, ValueError, KeyError, TypeError) as error:
+                        # One task that fails is given back with the reason; the service goes on with the rest.
+                        conn.rollback()
+                        executor.give_back({"task": task["id"]}, f"the harness failed on it: {error}")
+                        log.warning("gave back %s: %s", task["id"], str(error)[:300])
+                        continue
                     if route["type"] != "research_cell" or city is None:
                         continue
                     # The city's next cell, often the same dense cell again, is queued for the next pass.

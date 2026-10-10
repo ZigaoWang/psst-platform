@@ -137,7 +137,11 @@ def nearby_places(ctx: Context, lat: float, lon: float, meters: int = 300) -> di
     return {"places": [dict(r) for r in rows]}
 
 
-def check_draft(ctx: Context, type: str, draft: dict[str, Any]) -> dict[str, Any]:
+def check_draft(ctx: Context, type: str, draft: dict[str, Any] | str) -> dict[str, Any]:
+    if isinstance(draft, str):  # a model may pass the draft as JSON text
+        draft = json.loads(draft)
+    if not isinstance(draft, dict):
+        raise ValueError("draft is the item as an object: {\"body\": {...}, \"claims\": [...]}")
     check = runner.preflight(ctx.conn, type, ctx.place_id, draft, item_id=ctx.item_id)
     return {"problems": check.report.refusals, "warnings": check.report.flags}
 

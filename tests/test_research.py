@@ -465,3 +465,15 @@ def test_a_verified_fact_the_writer_forgot_to_name_is_attached():
     answer = {"stories": [{"body": {"short": "The mill closed in 1890 and was rebuilt in 1902."}, "facts": ["f1"]}]}
     built = harness_research.assemble({"existing": "pl_x", "ordinary": True}, answer, facts)
     assert [c["text"] for c in built["stories"][0]["claims"]] == ["The mill closed in 1890.", "It was rebuilt in 1902."]
+
+
+def test_a_fact_in_its_sources_words_is_sent_back(database, city):
+    from psst.harness import research as harness_research
+    with database.connect("admin") as conn:
+        snapshot = _snapshot(conn, MILL, "https://records.example.org/mill", "official_record")
+    copied = {"id": "f1", "text": "its wheel pit survives under the iron pavement grate by the door, where the "
+                                  "millstream still runs", "kind": "attribute", "values": [],
+              "evidence": [{"snapshot": snapshot, "quote": "its wheel pit survives under the iron pavement grate"}]}
+    with database.connect("worker") as conn:
+        found = harness_research.verify(conn, [copied])
+    assert any("fact f1" in p and "own words" in p for p in found)

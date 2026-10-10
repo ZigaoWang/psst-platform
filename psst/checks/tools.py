@@ -97,7 +97,7 @@ def check(item_type: str, body: dict[str, Any], claims: list[Claim], snapshots: 
     matches, quotes_by_claim = _match_quotes(report, claims, snapshots)
     if item_type != "photo":
         _trace(report, prose, claims, quotes_by_claim, context)
-        _own_words(report, prose, claims, snapshots, rulebook)
+        own_words(report, prose, claims, snapshots, rulebook)
         _paraphrase(report, prose, claims, snapshots, rulebook)
         _repeats(report, prose)
     if item_type == "story":
@@ -204,7 +204,7 @@ QUOTED = re.compile(r"\"[^\"]*\"")
 NAME_JOINERS = {"of", "the", "in", "and", "on", "at", "for", "de", "la", "le", "du", "von", "van"}
 
 
-def _own_words(report: Report, prose: dict[str, str], claims: list[Claim], snapshots: dict[str, Snapshot],
+def own_words(report: Report, prose: dict[str, str], claims: list[Claim], snapshots: dict[str, Snapshot],
                rulebook: Rulebook) -> None:
     size = int(rulebook.writing["max_shared_words"]) + 1
     cited = {p.snapshot for c in claims for p in c.evidence if p.snapshot in snapshots}

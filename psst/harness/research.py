@@ -12,9 +12,11 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from psst import rules
+from psst.checks.tools import Claim, Evidence, Snapshot, own_words
 from psst.cli import tasks as task_cli
 from psst.core import db, http
 from psst.evidence import urls
+from psst.rules.report import Report
 from psst.tasks import prompts, results
 
 from . import quotes, tools
@@ -189,7 +191,7 @@ def values_in(fact: dict[str, Any]) -> list[dict[str, str]]:
     found: list[str] = []
     for evidence in fact.get("evidence", []):
         quote = evidence.get("quote", "")
-        for value in NUMBER.findall(quote) + NAME.findall(quote):
+        for value in VALUE_NUMBER.findall(quote) + NAME.findall(quote):
             if value not in found and value not in COMMON:
                 found.append(value)
     return [{"value": v} for v in found[:12]]
@@ -219,6 +221,16 @@ def verify(conn: Any, facts: list[dict[str, Any]]) -> list[str]:
                 found.append(f"fact {fact.get('id')}: '{v['value']}' isn't in its quoted passages; quote the words "
                              "that state it")
     rulebook = rules.load()
+    # A fact is a note in the evidence step's own words; one that keeps a run of its source's words would carry that
+    # copying into the story.
+    report = Report()
+    snapshots = {sid: Snapshot(sid, r["source_id"], r["url"], r["kind"], r["text"]) for sid, r in texts.items()}
+    claims = [Claim(n, f.get("text", ""), f.get("kind", "attribute"), [],
+                    [Evidence(e.get("snapshot", ""), e.get("quote", "")) for e in f.get("evidence", [])])
+              for n, f in enumerate(facts, 1)]
+    own_words(report, {f"fact {f.get('id')}": f.get("text", "") for f in facts}, claims, snapshots, rulebook)
+    found += [r.replace("write it in your own words or quote it", "put the fact in your own words")
+              for r in report.refusals]
     need = rulebook.sources["rules"]["story"]
     strong = [k for k in sources.values()
               if rulebook.sources["kinds"].get(k, {}).get("role") in rulebook.sources["strong_roles"]]
@@ -315,6 +327,7 @@ def assemble(place: dict[str, Any], answer: dict[str, Any], facts: dict[str, dic
 
 
 NUMBER = re.compile(r"\d[\d,.]*\d|\d")
+VALUE_NUMBER = re.compile(r"\d[\d,.]*\d(?:st|nd|rd|th)?|\d(?:st|nd|rd|th)?")  # "19th" stays whole as a value
 NAME = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*")
 
 

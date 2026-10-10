@@ -151,8 +151,8 @@ def parse_json(text: str) -> dict[str, Any] | None:
 
 
 class Executor:
-    def __init__(self, token: str, model: str) -> None:
-        self.token, self.model = token, model
+    def __init__(self, token: str, model: str, max_places: int = 12) -> None:
+        self.token, self.model, self.max_places = token, model, max_places
         # A panel (vote:) marks together; a rotation (rotate:) takes turns writing, one model per place.
         self.mode = model.partition(":")[0] if model.startswith(("vote:", "rotate:")) else "one"
         self.members = model.partition(":")[2].split("+") if self.mode != "one" else []

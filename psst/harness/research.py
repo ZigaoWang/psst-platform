@@ -152,9 +152,13 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
     plan = triage(writers[0], task, document, spend)
     accounted: list[dict[str, Any]] = []
     turn = 0
+    capped = False
     for d in plan["decisions"]:
         lead = leads.get(d["lead"])
         if lead is None:
+            continue
+        if d["action"] == "write" and turn >= executor.max_places:
+            capped = True
             continue
         if d["action"] == "write":
             writer = writers[turn % len(writers)]
@@ -173,6 +177,11 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
         else:
             accounted.append({"lead": d["lead"], "status": "skipped" if d["action"] == "skip" else "later",
                               "reason": d["reason"][:300]})
+    if capped:
+        # The run wrote as many places as it was asked to: the places are stored, and the cell goes back to the
+        # queue so the next run continues it.
+        executor.give_back(document, f"wrote {turn} places as asked; the rest of the cell continues in the next run")
+        return {"places_written": turn, "continues": True}
     # Leads the place submissions already settled need no entry; the rest are accounted for here.
     final = {"places": [], "leads": [a for a in accounted if a["status"] != "added"],
              "notes": (plan.get("notes") or "Triaged and written by the harness.")[:600]}

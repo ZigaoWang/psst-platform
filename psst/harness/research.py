@@ -213,6 +213,8 @@ def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any],
         if answer.get("skip"):
             return {"skip": str(answer["skip"])[:300]}
         found = results.problems(EVIDENCE_SCHEMA, answer)
+        if not found and not answer.get("place") and decision.get("existing"):
+            answer["place"] = {"existing": decision["existing"], "ordinary": False}  # the place is known already
         if not found and not answer.get("place"):
             found = ["name the place: a new one with name, kind, size, ordinary, and wikidata or osm; or existing"]
         if found:

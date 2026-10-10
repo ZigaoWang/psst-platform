@@ -31,11 +31,14 @@ A well-known name or place can be good when the story gives it a fresh, specific
 
 - `good`: one physical thing, true, specific, sourced, tied to something a reader can see or check on the spot, and
   told cleanly with its surprise first. The size of the surprise sets the tier (below), not the mark.
-- `weak`: the core is not there yet: the surprise is buried under background, the story stops right after the hook with nothing more, its
+- `weak`: the core is not there yet: the place's only link to the story is a famous event or person passing
+  through (a passenger, a visit, a former resident with nothing to show for it), the surprise is buried under
+  background, the story stops right after the hook with nothing more, its
   conclusion is an unanswered question, it contradicts itself (two accounts stated as if both were true), it is thin
   on the place itself, or the long adds nothing after the hook (it only describes what the short already said, with
   no how, why, who, or what happened next). Your reason names the one thing a revision must fix.
-- `bad`: not a story: a single record line, a list of dates or owners, a planning or legal detail with nothing to
+- `bad`: not a story: a single record line (a name on a passenger list, census, or register that happens to give
+  this address, with nothing about the place itself), a list of dates or owners, a planning or legal detail with nothing to
   stand in front of, a statistic, a surprise already in the encyclopedia's first paragraph, or something true of
   every place of its kind.
 
@@ -44,6 +47,10 @@ A well-known name or place can be good when the story gives it a fresh, specific
 Every good story gets a tier in `tier`; guides, and anything not marked good, get null.
 
 - `featured`: the "wait, really?" bar. A reader standing there would stop a friend to tell them. It leads the feed.
+  A fact that reverses what every passer-by assumes (a "Roman" arch built in 1930), something a reader can test on
+  the spot (a bench that echoes a whisper across the square), or an odd survival still doing its old job (a 1890s
+  horse trough still filled every morning) is featured, even when the place is small. Don't hold back the tier for a
+  good story because it is short or the place is modest.
 - `map`: as true, specific, sourced, and visible, with a smaller surprise: a closed station's old name, a cab
   shelter's rules, grilles in the road that once lit a tunnel. It fills the map, so a reader finds something within a
   few steps anywhere. A mild or familiar surprise makes a map story, not a weak one. Wrong, speculative, rambling, or

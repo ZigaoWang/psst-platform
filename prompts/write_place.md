@@ -27,7 +27,7 @@ For each story give its `body` and `facts`, the ids of the facts it rests on:
   really?" story, map for a smaller surprise), `form` (story, street_name, or plaque), and `tags` left empty.
 
 For a new place, the guide: `body` with `identifier` (`[style or material] <what it is>, <year>[, by <maker>]`, for
-the structure standing now), `about` (two or three plain sentences, never four, in your own words: what it is and why it was made,
+the structure standing now, never its listing or grade), `about` (two or three plain sentences, never four, in your own words: what it is and why it was made,
 what happened since, and what it is today when a fact says so), and `key_facts` (empty), plus its `facts`.
 
 Answer only `{"stories": [{"body": {...}, "facts": ["f1", ...]}], "guide": {"body": {...}, "facts": [...]}}`. One

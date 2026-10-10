@@ -24,6 +24,11 @@ def golden(database, city):
                             'Records Office', %s, %s, %s, 'invented', 'editor')""",
                          (sample.CITY_ID, f"Place {n}", f"Headline {n}", f"Short {n}.", f"Long {n}.", mark,
                           ("featured" if n % 2 else "map") if mark == "good" else None, f"Reason {n}."))
+        # Ids are random; make sure each fold holds at least one good story and one to hold back.
+        while conn.execute("""SELECT count(DISTINCT (psst.golden_fold(id), mark = 'good')) AS n
+                              FROM psst.golden_stories""").fetchone()["n"] < 4:
+            conn.execute("""UPDATE psst.golden_stories SET id = psst.new_id('gs')
+                            WHERE id = (SELECT id FROM psst.golden_stories ORDER BY random() LIMIT 1)""")
         return {r["id"]: (r["mark"], r["tier"]) for r in conn.execute("SELECT id, mark, tier FROM psst.golden_stories")}
 
 

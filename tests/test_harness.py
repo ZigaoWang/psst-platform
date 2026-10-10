@@ -31,6 +31,10 @@ def golden(database, city, roles):
                             'Records Office', %s, %s, %s, 'invented', 'editor')""",
                          (sample.CITY_ID, f"Place {n}", f"Headline {n}", f"Short {n}.", f"Long {n}.", mark,
                           "map" if mark == "good" else None, f"Reason {n}."))
+        while conn.execute("""SELECT count(DISTINCT (psst.golden_fold(id), mark = 'good')) AS n
+                              FROM psst.golden_stories""").fetchone()["n"] < 4:  # both folds, both kinds
+            conn.execute("""UPDATE psst.golden_stories SET id = psst.new_id('gs')
+                            WHERE id = (SELECT id FROM psst.golden_stories ORDER BY random() LIMIT 1)""")
         return {r["id"]: (r["mark"], r["tier"]) for r in conn.execute("SELECT id, mark, tier FROM psst.golden_stories")}
 
 

@@ -641,3 +641,17 @@ def test_a_known_place_without_stories_is_written_and_waits_beyond_the_pass():
 def test_a_decade_stays_whole_as_a_value():
     from psst.harness import research as harness_research
     assert {"value": "1880s"} in harness_research.values_in({"evidence": [{"quote": "remodelled in the 1880s"}]})
+
+
+def test_a_similar_name_nearby_is_a_different_place_when_its_wikidata_item_differs(database, city, monkeypatch):
+    from psst.places import resolve
+    with database.connect("admin") as conn:
+        sample.place(conn, city.run, "Q900001")
+        other = sample.place(conn, city.run, "Q900002")
+        conn.execute("UPDATE psst.places SET state = 'pending' WHERE id = %s", (other,))
+    monkeypatch.setattr(coords, "resolve", lambda places: {
+        p["id"]: coords.Position(51.5, -0.05, "wikidata", p["wikidata"]) for p in places})
+    monkeypatch.setattr(names, "osm_tags", lambda refs: {})
+    monkeypatch.setattr("psst.places.resolve.http.wikidata_entities", lambda qids, props: {})
+    with database.connect("system") as conn:
+        assert resolve.resolve(conn, city.token, [other])["active"] == 1

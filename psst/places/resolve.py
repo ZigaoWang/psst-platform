@@ -41,12 +41,16 @@ def resolve(conn: Connection, token: str, place_ids: list[str], city_id: int | N
                 (city_id, position.lon, position.lat)).fetchone():
             result = {"refused": "its coordinate is outside the city it was researched for"}
         else:
+            # A similar name nearby is the same place, unless the two are different Wikidata items: two statues on
+            # one square share most of their names.
             duplicate = conn.execute("""
                 SELECT p.id, n.name FROM psst.places p JOIN psst.place_names n ON n.place_id = p.id
                 WHERE p.state = 'active' AND p.id <> %(id)s
                   AND ST_DWithin(p.geom::geography, ST_SetSRID(ST_MakePoint(%(lon)s, %(lat)s), 4326)::geography, %(m)s)
                   AND similarity(lower(n.name), lower(%(name)s)) > %(s)s
+                  AND (p.wikidata_id IS NULL OR %(qid)s::text IS NULL OR p.wikidata_id = %(qid)s)
                 LIMIT 1""", {"id": place["id"], "lat": position.lat, "lon": position.lon, "name": place["display"],
+                             "qid": place["wikidata"] or tagged.get(place["osm"] or "", {}).get("wikidata"),
                              "m": spec["duplicate_meters"], "s": spec["duplicate_name_similarity"]}).fetchone()
             if duplicate:
                 result = {"refused": f"the same place as {duplicate['id']} ({duplicate['name']})"}

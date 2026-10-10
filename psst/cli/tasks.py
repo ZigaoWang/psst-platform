@@ -189,7 +189,9 @@ def problems(document: dict[str, Any], result: dict[str, Any]) -> list[str]:
     if item_type and item_type != "translation":
         place = (document["data"].get("place") or {}).get("id")
         with db.connect("worker") as conn:
-            check = runner.preflight(conn, item_type, place, result)
+            revised = conn.execute("SELECT item_id FROM psst.revisions WHERE id = %s",
+                                   (document.get("revision"),)).fetchone()
+            check = runner.preflight(conn, item_type, place, result, item_id=revised["item_id"] if revised else None)
         found += check.report.refusals
     return found
 

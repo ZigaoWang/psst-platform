@@ -234,3 +234,15 @@ def test_research_on_a_dense_cell_goes_to_the_dense_cell_model(database, city):
     queue_research(database, city)
     assert Worker(database, SONNET).lease("research_cell") is None
     assert Worker(database, "claude-opus-5-5").lease("research_cell") is not None
+
+
+def test_a_revision_is_not_compared_with_its_own_story(database, city):
+    from psst.checks import runner
+    story, _ = research(database, city)
+    with database.connect("admin") as conn:
+        row = conn.execute("SELECT r.item_id, r.body, i.place_id FROM psst.revisions r JOIN psst.items i "
+                           "ON i.id = r.item_id WHERE r.id = %s", (story,)).fetchone()
+    with database.connect("worker") as conn:
+        as_revision = runner.context_for(conn, "story", row["place_id"], row["body"], None, row["item_id"])
+        as_new_story = runner.context_for(conn, "story", row["place_id"], row["body"], None)
+    assert as_revision.siblings == [] and len(as_new_story.siblings) == 1

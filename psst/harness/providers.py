@@ -48,6 +48,7 @@ class Reply:
     latency_ms: int = 0
     raw: dict[str, Any] = field(default_factory=dict)
     cut_off: bool = False   # the answer stopped at the length limit
+    reasoning_tokens: int = 0
 
 
 def split(model: str) -> tuple[str, str]:
@@ -129,7 +130,8 @@ def _openai(provider: str, name: str, messages: list[dict[str, Any]], tools: lis
                  cached_tokens=int((usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0),
                  output_tokens=int(usage.get("completion_tokens") or 0),
                  cost_usd=float(usage.get("cost") or 0), latency_ms=latency, raw=raw,
-                 cut_off=choice.get("finish_reason") == "length")
+                 cut_off=choice.get("finish_reason") == "length",
+                 reasoning_tokens=int((usage.get("completion_tokens_details") or {}).get("reasoning_tokens") or 0))
 
 
 def _arguments(text: str | None) -> dict[str, Any]:

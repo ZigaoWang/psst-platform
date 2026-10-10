@@ -113,7 +113,7 @@ CLAIM_PROPERTIES: dict[str, Any] = cast(dict[str, Any], results.CLAIMS["items"])
 EVIDENCE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {"skip": {"type": "string", "minLength": 5},
-                   "place": {"type": "object"},
+                   "place": results.place_identity(),
                    "facts": {"type": "array", "items": {
                        "type": "object", "required": ["id", "text", "kind", "values", "evidence"],
                        "properties": {"id": {"type": "string"}} | CLAIM_PROPERTIES}}},
@@ -144,6 +144,8 @@ def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any],
         if answer.get("skip"):
             return {"skip": str(answer["skip"])[:300]}
         found = results.problems(EVIDENCE_SCHEMA, answer)
+        if not found and not answer.get("place"):
+            found = ["name the place: a new one with name, kind, size, ordinary, and wikidata or osm; or existing"]
         if found:
             raise task_cli.NotSubmitted(found)
         stats, repairs = quotes.repair(ctx.conn, answer, ctx.read)

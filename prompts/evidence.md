@@ -25,5 +25,7 @@ record or a scholarly source; Wikipedia alone never counts.
 
 If the evidence for a real story isn't there (no record, nothing to see, only one blog behind the angle), don't force
 it: answer `{"skip": "<the reason, specific>"}` and nothing else. Otherwise answer
-`{"place": {...}, "facts": [...]}`, where `place` is the new place (`name`, `kind`, `size`, `ordinary`, and its
-`wikidata` or `osm`) or `{"existing": <id>, "ordinary": ...}` for a place the platform already has.
+`{"place": {...}, "facts": [...]}`, where `place` is the new place (`name`; `kind`, one of transit, crossing, street,
+building, worship, memorial, green, water, or culture; `size`, one of small, medium, or large; `ordinary`, true when a
+visitor would never look it up; and its `wikidata` or `osm`) or `{"existing": <id>, "ordinary": ...}` for a place the
+platform already has.

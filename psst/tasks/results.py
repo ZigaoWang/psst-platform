@@ -145,6 +145,20 @@ def _place() -> dict[str, Any]:
     return {"oneOf": [new_place, existing]}
 
 
+def place_identity() -> dict[str, Any]:
+    """A place without its writing: what the evidence step names before anything is written (decision 32)."""
+    branches = _place()["oneOf"]
+    shapes = []
+    for branch in branches:
+        props = {k: v for k, v in branch["properties"].items() if k not in ("stories", "guide")}
+        shape = {"type": "object", "additionalProperties": False, "properties": props,
+                 "required": [r for r in branch["required"] if r not in ("stories", "guide")]}
+        if "anyOf" in branch:
+            shape["anyOf"] = branch["anyOf"]
+        shapes.append(shape)
+    return {"oneOf": shapes}
+
+
 def review() -> dict[str, Any]:
     """One mark per item, good, weak, or bad, with the reason, and for a good item the cut it needs, if any."""
     decision = {"type": "object", "additionalProperties": False,
@@ -182,7 +196,10 @@ def problems(schema: dict[str, Any], instance: Any) -> list[str]:
             branches: dict[Any, list[jsonschema.ValidationError]] = {}
             for sub in error.context:
                 branches.setdefault(sub.schema_path[0], []).append(sub)
-            found += [f"{where(sub)}: {sub.message[:300]}" for sub in min(branches.values(), key=len)]
+            # The closest shape is the one the value matches in kind (no unexpected fields), then with fewest errors.
+            closest = min(branches.values(), key=lambda errs: (sum(e.validator == "additionalProperties" for e in errs),
+                                                               len(errs)))
+            found += [f"{where(sub)}: {sub.message[:300]}" for sub in closest]
         else:
             found.append(f"{where(error)}: {error.message[:300]}")
     return found

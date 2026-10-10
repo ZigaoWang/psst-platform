@@ -199,3 +199,10 @@ def test_a_place_in_the_wrong_shape_is_told_which_fields_are_wrong():
                                                           "leads": []})
     assert found and all("not valid under any" not in p for p in found)
     assert any("guide" in p for p in found)
+
+
+def test_a_new_place_with_wrong_values_is_told_about_those_values():
+    from psst.tasks import results
+    found = results.problems(results.place_identity(), {"name": "Invented Gallery", "kind": "tourism=gallery",
+                                                        "size": "single site", "ordinary": True, "wikidata": "Q900001"})
+    assert sorted(p.split(":")[0] for p in found) == ["kind", "size"]

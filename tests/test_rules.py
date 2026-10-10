@@ -77,3 +77,18 @@ def test_proper_names_keep_their_own_spelling():
     report = Report()
     writing.check_prose(report, "short", "The National Theatre faces the Southbank Centre.")
     assert not report.refusals
+
+
+@pytest.mark.parametrize("text", ["The hall opened about 1860,. On its north wall is a plaque.",
+                                  "The hall opened in 1860 , and still stands.",
+                                  "The hall opened in 1860,, and still stands."])
+def test_punctuation_left_by_an_edit_is_refused(text):
+    report = Report()
+    writing.check_prose(report, "about", text)
+    assert any("broken punctuation" in r for r in report.refusals)
+
+
+def test_ordinary_punctuation_passes():
+    report = Report()
+    writing.check_prose(report, "about", "It cost 2.5 million pounds in Washington, D.C., in 1860 ... brick, stone.")
+    assert not any("broken punctuation" in r for r in report.refusals)

@@ -44,6 +44,11 @@ def _compiled(rulebook: Rulebook) -> _Patterns:
     )
 
 
+# Punctuation left behind by an edit: a comma, semicolon, or colon followed by another mark (",." or ",,"), or a
+# space before a mark. Abbreviations ("D.C.,"), an ellipsis, and decimals are fine.
+BROKEN_PUNCTUATION = re.compile(r"[,;:][.,;:]|(?<=\w) [,;:]|(?<=\w) \.(?![.\d])")
+
+
 def check_prose(report: Report, where: str, text: str, rulebook: Rulebook | None = None) -> None:
     """Rules for anything published as Psst's own English text."""
     rulebook = rulebook or load()
@@ -58,6 +63,8 @@ def check_prose(report: Report, where: str, text: str, rulebook: Rulebook | None
             report.refuse(where, f"contains {what}")
     if "--" in text or " - " in text:
         report.refuse(where, "uses a hyphen as a dash; rewrite")
+    for match in BROKEN_PUNCTUATION.finditer(text):
+        report.refuse(where, f"has broken punctuation ('{match.group(0).strip()}'); read it aloud and fix the sentence")
     lowered = text.lower()
     for phrase, pattern in patterns.banned:
         if pattern.search(lowered):

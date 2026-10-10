@@ -52,7 +52,8 @@ STEP_LIMITS = {
     "audit": Limits(tool_calls=4, fixes=2, tokens=500_000, reply_tokens=8000),
     "revise": Limits(tool_calls=10, fixes=3, tokens=400_000, reply_tokens=8000),
     "triage": Limits(tool_calls=0, fixes=2, tokens=300_000, reply_tokens=12000),
-    "write": Limits(tool_calls=14, fixes=5, tokens=600_000, reply_tokens=8000),
+    "evidence": Limits(tool_calls=16, fixes=4, tokens=900_000, reply_tokens=8000),
+    "write": Limits(tool_calls=0, fixes=4, tokens=250_000, reply_tokens=8000),
 }
 STEP_TOOLS = {
     "tier_check": [],
@@ -61,7 +62,8 @@ STEP_TOOLS = {
     "audit": ["search_snapshot"],
     "revise": ["search_snapshot", "fetch_source", "check_draft"],
     "triage": [],
-    "write": ["fetch_source", "search_snapshot", "lookup_wikidata", "find_osm", "nearby_places", "check_draft"],
+    "evidence": ["fetch_source", "search_snapshot", "lookup_wikidata", "find_osm", "nearby_places"],
+    "write": [],
 }
 
 

@@ -328,15 +328,22 @@ def test_the_harness_researches_a_cell_place_by_place(database, city, monkeypatc
     place["stories"][0]["body"] |= {"tier": "map", "form": "story"}
     written = []
 
+    claims = place["stories"][0]["claims"]
+    facts = [{"id": f"f{n}"} | c for n, c in enumerate(claims + claims[:1], 1)]  # a story needs three facts
+    identity = {k: place[k] for k in ("wikidata", "name", "kind", "size", "ordinary")}
+
     def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300):
         if "Triage a cell's leads" in messages[0]["content"]:
             answer = {"decisions": [{"lead": first, "action": "write", "form": "story", "tier": "map",
                                      "angle": "the wheel pit under the grate"},
                                     {"lead": second, "action": "skip", "reason": "an office block, nothing more"}],
                       "notes": "One place worth writing."}
+        elif "Gather the evidence for one place" in messages[0]["content"]:
+            answer = {"place": identity, "facts": facts}
         else:
             written.append(model)
-            answer = {"place": place, "leads": [first]}
+            answer = {"stories": [{"body": place["stories"][0]["body"], "facts": [f["id"] for f in facts]}],
+                      "guide": {"body": place["guide"]["body"], "facts": ["f1"]}}
         return providers.Reply(text=json.dumps(answer), cost_usd=0.002)
     monkeypatch.setattr(providers, "chat", chat)
     outcome = harness.Executor(worker.token, rotation).run(dict(task))
@@ -389,3 +396,44 @@ def test_a_leads_official_record_is_gathered_from_its_wikidata_item(monkeypatch)
     assert found == [{"url": "https://historicengland.org.uk/listing/the-list/list-entry/1000001",
                       "title": "National Heritage List for England entry 1000001", "publisher": "Historic England",
                       "kind": "official_record", "language": "en"}]
+
+
+def test_prose_may_use_only_the_numbers_and_names_of_its_facts():
+    from psst.harness import research as harness_research
+    claims = [{"text": "The mill closed in 1890.", "kind": "date", "values": [{"value": "1890"}],
+               "evidence": [{"snapshot": "sn_1", "quote": "The Old Mill on River Lane closed in 1890"}]}]
+    body = {"short": "Milling on River Lane ended in 1890, and Ada Thorne kept the key until 1902.",
+            "look": "Stand at the door and look down through the grate."}
+    found = harness_research.unsupported({"stories": [{"body": body, "claims": claims}]}, {}, ["Old Mill"])
+    assert sorted(found) == ["story: 'Ada Thorne' isn't in the facts it names; use only the facts' names",
+                             "story: 1902 isn't in the facts it names; use only the facts' numbers"]
+
+
+def test_a_lead_without_the_evidence_for_a_story_is_skipped_with_the_reason(database, city, monkeypatch):
+    from psst.harness import executor as harness
+    from psst.harness import providers
+    for role in ("worker", "system"):
+        monkeypatch.setenv(f"PSST_DATABASE_URL_{role.upper()}", database.url(role))
+    model = "openrouter:test/writer"
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.settings SET value = %s WHERE key IN ('routing.research_cell', "
+                     "'routing.research_cell_dense')", (json.dumps(model),))
+        conn.execute("""UPDATE psst.settings SET value = '{"testville": 1}' WHERE key = 'harness.city_budgets_usd'""")
+    worker = Worker(database, model)
+    task = worker.lease("research_cell")
+    with database.connect("worker") as conn:
+        document = files.build(conn, task)
+    first, second = (lead["lead"] for lead in document["data"]["leads"])
+
+    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300):
+        if "Triage a cell's leads" in messages[0]["content"]:
+            answer = {"decisions": [{"lead": first, "action": "write", "form": "story", "tier": "map", "angle": "x"},
+                                    {"lead": second, "action": "skip", "reason": "an office block, nothing more"}]}
+        else:
+            answer = {"skip": "only one blog repeats the story and nothing marks the spot"}
+        return providers.Reply(text=json.dumps(answer), cost_usd=0.001)
+    monkeypatch.setattr(providers, "chat", chat)
+    harness.Executor(worker.token, model).run(dict(task))
+    with database.connect("admin") as conn:
+        lead = conn.execute("SELECT status, reason FROM psst.leads WHERE id = %s", (first,)).fetchone()
+    assert lead["status"] == "skipped" and "only one blog" in lead["reason"]

@@ -91,9 +91,9 @@ def test_weak_and_bad_both_hold_back(database, city, golden):
 
 def test_the_gate_stays_closed_below_the_agreement_required(database, city, golden):
     refresh(database, city)
-    calibrate(database, golden, wrong=2)  # 8 of 10, under 90 percent
+    calibrate(database, golden, wrong=2)  # two of ten wrong: under 90 percent on one side or both
     status = refresh(database, city)
-    assert status["open"] is False and float(status["agreement"]) == 0.8
+    assert status["open"] is False and min(float(status["agreement"]), float(status["caught"])) < 0.9
 
 
 def test_a_new_review_prompt_needs_a_new_calibration(database, city, golden, monkeypatch):

@@ -5,7 +5,8 @@ A stop loses at most the place in hand."""
 from __future__ import annotations
 
 import json
-from typing import Any
+import re
+from typing import Any, cast
 
 import psycopg
 from psycopg.types.json import Jsonb
@@ -13,16 +14,13 @@ from psycopg.types.json import Jsonb
 from psst import rules
 from psst.cli import tasks as task_cli
 from psst.core import db, http
+from psst.evidence import urls
 from psst.tasks import prompts, results
 
 from . import quotes, tools
 from .executor import PREAMBLE, Executor, GaveUp, Spend, version
 
 MAX_WRITES = 12  # places one pass writes, best first
-
-WRITE_INTRO = """You write ONE place now, from the lead and angle below, not the whole cell: its stories and, for a new
-place, its guide. The instructions that follow are for researching a whole cell; apply them to this one place. Reply
-with `{"place": <the place, as the instructions describe a place in places>, "leads": [<this lead's id>]}`."""
 
 TRIAGE_SCHEMA = {
     "type": "object", "required": ["decisions"],
@@ -111,38 +109,173 @@ def records(qid: str | None) -> list[dict[str, Any]]:
     return found
 
 
-def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], decision: dict[str, Any],
-          lead: dict[str, Any], spend: Spend) -> dict[str, Any]:
-    prompt = prompts.load("research_cell").text
-    system = PREAMBLE + "\n\n" + WRITE_INTRO + "\n\n" + prompt + "\n\n## Shared data\n\n" + shared_data(document)
+CLAIM_PROPERTIES: dict[str, Any] = cast(dict[str, Any], results.CLAIMS["items"])["properties"]
+EVIDENCE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {"skip": {"type": "string", "minLength": 5},
+                   "place": {"type": "object"},
+                   "facts": {"type": "array", "items": {
+                       "type": "object", "required": ["id", "text", "kind", "values", "evidence"],
+                       "properties": {"id": {"type": "string"}} | CLAIM_PROPERTIES}}},
+}
+MIN_FACTS = 3
+
+
+def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any], decision: dict[str, Any],
+             lead: dict[str, Any], spend: Spend) -> dict[str, Any]:
+    """Step one (decision 32): the facts for one place, each bound to the exact words of a source, checked in code
+    before anything is written: every quote in its snapshot, every value in its quote, and enough independent and
+    primary sources for a story. Returns {"skip": reason} when the evidence for a real story isn't there."""
+    prompt = prompts.load("evidence").text
+    system = PREAMBLE + "\n\n" + prompt
     brief = document["data"]
+    gathered = gather(executor, lead)
     user = json.dumps({"data": {"lead": lead, "angle": decision.get("angle"), "form": decision.get("form"),
                                 "tier": decision.get("tier"), "existing": decision.get("existing"),
                                 "cell": {"bounds": brief["bounds"], "neighborhoods": brief["neighborhoods"]},
-                                "rules": brief["rules"], "gathered": gather(executor, lead)},
-                       "result_schema": results.research_place()}, ensure_ascii=False, default=str)
+                                "gathered": gathered},
+                       "result_schema": EVIDENCE_SCHEMA}, ensure_ascii=False, default=str)
     ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=executor.token,
                         place_id=decision.get("existing"))
+    ctx.read.update(page["snapshot"] for page in gathered)
+    kept: dict[str, Any] = {}
+
+    def accept(answer: dict[str, Any]) -> dict[str, Any]:
+        if answer.get("skip"):
+            return {"skip": str(answer["skip"])[:300]}
+        found = results.problems(EVIDENCE_SCHEMA, answer)
+        if found:
+            raise task_cli.NotSubmitted(found)
+        stats, repairs = quotes.repair(ctx.conn, answer, ctx.read)
+        ctx.conn.execute("SELECT psst.record_quote_repairs(%s, %s, NULL, %s, %s, %s, '[]')",
+                         (executor.token, task["id"], executor.model, spend.trace[-1], Jsonb(stats)))
+        found = verify(ctx.conn, answer.get("facts") or [])
+        if found:
+            raise task_cli.NotSubmitted(found)
+        kept.update(repairs=repairs)
+        return answer
     try:
-        gathered = json.loads(user)["data"]["gathered"]
-        ctx.read.update(page["snapshot"] for page in gathered)
+        answer = dict(executor.converse("evidence", system, user, task, version(PREAMBLE + prompt), accept, ctx,
+                                        spend))
+    finally:
+        ctx.conn.close()
+    return answer | kept
 
-        repaired: list[dict[str, Any]] = []
 
-        def accept(answer: dict[str, Any]) -> Any:
-            stats, repairs = quotes.repair(ctx.conn, answer, ctx.read)
-            ctx.conn.execute("SELECT psst.record_quote_repairs(%s, %s, NULL, %s, %s, %s, '[]')",
-                             (executor.token, task["id"], executor.model, spend.trace[-1], Jsonb(stats)))
-            repaired[:] = repairs
-            return task_cli.submit_one_place(document, answer)
-        placed = dict(executor.converse("write", system, user, task, version(PREAMBLE + WRITE_INTRO + prompt),
-                                        accept, ctx, spend))
+def verify(conn: Any, facts: list[dict[str, Any]]) -> list[str]:
+    """What is wrong with a set of facts before anything is written from them."""
+    from psst.core.text import contains, find_quote
+    found: list[str] = []
+    texts = {r["id"]: r for r in conn.execute("""
+        SELECT n.id, n.text, n.source_id, s.url, s.kind FROM psst.snapshots n JOIN psst.sources s ON s.id = n.source_id
+        WHERE n.id = ANY(%s)""", ([e.get("snapshot") for f in facts for e in f.get("evidence", [])],))}
+    sources: dict[str, str] = {}
+    for fact in facts:
+        quoted = []
+        for e in fact.get("evidence", []):
+            snap = texts.get(e.get("snapshot"))
+            if snap is None:
+                found.append(f"fact {fact.get('id')}: no snapshot {e.get('snapshot')}; quote only pages you read")
+            elif not find_quote(snap["text"], e.get("quote", "")):
+                found.append(f"fact {fact.get('id')}: the quote isn't in snapshot {e['snapshot']}; copy it exactly")
+            else:
+                quoted.append(e["quote"])
+                sources[snap["source_id"]] = urls.host_kind(snap["url"]) or snap["kind"]
+        for v in fact.get("values", []):
+            if quoted and not any(contains(q, v.get("source_form") or v["value"]) for q in quoted):
+                found.append(f"fact {fact.get('id')}: '{v['value']}' isn't in its quoted passages; quote the words "
+                             "that state it")
+    rulebook = rules.load()
+    need = rulebook.sources["rules"]["story"]
+    strong = [k for k in sources.values()
+              if rulebook.sources["kinds"].get(k, {}).get("role") in rulebook.sources["strong_roles"]]
+    if len(facts) < MIN_FACTS:
+        found.append(f"a story needs at least {MIN_FACTS} facts; find more, or answer skip with the reason")
+    if len(sources) < need["min_sources"]:
+        found.append(f"the facts rest on {len(sources)} source; a story needs {need['min_sources']} independent ones")
+    if len(strong) < need["min_strong_sources"]:
+        found.append("no primary record or scholarly source among the facts; find one, or answer skip with the reason")
+    return found
+
+
+def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], decision: dict[str, Any],
+          lead: dict[str, Any], gathered: dict[str, Any], spend: Spend) -> dict[str, Any]:
+    """Step two (decision 32): the stories and guide from the verified facts only, with no tools. Code builds the
+    claims from the facts each part names, refuses any year, number, or name that isn't in them, and then submits
+    the place through the same checks as any submission."""
+    prompt = prompts.load("write_place").text
+    system = PREAMBLE + "\n\n" + prompt + "\n\n## Shared data\n\n" + shared_data(document)
+    facts = {f["id"]: f for f in gathered["facts"]}
+    user = json.dumps({"data": {"place": gathered["place"], "lead": lead["name"], "angle": decision.get("angle"),
+                                "tier": decision.get("tier"), "form": decision.get("form"),
+                                "facts": list(facts.values())}}, ensure_ascii=False, default=str)
+    ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=executor.token,
+                        place_id=decision.get("existing"))
+
+    def accept(answer: dict[str, Any]) -> Any:
+        place = assemble(gathered["place"], answer, facts)
+        found = unsupported(place, facts, [lead["name"], *document["data"]["neighborhoods"]])
+        if found:
+            raise task_cli.NotSubmitted(found)
+        return task_cli.submit_one_place(document, {"place": place, "leads": [lead["lead"]]})
+    try:
+        placed = dict(executor.converse("write", system, user, task, version(PREAMBLE + prompt), accept, ctx,
+                                        spend))
         ctx.conn.execute("SELECT psst.record_quote_repairs(%s, %s, %s, %s, NULL, NULL, %s)",
-                         (executor.token, task["id"], placed["place"], executor.model, Jsonb(repaired)))
+                         (executor.token, task["id"], placed["place"], executor.model,
+                          Jsonb(gathered.get("repairs", []))))
         ctx.conn.execute("SELECT psst.tie_harness_calls(%s, %s, %s)", (executor.token, spend.trace, placed["place"]))
         return placed
     finally:
         ctx.conn.close()
+
+
+def assemble(place: dict[str, Any], answer: dict[str, Any], facts: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """The place as a submission: each story and the guide with the claims of the facts they name."""
+    def claims(ids: list[str]) -> list[dict[str, Any]]:
+        if not isinstance(ids, list) or any(i not in facts for i in ids):
+            raise task_cli.NotSubmitted([f"name facts by their ids ({', '.join(facts)}); got {ids}"])
+        return [{k: facts[i][k] for k in ("text", "kind", "values", "evidence") if k in facts[i]} for i in ids]
+    built = dict(place)
+    try:
+        built["stories"] = [{"body": s["body"], "claims": claims(s["facts"])} for s in answer["stories"]]
+        if answer.get("guide") and "existing" not in place:
+            built["guide"] = {"body": answer["guide"]["body"], "claims": claims(answer["guide"]["facts"])}
+    except (KeyError, TypeError):
+        raise task_cli.NotSubmitted(["answer {stories: [{body, facts}], guide: {body, facts}}"]) from None
+    return built
+
+
+NUMBER = re.compile(r"\d[\d,.]*\d|\d")
+NAME = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*")
+
+
+def unsupported(place: dict[str, Any], facts: dict[str, dict[str, Any]], known: list[str]) -> list[str]:
+    """Every year, number, and proper name in the prose must come from the verified facts it names (decision 32)."""
+    found: list[str] = []
+    parts = [("story", s) for s in place.get("stories", [])] + ([("guide", place["guide"])] if "guide" in place else [])
+    for label, part in parts:
+        support = " ".join(json.dumps(c, ensure_ascii=False) for c in part["claims"]) + " " + " ".join(known)
+        support_digits = re.sub(r"[^0-9]", " ", support)
+        fields = [v for v in part["body"].values() if isinstance(v, str)]
+        for number in {re.sub(r"[,.]", "", n) for n in NUMBER.findall(" ".join(fields))}:
+            if number not in support_digits.split() and number not in re.sub(r"[,.]", "", support):
+                found.append(f"{label}: {number} isn't in the facts it names; use only the facts' numbers")
+        names = set()
+        for field in fields:
+            for sentence in re.split(r"(?<=[.!?:;])\s+", field):
+                rest = sentence.split(None, 1)[1] if len(sentence.split()) > 1 else ""  # not a sentence's first word
+                names |= set(NAME.findall(rest))
+        for name in names:
+            if name.casefold() not in support.casefold() and name not in COMMON:
+                found.append(f"{label}: '{name}' isn't in the facts it names; use only the facts' names")
+    return found
+
+
+# Capitalized words that aren't names a fact must state.
+COMMON = {"The", "A", "An", "It", "Its", "In", "On", "At", "From", "Look", "Stand", "Walk", "Find", "This", "That",
+          "These", "Those", "Today", "Now", "When", "Where", "Here", "There", "He", "She", "They", "His", "Her",
+          "Their", "I", "We", "You", "Your", "After", "Before", "By", "For", "With", "Over", "Under", "Above", "Below"}
 
 
 def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, Any], spend: Spend) -> Any:
@@ -164,7 +297,12 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
             writer = writers[turn % len(writers)]
             turn += 1
             try:
-                placed = write(writer, task, document, d, lead, Spend())
+                gathered = evidence(writer, task, document, d, lead, Spend())
+                if gathered.get("skip"):
+                    accounted.append({"lead": d["lead"], "status": "skipped",
+                                      "reason": f"the evidence isn't there: {gathered['skip']}"[:300]})
+                    continue
+                placed = write(writer, task, document, d, lead, gathered, Spend())
             except (GaveUp, ValueError, TypeError, KeyError, psycopg.Error) as reason:
                 # One place that fails, for any reason, is given back; the rest of the cell goes on.
                 status = "skipped" if lead.get("well_known") else "later"

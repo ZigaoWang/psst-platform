@@ -62,21 +62,40 @@
 </section>
 
 <section>
-	<h2>Golden set agreement</h2>
-	<p class="muted">Each model's latest calibration against the editor's marks. A model reviews only at 90 percent or more.</p>
+	<h2>The gate, per model</h2>
+	<p class="muted">Each model's latest calibration: the editor's good stories it publishes, and the defects (bad stories and constructed negatives) it catches. A model reviews only with 90 percent or more on both. Tier is reported, not gated.</p>
 	{#if data.bakeoff.length}
 		<div class="table-wrap">
 			<table>
-				<thead><tr><th>Model</th><th class="num">Agreed</th><th class="num">Agreement</th><th class="num">Cost</th><th>When</th></tr></thead>
+				<thead><tr><th>Model</th><th class="num">Good published</th><th class="num">Defects caught</th><th class="num">Tier</th><th class="num">Cost</th><th>When</th></tr></thead>
 				<tbody>
 					{#each data.bakeoff as b (b.model)}
-						<tr class:pass={b.agreed / b.marked >= 0.9}><td class="mono">{b.model}</td><td class="num">{b.agreed} of {b.marked}</td>
-							<td class="num">{Math.round((b.agreed / b.marked) * 1000) / 10} percent</td><td class="num">{usd(b.cost)}</td><td>{relative(b.at)}</td></tr>
+						<tr class:pass={b.published / b.good >= 0.9 && b.caught / b.negatives >= 0.9}>
+							<td class="mono">{b.model}</td><td class="num">{b.published} of {b.good}</td><td class="num">{b.caught} of {b.negatives}</td>
+							<td class="num">{b.tier_agreed} of {b.tier_marked}</td><td class="num">{usd(b.cost)}</td><td>{relative(b.at)}</td></tr>
 					{/each}
 				</tbody>
 			</table>
 		</div>
 	{:else}<Empty>No calibration for the current golden set yet.</Empty>{/if}
+</section>
+
+<section>
+	<h2>Quotes, per writer model</h2>
+	<p class="muted">Of the quotes a writer gave: copied exactly, repaired to the source's exact text (0.95 similarity or more), or invented. A writer that invents often doesn't qualify.</p>
+	{#if data.quoting.length}
+		<div class="table-wrap">
+			<table>
+				<thead><tr><th>Model</th><th class="num">Answers</th><th class="num">Quotes</th><th class="num">Exact</th><th class="num">Repaired</th><th class="num">Invented</th><th class="num">Unknown snapshot</th></tr></thead>
+				<tbody>
+					{#each data.quoting as q (q.model)}
+						<tr><td class="mono">{q.model}</td><td class="num">{q.answers}</td><td class="num">{q.quotes}</td><td class="num">{q.exact}</td>
+							<td class="num">{q.repaired}</td><td class="num">{q.invented}</td><td class="num">{q.unknown}</td></tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	{:else}<Empty>No writing yet.</Empty>{/if}
 </section>
 
 <section>

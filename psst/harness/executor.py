@@ -81,6 +81,35 @@ def version(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()[:12]
 
 
+CREDIT_SECONDS = 300
+_credit_checked = 0.0
+
+
+def check_credit(conn: Connection, token: str) -> None:
+    """Every few minutes, ask the provider what the key has spent and the account has left, record it for the console,
+    and stop when the key has reached the budget by the provider's own count or the account is nearly empty."""
+    global _credit_checked
+    import time
+    if time.monotonic() - _credit_checked < CREDIT_SECONDS:
+        return
+    _credit_checked = time.monotonic()
+    try:
+        credit = providers.credit()
+    except OSError:
+        return
+    if credit is None:
+        return
+    conn.execute("SELECT psst.record_harness_credit(%s, %s)", (token, Jsonb(credit)))
+    budget = conn.execute("SELECT psst.setting('harness.budget_usd') AS b").fetchone()
+    if budget and credit["key_spent"] >= float(budget["b"]):
+        raise BudgetReached(f"the provider counts {credit['key_spent']:.4f} USD spent on this key")
+    if credit["account_remaining"] < ACCOUNT_RESERVE_USD:
+        raise BudgetReached(f"only {credit['account_remaining']:.2f} USD of credit is left on the account")
+
+
+ACCOUNT_RESERVE_USD = 2.0  # never run the provider account dry mid-task
+
+
 def check_budget(conn: Connection, city_id: int | None) -> None:
     """Stop before spending past the total budget or a city's daily or monthly budget."""
     row = conn.execute("""SELECT psst.harness_spend(%s) AS s, psst.setting('harness.budget_usd') AS total,
@@ -134,6 +163,7 @@ class Executor:
         while True:
             with db.connect("worker") as conn:
                 check_budget(conn, task.get("city_id"))
+                check_credit(conn, self.token)
             if spend.tokens >= limits.tokens:
                 raise GaveUp(f"used {spend.tokens} tokens, over the step's limit of {limits.tokens}")
             offer = definitions if tool_calls < limits.tool_calls else None

@@ -25,7 +25,7 @@ def roles(database, monkeypatch):
 @pytest.fixture
 def golden(database, city, roles):
     with database.connect("admin") as conn:
-        for n, mark in enumerate(["good", "weak", "bad", "good"]):
+        for n, mark in enumerate(["good", "weak", "bad", "good", "weak", "good", "bad", "good", "weak", "good"]):
             conn.execute("""INSERT INTO psst.golden_stories (id, city_id, place, headline, short, long, sources, mark,
                             tier, reason, origin, marked_by) VALUES (psst.new_id('gs'), %s, %s, %s, %s, %s,
                             'Records Office', %s, %s, %s, 'invented', 'editor')""",

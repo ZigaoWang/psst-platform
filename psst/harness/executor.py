@@ -19,7 +19,7 @@ from psst.cli import tasks as task_cli
 from psst.core import db
 from psst.tasks import files
 
-from . import providers, tools
+from . import providers, quotes, tools
 
 Connection = psycopg.Connection[dict[str, Any]]
 
@@ -269,9 +269,12 @@ class Executor:
                 ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=self.token,
                                     place_id=task.get("place_id"),
                                     item_id=task.get("item_id"))
+                def accept(answer: dict[str, Any]) -> Any:
+                    if step == "revise":
+                        quotes.repair(ctx.conn, answer, ctx.read | _snapshots_in(document))
+                    return task_cli.submit(document, answer)
                 try:
-                    outcome = self.converse(step, system, user, task, prompt_version,
-                                            lambda answer: task_cli.submit(document, answer), ctx, spend)
+                    outcome = self.converse(step, system, user, task, prompt_version, accept, ctx, spend)
                 finally:
                     ctx.conn.close()
         except GaveUp as reason:
@@ -337,4 +340,9 @@ def combine(step: str, answers: list[dict[str, Any]]) -> dict[str, Any]:
         combined.append(chosen | {"mark": mark, "tier": tier})
     notes = " / ".join(a.get("notes", "") for a in answers if a.get("notes"))[:600] or "Marked by a panel."
     return {listing: combined, "notes": notes}
+
+
+def _snapshots_in(document: dict[str, Any]) -> set[str]:
+    """Snapshot ids a task file gives (a revision's sources), so a revision can quote them exactly."""
+    return set(re.findall(r"\bsn_[0-9a-hjkmnp-tv-z]{10}\b", json.dumps(document["data"])))
 

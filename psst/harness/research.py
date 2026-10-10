@@ -14,7 +14,7 @@ from psst.cli import tasks as task_cli
 from psst.core import db
 from psst.tasks import prompts, results
 
-from . import tools
+from . import quotes, tools
 from .executor import PREAMBLE, Executor, GaveUp, Spend, version
 
 MAX_WRITES = 12  # places one pass writes, best first
@@ -101,8 +101,14 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
     ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=executor.token,
                         place_id=decision.get("existing"))
     try:
+        gathered = json.loads(user)["data"]["gathered"]
+        ctx.read.update(page["snapshot"] for page in gathered)
+
+        def accept(answer: dict[str, Any]) -> Any:
+            quotes.repair(ctx.conn, answer, ctx.read)
+            return task_cli.submit_one_place(document, answer)
         placed = dict(executor.converse("write", system, user, task, version(PREAMBLE + WRITE_INTRO + prompt),
-                                        lambda answer: task_cli.submit_one_place(document, answer), ctx, spend))
+                                        accept, ctx, spend))
         ctx.conn.execute("SELECT psst.tie_harness_calls(%s, %s, %s)", (executor.token, spend.trace, placed["place"]))
         return placed
     finally:

@@ -8,7 +8,7 @@ import hashlib
 import json
 import urllib.parse
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import psycopg
@@ -31,6 +31,7 @@ class Context:
     token: str
     place_id: str | None = None
     item_id: str | None = None
+    read: set[str] = field(default_factory=set)   # snapshots fetched or searched for this item
 
 
 def _string(description: str) -> dict[str, Any]:
@@ -92,6 +93,7 @@ def fetch_source(ctx: Context, url: str, title: str, publisher: str, kind: str, 
     links = [{"text": label, "url": href} for label, href in result.get("links") or []
              if href.startswith("https://") and urllib.parse.urlsplit(href).netloc != urllib.parse.urlsplit(url).netloc
              and "wikipedia.org" not in href and "wikimedia.org" not in href][:LINK_LIMIT]
+    ctx.read.add(result["snapshot"])
     return {"snapshot": result["snapshot"], "kind": result["kind"], "url": result["url"],
             "characters": len(text), "text": shown, "links": links}
 
@@ -100,6 +102,7 @@ def search_snapshot(ctx: Context, snapshot: str, words: str) -> dict[str, Any]:
     row = ctx.conn.execute("SELECT text FROM psst.snapshots WHERE id = %s", (snapshot,)).fetchone()
     if row is None:
         return {"error": f"no snapshot {snapshot}"}
+    ctx.read.add(snapshot)
     return {"snapshot": snapshot, "passages": reading.passages(row["text"], words, TEXT_LIMIT)}
 
 

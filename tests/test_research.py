@@ -636,3 +636,8 @@ def test_a_known_place_without_stories_is_written_and_waits_beyond_the_pass():
                  {"lead": "ld_c", "action": "known", "existing": "pl_c", "reason": "has two"}]
     harness_research.settle_storyless(decisions, {"pl_a", "pl_b"}, {}, 1)
     assert [d["action"] for d in decisions] == ["write", "later", "known"]
+
+
+def test_a_decade_stays_whole_as_a_value():
+    from psst.harness import research as harness_research
+    assert {"value": "1880s"} in harness_research.values_in({"evidence": [{"quote": "remodelled in the 1880s"}]})

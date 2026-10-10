@@ -461,7 +461,7 @@ def assemble(place: dict[str, Any], answer: dict[str, Any], facts: dict[str, dic
 
 
 NUMBER = re.compile(r"\d[\d,.]*\d|\d")
-VALUE_NUMBER = re.compile(r"\d[\d,.]*\d(?:st|nd|rd|th)?|\d(?:st|nd|rd|th)?")  # "19th" stays whole as a value
+VALUE_NUMBER = re.compile(r"\d[\d,.]*\d(?:st|nd|rd|th|s)?|\d(?:st|nd|rd|th)?")  # "19th" and "1880s" stay whole
 NAME = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*")
 
 

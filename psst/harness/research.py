@@ -71,6 +71,10 @@ def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], s
             decided = {d["lead"] for d in answer["decisions"]}
             found += [f"decide lead {lead} ({leads[lead]['name']})" for lead in leads if lead not in decided]
             writes = sum(d["action"] == "write" for d in answer["decisions"])
+            for d in reversed(answer["decisions"]):  # past the pass's number, the last chosen wait for the next
+                if writes > most and d["action"] == "write" and not leads.get(d["lead"], {}).get("well_known"):
+                    d.update(action="later", reason="chosen to write; over this pass's number of places")
+                    writes -= 1
             if writes > most:
                 found.append(f"{writes} leads to write; choose at most {most}, the best, and mark the rest later")
             for d in answer["decisions"]:

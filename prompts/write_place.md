@@ -28,7 +28,7 @@ For each story give its `body` and `facts`, the ids of the facts it rests on:
 
 For a new place, the guide: `body` with `identifier` (`[style or material] <what it is>, <year>[, by <maker>]`, for
 the structure standing now, never its listing or grade), `about` (two or three plain sentences, never four, in your own words: what it is and why it was made,
-what happened since, and what it is today when a fact says so), and `key_facts` (empty), plus its `facts`.
+what happened since, and what it is today when a fact says so; never its listing, grade, or listing date), and `key_facts` (empty), plus its `facts`.
 
 Answer only `{"stories": [{"body": {...}, "facts": ["f1", ...]}], "guide": {"body": {...}, "facts": [...]}}`. One
 strong story is better than two thin ones.

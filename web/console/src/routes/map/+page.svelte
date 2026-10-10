@@ -8,6 +8,14 @@
 
 	let { data }: PageProps = $props();
 	let container: HTMLDivElement | undefined = $state();
+	let showDensity = $state(false);
+	let stats: { hexagons: number; atTarget: number } | null = $state(null);
+	let mapRef: import('maplibre-gl').Map | undefined;
+
+	$effect(() => {
+		const visibility = showDensity ? 'visible' : 'none';
+		if (mapRef?.getLayer('density')) mapRef.setLayoutProperty('density', 'visibility', visibility);
+	});
 
 	$effect(() => {
 		const city = data.city;
@@ -25,6 +33,7 @@
 				bounds: [[city.west, city.south], [city.east, city.north]],
 				attributionControl: { compact: true }
 			});
+			mapRef = map;
 			map.addControl(new maplibre.NavigationControl({ showCompass: false }));
 			map.on('load', async () => {
 				const layers = await layersRequest;
@@ -35,6 +44,17 @@
 					paint: {
 						'fill-color': ['match', ['get', 'state'], 'researched', '#146c2e', 'queued', '#1f5fbf', '#9aa0a6'],
 						'fill-opacity': 0.18, 'fill-outline-color': '#6b6f76'
+					}
+				});
+				stats = layers.densityStats;
+				map.addSource('density', { type: 'geojson', data: layers.density });
+				map.addLayer({
+					id: 'density', type: 'fill', source: 'density',
+					layout: { visibility: showDensity ? 'visible' : 'none' },
+					paint: {
+						// Gaps (below the target of three) in warm colors, hexagons at the target in green.
+						'fill-color': ['step', ['get', 'things'], '#b3261e', 1, '#e8710a', 2, '#f9ab00', 3, '#146c2e'],
+						'fill-opacity': 0.45, 'fill-outline-color': '#ffffff'
 					}
 				});
 				map.addSource('places', { type: 'geojson', data: layers.places });
@@ -59,14 +79,19 @@
 </script>
 
 <svelte:head><title>Map · Psst console</title></svelte:head>
-<PageHeader title="Map" subtitle="Research cells by state, and places: dark when something about them is live, red when not yet." />
+<PageHeader title="Map" subtitle="Research cells by state, places (dark when something about them is live, red when not yet), and density against the target." />
 
 <form class="filters" method="GET">
 	<label>City
 		<select name="city">{#each data.cities as c (c.slug)}<option value={c.slug} selected={c.slug === data.city?.slug}>{c.name}</option>{/each}</select>
 	</label>
 	<button type="submit">Show</button>
+	<label><input type="checkbox" bind:checked={showDensity} /> Density</label>
 </form>
+{#if showDensity && stats}
+	<p class="muted">Published things per 100 meter hexagon in the dense areas: {stats.atTarget} of {stats.hexagons} hexagons
+		have three or more. Red has none, orange one, yellow two, green three or more.</p>
+{/if}
 
 {#if data.city}
 	<div class="map" bind:this={container} role="region" aria-label={`Map of ${data.city.name}`}></div>

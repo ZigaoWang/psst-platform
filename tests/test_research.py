@@ -478,3 +478,15 @@ def test_a_fact_in_its_sources_words_is_sent_back(database, city):
     with database.connect("worker") as conn:
         found = harness_research.verify(conn, [copied])
     assert any("fact f1" in p and "own words" in p for p in found)
+
+
+def test_a_fact_resting_only_on_a_reference_work_is_sent_back(database, city):
+    from psst.harness import research as harness_research
+    with database.connect("admin") as conn:
+        wiki = _snapshot(conn, "The Old Mill on River Lane closed in 1890 after a flood.",
+                         "https://en.wikipedia.org/wiki/Old_Mill_River_Lane", "reference")
+    fact = {"id": "f1", "text": "Milling ended there in 1890.", "kind": "date", "values": [],
+            "evidence": [{"snapshot": wiki, "quote": "The Old Mill on River Lane closed in 1890"}]}
+    with database.connect("worker") as conn:
+        found = harness_research.verify(conn, [fact])
+    assert any("fact f1: rests only on reference works" in p for p in found)

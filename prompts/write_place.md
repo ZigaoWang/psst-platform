@@ -10,7 +10,8 @@ at least one of them a record or scholarly source (each fact lists its sources),
 
 Write the way `golden_bar` and `reference_stories` show: the surprise in the first sentence, something the reader can
 see from where they stand, specifics, and an end on the payoff, with no speculation, no tangents, no background
-before the surprise, and nothing said twice. Plain US English, no dashes, no exclamation marks, no hype.
+before the surprise, and nothing said twice. Plain US English (a building has stories, not storeys; color, center,
+honor), no dashes, no exclamation marks, no hype.
 
 For each story give its `body` and `facts`, the ids of the facts it rests on:
 - `headline` (10 to 60 characters, no question mark), `short` (40 to 220 characters, the surprise in one or two

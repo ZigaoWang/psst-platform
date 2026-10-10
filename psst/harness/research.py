@@ -205,8 +205,10 @@ def verify(conn: Any, facts: list[dict[str, Any]]) -> list[str]:
         SELECT n.id, n.text, n.source_id, s.url, s.kind FROM psst.snapshots n JOIN psst.sources s ON s.id = n.source_id
         WHERE n.id = ANY(%s)""", ([e.get("snapshot") for f in facts for e in f.get("evidence", [])],))}
     sources: dict[str, str] = {}
+    rulebook = rules.load()
     for fact in facts:
         quoted = []
+        roles = set()
         for e in fact.get("evidence", []):
             snap = texts.get(e.get("snapshot"))
             if snap is None:
@@ -215,12 +217,16 @@ def verify(conn: Any, facts: list[dict[str, Any]]) -> list[str]:
                 found.append(f"fact {fact.get('id')}: the quote isn't in snapshot {e['snapshot']}; copy it exactly")
             else:
                 quoted.append(e["quote"])
-                sources[snap["source_id"]] = urls.host_kind(snap["url"]) or snap["kind"]
+                kind = urls.host_kind(snap["url"]) or snap["kind"]
+                sources[snap["source_id"]] = kind
+                roles.add(rulebook.sources["kinds"].get(kind, {}).get("role"))
+        if roles == {"reference"}:
+            found.append(f"fact {fact.get('id')}: rests only on reference works; quote the record they draw on, or "
+                         "drop the fact")
         for v in fact.get("values", []):
             if quoted and not any(contains(q, v.get("source_form") or v["value"]) for q in quoted):
                 found.append(f"fact {fact.get('id')}: '{v['value']}' isn't in its quoted passages; quote the words "
                              "that state it")
-    rulebook = rules.load()
     # A fact is a note in the evidence step's own words; one that keeps a run of its source's words would carry that
     # copying into the story.
     report = Report()

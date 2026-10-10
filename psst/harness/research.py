@@ -450,7 +450,11 @@ def unsupported(place: dict[str, Any], facts: dict[str, dict[str, Any]], known: 
 # Capitalized words that aren't names a fact must state.
 COMMON = {"The", "A", "An", "It", "Its", "In", "On", "At", "From", "Look", "Stand", "Walk", "Find", "This", "That",
           "These", "Those", "Today", "Now", "When", "Where", "Here", "There", "He", "She", "They", "His", "Her",
-          "Their", "I", "We", "You", "Your", "After", "Before", "By", "For", "With", "Over", "Under", "Above", "Below"}
+          "Their", "I", "We", "You", "Your", "After", "Before", "By", "For", "With", "Over", "Under", "Above", "Below",
+          # periods and styles describe a date or a look the facts give, and the country is never in doubt
+          "Victorian", "Edwardian", "Georgian", "Regency", "Tudor", "Jacobean", "Elizabethan", "Gothic", "Baroque",
+          "Classical", "Italianate", "Romanesque", "Renaissance", "Revival", "Art", "Deco", "Modernist",
+          "England", "English", "Britain", "British"}
 
 
 def prose_writer(evidence_writer: Executor) -> Executor:

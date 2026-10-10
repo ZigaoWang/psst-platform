@@ -620,3 +620,10 @@ def test_a_pass_offers_the_previous_apps_places_first(database, city):
     with database.connect("worker") as conn:
         leads = files.research_brief(conn, cell)["leads"]
     assert leads[0]["name"] == "Old Pump" and leads[0]["origin"] == "legacy"
+
+
+def test_period_words_and_the_country_need_no_fact_but_other_names_do():
+    from psst.harness import research as harness_research
+    place = {"stories": [{"body": {"long": "A Victorian box in England, cast in Hertfordshire."}, "claims": []}]}
+    assert harness_research.unsupported(place, {}, []) == [
+        "story: 'Hertfordshire' isn't in the facts it names; use only the facts' names"]

@@ -437,3 +437,12 @@ def test_a_lead_without_the_evidence_for_a_story_is_skipped_with_the_reason(data
     with database.connect("admin") as conn:
         lead = conn.execute("SELECT status, reason FROM psst.leads WHERE id = %s", (first,)).fetchone()
     assert lead["status"] == "skipped" and "only one blog" in lead["reason"]
+
+
+def test_leads_with_an_official_record_are_marked_for_triage(monkeypatch):
+    from psst.harness import research as harness_research
+    monkeypatch.setattr(harness_research.http, "wikidata_entities", lambda qids, props: {
+        "Q900010": {"claims": {"P1216": [{"mainsnak": {"datavalue": {"value": "1000001"}}}]}}, "Q900011": {}})
+    leads = [{"lead": "ld_a", "wikidata": "Q900010"}, {"lead": "ld_b", "wikidata": "Q900011"}, {"lead": "ld_c"}]
+    harness_research.mark_records(leads)
+    assert [lead.get("record") for lead in leads] == ["National Heritage List for England entry 1000001", None, None]

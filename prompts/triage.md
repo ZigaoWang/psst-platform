@@ -19,7 +19,9 @@ For each lead in `data.leads`, decide one `action`:
   ("only a blog repeats the tunnel story", "nothing beyond its encyclopedia opening").
 - `later`: worth a look but not this pass. Never for a lead marked `well_known`. Give a `reason`.
 
-Choose at most `data.max_writes` leads to write, best first. At least half of what you write should be ordinary
+A lead with a `record` has an official record (a heritage list entry, say) that a story can rest on; a story needs
+one primary record or scholarly source, so prefer these, and choose a lead without one only when you know where its
+record is. Choose at most `data.max_writes` leads to write, best first. At least half of what you write should be ordinary
 places a visitor would never look up: a bollard, a gate, a corner shop, a boundary stone, a street sign. Map stories
 count: the goal is something worth looking at within a few steps anywhere. Never choose a lead you would have to pad,
 guess, or speculate to make interesting.

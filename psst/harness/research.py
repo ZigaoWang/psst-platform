@@ -38,8 +38,23 @@ def shared_data(document: dict[str, Any]) -> str:
     return json.dumps({k: data[k] for k in keys if k in data}, ensure_ascii=False, sort_keys=True, default=str)
 
 
+def mark_records(leads: list[dict[str, Any]]) -> None:
+    """Note on each lead whether its Wikidata item points to an official record, in one batched lookup, so triage
+    can prefer the leads a story can rest on."""
+    qids = sorted({lead["wikidata"] for lead in leads if lead.get("wikidata")})
+    try:
+        entities = http.wikidata_entities(qids, props="claims") if qids else {}
+    except (OSError, ValueError):
+        return
+    for lead in leads:
+        found = records(lead.get("wikidata"), entities)
+        if found:
+            lead["record"] = found[0]["title"]
+
+
 def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], spend: Spend) -> dict[str, Any]:
     brief = document["data"]
+    mark_records(brief["leads"])
     prompt = prompts.load("triage").text
     system = PREAMBLE + "\n\n" + prompt + "\n\n## Shared data\n\n" + shared_data(document)
     user = json.dumps({"data": {"leads": brief["leads"], "places_nearby": brief["places_nearby"],
@@ -90,15 +105,17 @@ def gather(executor: Executor, lead: dict[str, Any]) -> list[dict[str, Any]]:
     return [page for page in pages if not page.get("error")]
 
 
-def records(qid: str | None) -> list[dict[str, Any]]:
+def records(qid: str | None, entities: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """The official records a Wikidata item names, as fetch requests (rules/sources.yaml, record_properties)."""
     if not qid:
         return []
     spec = rules.load().sources.get("record_properties", {})
-    try:
-        entity = http.wikidata_entities([qid], props="claims").get(qid) or {}
-    except (OSError, ValueError):
-        return []
+    if entities is None:
+        try:
+            entities = http.wikidata_entities([qid], props="claims")
+        except (OSError, ValueError):
+            return []
+    entity = entities.get(qid) or {}
     found = []
     for prop, how in spec.items():
         for claim in entity.get("claims", {}).get(prop, [])[:2]:

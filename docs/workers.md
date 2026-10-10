@@ -8,7 +8,7 @@ Each task type is routed to one model (`routing.<type>` in the console's setting
 
 | Role | Task types | Model | Tasks per run |
 |---|---|---|---|
-| Researcher | `research_cell` | Sonnet 5.5 | 1 cell |
+| Researcher | `research_cell` | Opus 5.5 on dense cells, Sonnet 5.5 elsewhere (`task queue` shows which) | 1 cell |
 | Reviewer | `review` | Sonnet 5.5 | 2 |
 | Reviser | `revise` | Sonnet 5.5 | 6 |
 | Auditor | `audit` | Sonnet 5.5 | 10 |
@@ -37,9 +37,9 @@ Rules for every run:
 
 ## Role notes
 
-**Researcher.** Follow the task's prompt: one cell end to end, from leads to every story and guide, in one voice, with the reference stories as the bar. Primary sources first; drop what isn't surprising and say why. A dense cell is a long session: keep going until the leads are done or left `later` with a reason.
+**Researcher.** Follow the task's prompt: one cell end to end, from leads to every story and guide, in one voice, with the reference stories as the bar. Primary sources first; drop what isn't surprising and say why. Submit each place with `uv run psst task place` as soon as it is finished; it renews the lease. A dense cell is a long session: keep going until the leads are done or left `later` with a reason, then submit the final result. If a session stops before that, nothing is lost but the place in hand: its lease runs out after 90 minutes, its run ends, and the next researcher continues the cell.
 
-**Reviewer.** Read every item with its passages beside it. Approve what is true and surprising, edit what you can fix yourself, reject the rest with one specific note and whether a revision could fix it. Reject what isn't surprising even when every fact is right.
+**Reviewer.** Read every item with its passages beside it and mark it good, weak, or bad the way the editor marked the examples in the task file. A good item that needs only a cut names the cut in `fix`; a weak one says what to add or settle; a bad one is not a story.
 
 **Reviser.** This is the item's only revision. Fix exactly what the review or audit named; if the story can't be made worth telling, give the task back.
 

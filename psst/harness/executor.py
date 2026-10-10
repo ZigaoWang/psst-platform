@@ -56,8 +56,8 @@ STEP_LIMITS = {
     "audit": Limits(tool_calls=4, fixes=2, tokens=500_000, reply_tokens=8000),
     "revise": Limits(tool_calls=10, fixes=3, tokens=400_000, reply_tokens=8000),
     "triage": Limits(tool_calls=0, fixes=1, tokens=200_000, reply_tokens=32000, reasoning="off"),
-    "evidence": Limits(tool_calls=0, fixes=1, tokens=60_000, reply_tokens=8000, reasoning="off"),
-    "write": Limits(tool_calls=0, fixes=1, tokens=40_000, reply_tokens=4000, reasoning="off"),
+    "evidence": Limits(tool_calls=0, fixes=2, tokens=60_000, reply_tokens=8000, reasoning="off"),
+    "write": Limits(tool_calls=0, fixes=2, tokens=40_000, reply_tokens=4000, reasoning="off"),
 }
 STEP_TOOLS = {
     "tier_check": [],

@@ -446,3 +446,11 @@ def test_leads_with_an_official_record_are_marked_for_triage(monkeypatch):
     leads = [{"lead": "ld_a", "wikidata": "Q900010"}, {"lead": "ld_b", "wikidata": "Q900011"}, {"lead": "ld_c"}]
     harness_research.mark_records(leads)
     assert [lead.get("record") for lead in leads] == ["National Heritage List for England entry 1000001", None, None]
+
+
+def test_a_facts_values_come_from_its_quotes():
+    from psst.harness import research as harness_research
+    fact = {"values": [{"value": "around 1800"}], "evidence": [
+        {"snapshot": "sn_1", "quote": "House, c.1800, No.33 Peckham Road, listed at Grade: II in 1954"}]}
+    assert [v["value"] for v in harness_research.values_in(fact)] == ["1800", "33", "1954", "House", "No", "Peckham Road",
+                                                                       "Grade"]

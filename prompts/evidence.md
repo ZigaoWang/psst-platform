@@ -13,10 +13,10 @@ For each fact give:
 - `id`: f1, f2, ...
 - `text`: the fact in one plain sentence of your own.
 - `kind`: date, name, number, place, event, or attribute.
-- `values`: every year, number, name, and detail the fact asserts, as a writer would put it in prose; `source_form`
-  when the source writes it differently ("4th September" for "September 4").
-- `evidence`: the snapshot id and the exact words copied from that snapshot, long enough to contain every value. Copy
-  them character for character; a quote that isn't in the snapshot is thrown out with its fact.
+- `values`: leave empty; the numbers and names are taken from your quotes.
+- `evidence`: the snapshot id and the exact words copied from that snapshot, long enough to contain every name, date,
+  and number the fact states. Copy them character for character; a quote that isn't in the snapshot is thrown out.
+  The writer may use only the numbers and names your quotes contain, in their words.
 
 Cover what the story needs: the surprise itself, what a reader can see from where they stand (or the marker of it),
 and the specifics that make it true of this place. Then what the guide needs: what the place is, when and by whom it

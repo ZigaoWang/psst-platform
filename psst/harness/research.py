@@ -168,6 +168,8 @@ def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any],
         stats, repairs = quotes.repair(ctx.conn, answer, ctx.read)
         ctx.conn.execute("SELECT psst.record_quote_repairs(%s, %s, NULL, %s, %s, %s, '[]')",
                          (executor.token, task["id"], executor.model, spend.trace[-1], Jsonb(stats)))
+        for fact in answer.get("facts") or []:
+            fact["values"] = values_in(fact)  # the exact numbers and names its quotes state, never the model's own
         found = verify(ctx.conn, answer.get("facts") or [])
         if found:
             raise task_cli.NotSubmitted(found)
@@ -179,6 +181,18 @@ def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any],
     finally:
         ctx.conn.close()
     return answer | kept
+
+
+def values_in(fact: dict[str, Any]) -> list[dict[str, str]]:
+    """A fact's values, taken from the words of its quotes: every number and every capitalized name, as written
+    there, so each value is in its passage by construction and the prose can use only these forms."""
+    found: list[str] = []
+    for evidence in fact.get("evidence", []):
+        quote = evidence.get("quote", "")
+        for value in NUMBER.findall(quote) + NAME.findall(quote):
+            if value not in found and value not in COMMON:
+                found.append(value)
+    return [{"value": v} for v in found[:12]]
 
 
 def verify(conn: Any, facts: list[dict[str, Any]]) -> list[str]:

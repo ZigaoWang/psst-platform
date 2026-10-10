@@ -181,6 +181,9 @@ CAPITAL_WORD = re.compile(r"(?<![\w'’-])[A-Z][\w'’]*")
 SENTENCE_START = re.compile(r"(?:^|[.!?:;]\s+|[\"“(]\s*)$")
 
 
+POSSESSIVE = re.compile(r"['’]s$")
+
+
 def proper_names(text: str) -> list[str]:
     """Each capitalized word, except one that only starts a sentence (a sentence's first word counts when the next
     word is capitalized too, as in a name)."""
@@ -191,7 +194,7 @@ def proper_names(text: str) -> list[str]:
         starts = SENTENCE_START.search(text[:match.start()]) is not None
         joined = following is not None and text[match.end():following.start()] == " "
         if len(match.group(0)) > 1 and (not starts or joined):
-            names.append(match.group(0))
+            names.append(POSSESSIVE.sub("", match.group(0)))  # Highbury's names Highbury
     return names
 
 

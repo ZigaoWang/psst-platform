@@ -8,7 +8,7 @@ import dataclasses
 
 import pytest
 
-from psst.checks.tools import Claim, Context, Evidence, Snapshot, Stop, check, numbers
+from psst.checks.tools import Claim, Context, Evidence, Snapshot, Stop, check, numbers, proper_names
 from psst.core.text import find_quote
 
 RECORD = Snapshot("sn_record0000", "so_record0000", "https://records.example.org/pump-house", "official_record",
@@ -275,3 +275,7 @@ def test_a_long_name_shared_with_the_source_is_not_copying():
     named = story(long=LONG + " Concerts are now given here by the Academy of St Martin in the Fields Orchestra.")
     result = check("story", named, claims(), SNAPSHOTS | {RECORD.id: record})
     assert "copies" not in refusals(result)
+
+
+def test_a_possessive_name_is_the_name():
+    assert proper_names("We walked past Highbury's clock") == ["Highbury"]

@@ -59,7 +59,7 @@ def scripted(replies):
     """A provider that answers with the replies in order, each costing a tenth of a cent."""
     calls = []
 
-    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300):
+    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
         calls.append({"messages": list(messages), "tools": tools})
         reply = replies.pop(0)
         if isinstance(reply, providers.Reply):
@@ -147,7 +147,7 @@ def test_the_service_works_what_is_routed_to_a_harness_model(database, golden, m
         conn.execute("UPDATE psst.settings SET value = %s WHERE key = 'routing.review'", (json.dumps(MODEL),))
     queue(database)
 
-    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300):
+    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
         items = json.loads(messages[1]["content"])["data"]["items"]
         marks = [{"golden": i["id"], "mark": golden[i["id"]][0], "tier": golden[i["id"]][1], "reason": "read it"}
                  for i in items]
@@ -181,7 +181,7 @@ def test_a_panel_calibrates_as_one_model(database, golden, monkeypatch):
     with database.connect("worker") as conn:
         task = dict(conn.execute("SELECT * FROM psst.lease_task(%s, ARRAY['calibrate'])", (worker.token,)).fetchone())
 
-    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300):
+    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
         items = json.loads(messages[1]["content"])["data"]["items"]
         wrong = model == "openrouter:test/c"  # one member always says weak; the other two outvote it
         marks = [{"golden": i["id"], "mark": "weak" if wrong else golden[i["id"]][0],
@@ -227,7 +227,7 @@ def test_featured_needs_a_second_model_to_agree(database, city, roles, monkeypat
     with database.connect("worker") as conn:
         task = dict(conn.execute("SELECT * FROM psst.lease_task(%s, ARRAY['review'])", (worker.token,)).fetchone())
 
-    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300):
+    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
         if model == "openrouter:test/second":
             return providers.Reply(text=json.dumps({"tier": "map", "reason": "a smaller surprise"}), cost_usd=0.0001)
         return providers.Reply(text=json.dumps({"decisions": [
@@ -250,3 +250,16 @@ def test_a_cancelled_calibration_can_be_queued_again(database, golden):
     with database.connect("admin") as conn:
         queued = conn.execute("SELECT count(*) AS n FROM psst.tasks WHERE type = 'calibrate' AND state = 'queued'")
         assert queued.fetchone()["n"] == 2
+
+
+def test_openrouter_requests_ask_for_the_fastest_private_provider_and_the_reasoning_level(monkeypatch):
+    sent = {}
+
+    def post(url, body, headers, timeout):
+        sent.update(body)
+        return {"choices": [{"message": {"content": "{}"}}], "usage": {"cost": 0.0}}, 5
+    monkeypatch.setattr(providers, "_post", post)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "invented")
+    providers.chat("openrouter:test/model", [{"role": "user", "content": "x"}], reasoning="low")
+    assert sent["provider"] == {"data_collection": "deny", "sort": "throughput"}
+    assert sent["reasoning"] == {"effort": "low"}

@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -43,6 +44,7 @@ class Limits:
     fixes: int = 2
     tokens: int = 400_000          # input and output over every call for the item
     reply_tokens: int = 8000
+    reasoning: str | None = None   # "off" or "low" for a step that needs craft more than deliberation
 
 
 STEP_LIMITS = {
@@ -52,8 +54,8 @@ STEP_LIMITS = {
     "audit": Limits(tool_calls=4, fixes=2, tokens=500_000, reply_tokens=8000),
     "revise": Limits(tool_calls=10, fixes=3, tokens=400_000, reply_tokens=8000),
     "triage": Limits(tool_calls=0, fixes=2, tokens=300_000, reply_tokens=12000),
-    "evidence": Limits(tool_calls=10, fixes=3, tokens=600_000, reply_tokens=8000),
-    "write": Limits(tool_calls=0, fixes=4, tokens=250_000, reply_tokens=8000),
+    "evidence": Limits(tool_calls=10, fixes=2, tokens=600_000, reply_tokens=8000),
+    "write": Limits(tool_calls=0, fixes=2, tokens=250_000, reply_tokens=8000, reasoning="low"),
 }
 STEP_TOOLS = {
     "tier_check": [],
@@ -181,7 +183,8 @@ class Executor:
             offer = definitions if tool_calls < limits.tool_calls else None
             error: str | None = None
             try:
-                reply = providers.chat(self.model, messages, offer, limits.reply_tokens, json_only=not offer)
+                reply = providers.chat(self.model, messages, offer, limits.reply_tokens, json_only=not offer,
+                                       reasoning=limits.reasoning)
             except providers.ProviderError as failure:
                 error, reply = str(failure), None
             ran: list[dict[str, Any]] = []
@@ -192,8 +195,10 @@ class Executor:
                                             for c in reply.tool_calls]}
                 messages.append(assistant)
                 for c in reply.tool_calls:
+                    started = time.monotonic()
                     output = tools.call(ctx, c.name, c.arguments)
-                    ran.append({"tool": c.name, "input": c.arguments, "output": output, "error": output.get("error")})
+                    ran.append({"tool": c.name, "input": c.arguments, "output": output, "error": output.get("error"),
+                                "latency_ms": int((time.monotonic() - started) * 1000)})
                     messages.append({"role": "tool", "tool_call_id": c.id,
                                      "content": json.dumps(output, ensure_ascii=False)[:40000]})
                     tool_calls += 1

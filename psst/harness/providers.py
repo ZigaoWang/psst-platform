@@ -64,11 +64,12 @@ def check(model: str) -> None:
 
 
 def chat(model: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None,
-         max_tokens: int = 4000, json_only: bool = False, timeout: int = 300) -> Reply:
+         max_tokens: int = 4000, json_only: bool = False, timeout: int = 300, reasoning: str | None = None) -> Reply:
+    """`reasoning` sets how much a reasoning model thinks before it answers: "off", "low", or None for its default."""
     provider, name = split(model)
     if provider == "anthropic":
         return _anthropic(name, messages, tools, max_tokens, timeout)
-    return _openai(provider, name, messages, tools, max_tokens, json_only, timeout)
+    return _openai(provider, name, messages, tools, max_tokens, json_only, timeout, reasoning)
 
 
 def _post(url: str, body: dict[str, Any], headers: dict[str, str], timeout: int) -> tuple[dict[str, Any], int]:
@@ -101,7 +102,7 @@ def _key(variable: str) -> str:
 
 
 def _openai(provider: str, name: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None,
-            max_tokens: int, json_only: bool, timeout: int) -> Reply:
+            max_tokens: int, json_only: bool, timeout: int, reasoning: str | None = None) -> Reply:
     base, variable = OPENAI_COMPATIBLE[provider]
     body: dict[str, Any] = {"model": name, "messages": messages, "max_tokens": max_tokens, "temperature": 0.2}
     if tools:
@@ -109,9 +110,11 @@ def _openai(provider: str, name: str, messages: list[dict[str, Any]], tools: lis
     elif json_only:
         body["response_format"] = {"type": "json_object"}
     if provider == "openrouter":
-        # Only providers that neither keep nor train on what is sent; the usage block reports the real cost.
-        body["provider"] = {"data_collection": "deny"}
+        # Only providers that neither keep nor train on what is sent, fastest first.
+        body["provider"] = {"data_collection": "deny", "sort": "throughput"}
         body["usage"] = {"include": True}
+        if reasoning:
+            body["reasoning"] = {"enabled": False} if reasoning == "off" else {"effort": reasoning}
     raw, latency = _post(f"{base}/chat/completions", body, {"Authorization": f"Bearer {_key(variable)}"}, timeout)
     if "error" in raw:
         raise ProviderError(f"{provider}: {raw['error']}")

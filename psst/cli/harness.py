@@ -39,7 +39,8 @@ def run_tasks(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     providers.split(args.model)
     done: list[dict[str, Any]] = []
-    with db.connect("worker") as conn, session(conn, "worker", f"harness {args.task_type}", args.model) as token:
+    with db.open_connection(db.conninfo("worker")) as conn, \
+            session(conn, "worker", f"harness {args.task_type}", args.model) as token:
         executor = Executor(token, args.model)
         city = None
         if args.city:
@@ -66,7 +67,7 @@ def run_tasks(args: argparse.Namespace) -> int:
 def run_calibration(args: argparse.Namespace) -> int:
     """Queue both folds for the model and do them with it; the gate counts it only when it is the routed reviewer."""
     providers.split(args.model)
-    with db.connect("system") as conn, session(conn, "system", "harness calibration") as token:
+    with db.open_connection(db.conninfo("system")) as conn, session(conn, "system", "harness calibration") as token:
         bar = golden_bar(conn)
         queued = conn.execute("SELECT psst.queue_calibration(%s, %s, %s, %s) AS n",
                               (token, args.model, prompts.load("review").version,

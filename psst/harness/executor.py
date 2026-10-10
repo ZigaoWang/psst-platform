@@ -54,7 +54,9 @@ STEP_LIMITS = {
     "calibrate": Limits(tool_calls=0, fixes=2, tokens=400_000, reply_tokens=16000, reasoning="off"),
     "review": Limits(tool_calls=0, fixes=2, tokens=500_000, reply_tokens=12000, reasoning="off"),
     "audit": Limits(tool_calls=4, fixes=2, tokens=500_000, reply_tokens=8000),
-    "revise": Limits(tool_calls=10, fixes=3, tokens=400_000, reply_tokens=8000),
+    # One revision from the item, its passages, and the named fix; the tool checks run on what it submits. With
+    # tools, a reviser spent up to eleven calls checking drafts to cut one sentence.
+    "revise": Limits(tool_calls=0, fixes=2, tokens=100_000, reply_tokens=8000, reasoning="off"),
     "triage": Limits(tool_calls=0, fixes=1, tokens=200_000, reply_tokens=32000, reasoning="off"),
     "evidence": Limits(tool_calls=0, fixes=2, tokens=60_000, reply_tokens=8000, reasoning="off"),
     "write": Limits(tool_calls=0, fixes=2, tokens=40_000, reply_tokens=4000, reasoning="off"),
@@ -64,7 +66,7 @@ STEP_TOOLS = {
     "calibrate": [],
     "review": [],  # each item carries its passages; the gate measured the reviewer without tools
     "audit": ["search_snapshot"],
-    "revise": ["search_snapshot", "fetch_source", "check_draft"],
+    "revise": [],
     "triage": [],
     "evidence": [],
     "write": [],

@@ -57,7 +57,8 @@ def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], s
     compact = [{k: lead[k] for k in ("lead", "name", "what", "record", "well_known") if lead.get(k)}
                for lead in brief["leads"]]
     nearby = [{"id": p["id"], "name": p["name"], "stories": p["stories"]} for p in brief["places_nearby"]]
-    user = json.dumps({"data": {"leads": compact, "places_nearby": nearby, "max_writes": MAX_WRITES},
+    most = min(MAX_WRITES, executor.max_places)
+    user = json.dumps({"data": {"leads": compact, "places_nearby": nearby, "max_writes": most},
                        "result_schema": TRIAGE_SCHEMA}, ensure_ascii=False, default=str)
     leads = {lead["lead"]: lead for lead in brief["leads"]}
 
@@ -66,6 +67,9 @@ def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], s
         if not found:
             decided = {d["lead"] for d in answer["decisions"]}
             found += [f"decide lead {lead} ({leads[lead]['name']})" for lead in leads if lead not in decided]
+            writes = sum(d["action"] == "write" for d in answer["decisions"])
+            if writes > most:
+                found.append(f"{writes} leads to write; choose at most {most}, the best, and mark the rest later")
             for d in answer["decisions"]:
                 if d["action"] in ("skip", "later") and not d.get("reason"):
                     found.append(f"lead {d['lead']}: say why it is {d['action']}")
@@ -431,8 +435,6 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
     plan = triage(writers[0], task, document, spend)
     accounted: list[dict[str, Any]] = []
     chosen = [d for d in plan["decisions"] if d["action"] == "write" and d["lead"] in leads]
-    capped = len(chosen) > executor.max_places
-    chosen = chosen[:executor.max_places]
     for d in plan["decisions"]:
         if d["lead"] not in leads or d["action"] == "write":
             continue
@@ -458,11 +460,7 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
 
     with ThreadPoolExecutor(max_workers=parallel_places()) as pool:
         accounted += list(pool.map(place, range(len(chosen)), chosen))
-    if capped:
-        # The run wrote as many places as it was asked to: the places are stored, and the cell goes back to the
-        # queue so the next run continues it.
-        executor.give_back(document, f"wrote {len(chosen)} places as asked; the rest of the cell continues next run")
-        return {"places_written": len(chosen), "continues": True}
+    # A pass ends here: leads left open or later stay with the cell, and the cell is queued again for its next pass.
     # Leads the place submissions already settled need no entry; the rest are accounted for here.
     final = {"places": [], "leads": [a for a in accounted if a["status"] != "added"],
              "notes": (plan.get("notes") or "Triaged and written by the harness.")[:600]}

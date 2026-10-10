@@ -15,7 +15,7 @@ from psycopg.types.json import Jsonb
 
 from psst.checks import runner
 from psst.photos import importing
-from psst.places import research, resolve
+from psst.places import cells, research, resolve
 from psst.tasks import prompts
 from psst.tasks.files import golden_bar
 
@@ -23,7 +23,8 @@ log = logging.getLogger("psst.system")
 Connection = psycopg.Connection[dict[str, Any]]
 AUDIT_PLAN_SECONDS = 600
 GATE_SECONDS = 300
-REVIEW_PLAN_SECONDS = 600  # long enough for a reviser's batch of revisions to gather
+REVIEW_PLAN_SECONDS = 600
+HEXAGON_SECONDS = 600  # long enough for a reviser's batch of revisions to gather
 
 
 class SystemWorker:
@@ -40,6 +41,7 @@ class SystemWorker:
         self._audits_planned = 0.0
         self._gate_refreshed = 0.0
         self._reviews_planned = 0.0
+        self._hexagons_filled = 0.0
 
     def tool_check(self, conn: Connection, task: dict[str, Any]) -> dict[str, Any]:
         result = runner.run(conn, self.token, task["revision_id"], task["id"])
@@ -89,6 +91,30 @@ class SystemWorker:
         self._gate_refreshed = time.monotonic()
         return dict(row["s"]) if row else {}
 
+    def fill_hexagons(self) -> int:
+        """Give each place its density hexagon, and outline every hexagon of the dense research cells, so the density
+        map shows the gaps as well as what is there (decision 27)."""
+        with self.connect() as conn:
+            missing = conn.execute("""SELECT id, city_id, ST_Y(geom) AS lat, ST_X(geom) AS lon FROM psst.places
+                                      WHERE state = 'active' AND h3_r9 IS NULL AND geom IS NOT NULL
+                                        AND city_id IS NOT NULL LIMIT 2000""").fetchall()
+            places = [{"place": r["id"], "cell": cells.cell_for(r["lat"], r["lon"], cells.DENSITY),
+                       "city": r["city_id"]} for r in missing]
+            dense = conn.execute("""
+                SELECT rc.cell, rc.city_id FROM psst.research_cells rc
+                WHERE (SELECT count(*) FROM psst.leads l WHERE l.cell = rc.cell)
+                      >= psst.setting('research.dense_leads')::text::integer
+                  AND NOT EXISTS (SELECT 1 FROM psst.hexagons h WHERE h.parent = rc.cell) LIMIT 20""").fetchall()
+            hexagons = {p["cell"]: cells.density_hexagon(p["cell"], p["city"]) for p in places}
+            for row in dense:
+                hexagons.update({c: cells.density_hexagon(c, row["city_id"]) for c in cells.children(row["cell"])})
+            conn.execute("SELECT psst.record_hexagons(%s, %s, %s)",
+                         (self.token, Jsonb([{k: p[k] for k in ("place", "cell")} for p in places]),
+                          Jsonb(list(hexagons.values()))))
+            conn.commit()
+        self._hexagons_filled = time.monotonic()
+        return len(places) + len(hexagons)
+
     def plan_reviews(self) -> int:
         """Batch the items waiting for a review that no research cell's review covers (revisions, rechecks)."""
         with self.connect() as conn:
@@ -113,6 +139,8 @@ class SystemWorker:
                 self.plan_audits()
             if time.monotonic() - self._reviews_planned > REVIEW_PLAN_SECONDS:
                 self.plan_reviews()
+            if time.monotonic() - self._hexagons_filled > HEXAGON_SECONDS:
+                self.fill_hexagons()
             if time.monotonic() - self._gate_refreshed > GATE_SECONDS:
                 self.refresh_gate()
             if once and not busy:

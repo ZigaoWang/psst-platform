@@ -289,3 +289,19 @@ def test_a_new_place_that_already_exists_is_caught_before_submitting(database, c
     with database.connect("worker") as conn:
         found = place_problems(conn, "place 0", mill)
     assert len(found) == 1 and "is already" in found[0] and "submit it as existing" in found[0]
+
+
+def test_places_and_dense_cells_get_density_hexagons(database, city, monkeypatch):
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.settings SET value = '1' WHERE key = 'research.dense_leads'")
+        place = sample.place(conn, city.run)
+    system = SystemWorker(lambda: psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row),
+                          city.token)
+    system.fill_hexagons()
+    with database.connect("admin") as conn:
+        cell = conn.execute("SELECT h3_r9 FROM psst.places WHERE id = %s", (place,)).fetchone()["h3_r9"]
+        hexagons = conn.execute("SELECT count(*) AS n, count(*) FILTER (WHERE cell = %s) AS own FROM psst.hexagons",
+                                (cell,)).fetchone()
+        density = conn.execute("SELECT stories FROM psst.hexagon_density WHERE cell = %s", (cell,)).fetchone()
+    assert cell and hexagons["own"] == 1 and hexagons["n"] > 49  # its own, plus every hexagon of the dense cells
+    assert density["stories"] == 0

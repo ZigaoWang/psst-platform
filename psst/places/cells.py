@@ -6,6 +6,7 @@ import h3
 
 RESEARCH = 7
 DEMAND = 5
+DENSITY = 9  # about 100 meters across: the unit of the density target (decision 27)
 
 
 def cell_for(lat: float, lon: float, resolution: int = RESEARCH) -> str:
@@ -16,6 +17,19 @@ def polygon_wkt(cell: str) -> str:
     ring = [(lng, lat) for lat, lng in h3.cell_to_boundary(cell)]
     ring.append(ring[0])
     return "POLYGON((" + ", ".join(f"{x} {y}" for x, y in ring) + "))"
+
+
+def geojson(cell: str) -> dict[str, object]:
+    ring = [[lng, lat] for lat, lng in h3.cell_to_boundary(cell)]
+    return {"type": "Polygon", "coordinates": [ring + [ring[0]]]}
+
+
+def density_hexagon(cell: str, city_id: int) -> dict[str, object]:
+    return {"cell": cell, "city": city_id, "parent": str(h3.cell_to_parent(cell, RESEARCH)), "geom": geojson(cell)}
+
+
+def children(cell: str, resolution: int = DENSITY) -> list[str]:
+    return [str(c) for c in h3.cell_to_children(cell, resolution)]
 
 
 def bounds(cell: str) -> tuple[float, float, float, float]:

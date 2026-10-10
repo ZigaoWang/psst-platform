@@ -37,6 +37,14 @@ host_kinds:
   scholarly:
     - british-history.ac.uk
     - ucl.ac.uk
+  press:
+    - bbc.co.uk
+    - bbc.com
+    - theguardian.com
+    - standard.co.uk
+    - telegraph.co.uk
+    - independent.co.uk
+    - thetimes.co.uk
   reference:
     - wikipedia.org
     - wikidata.org

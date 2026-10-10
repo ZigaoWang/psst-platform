@@ -528,7 +528,8 @@ def test_gathering_follows_official_links_and_keeps_the_paragraphs_that_name_the
     monkeypatch.setattr(harness_research, "read_all", read_all)
     monkeypatch.setattr(harness_research, "records", lambda qid, entities=None: [])
     pages = harness_research.gather(None, {"name": "Old Mill", "url": "https://en.wikipedia.org/wiki/Old_Mill"})
-    assert asked[1] == ["https://historicengland.org.uk/listing/1000001"]  # the official link, not the blog
+    assert asked[1] == ["https://historicengland.org.uk/listing/1000001",
+                        "https://blog.example.org/mill"]  # the record first, then the others
     assert "The Old Mill closed in 1890." in pages[0]["text"] and "More unrelated" not in pages[0]["text"]
 
 

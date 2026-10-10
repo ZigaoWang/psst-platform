@@ -88,7 +88,7 @@ def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], s
 
 PASSAGE_CHARS = 2500   # of each long page, the paragraphs that name the place, before any model sees it
 RECORD_CHARS = 5000    # a record page, or any short page, kept whole up to this
-FOLLOWED_LINKS = 2     # links from the lead's page to official, archive, or scholarly hosts read as well
+FOLLOWED_LINKS = 3     # of the lead page's references, read as well: records first, then press, then others
 
 
 def gather(executor: Executor, lead: dict[str, Any]) -> list[dict[str, Any]]:
@@ -105,11 +105,16 @@ def gather(executor: Executor, lead: dict[str, Any]) -> list[dict[str, Any]]:
     requests += records(lead.get("wikidata"))
     pages = read_all(executor, requests)
     strong = {"official_record", "archive", "scholarly"}
-    followed = [link["url"] for page in pages for link in page.get("links", [])
-                if urls.host_kind(link["url"]) in strong and link["url"] not in {r["url"] for r in requests}]
+    # An article's references lead to what it rests on: records and scholarship first, then the press, then any
+    # other site (a local history society, say), so the story has independent sources beyond the encyclopedia.
+    rank = {"official_record": 0, "archive": 0, "scholarly": 0, "press": 1}
+    read = {r["url"] for r in requests}
+    links = [link["url"] for page in pages for link in page.get("links", [])
+             if link["url"] not in read and urls.host_kind(link["url"]) != "reference"
+             and not urls.problem(link["url"])]
+    followed = sorted(dict.fromkeys(links), key=lambda u: rank.get(urls.host_kind(u) or "", 2))[:FOLLOWED_LINKS]
     pages += read_all(executor, [{"url": u, "title": lead["name"], "publisher": urllib.parse.urlsplit(u).netloc,
-                                  "kind": urls.host_kind(u), "language": "en"}
-                                 for u in list(dict.fromkeys(followed))[:FOLLOWED_LINKS]])
+                                  "kind": urls.host_kind(u) or "community", "language": "en"} for u in followed])
     terms = " ".join([lead["name"], lead.get("what") or ""])
     # A record page is short and all about the place, so it is kept whole; a long page is cut to the paragraphs that
     # name the place, since its description may never repeat the name.

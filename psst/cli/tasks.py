@@ -280,13 +280,18 @@ def research_problems(brief: dict[str, Any], result: dict[str, Any], settled: se
     return found
 
 
-def submit_result(args: argparse.Namespace) -> int:
-    document = json.loads(args.task_file.read_text())
-    result = json.loads(args.result_file.read_text())
+class NotSubmitted(Exception):
+    def __init__(self, found: list[str]) -> None:
+        super().__init__("; ".join(found))
+        self.found = found
+
+
+def submit(document: dict[str, Any], result: dict[str, Any]) -> Any:
+    """Check a result and submit it for the run whose token is in the environment; the reply says what happens next.
+    Raises NotSubmitted with everything to fix."""
     found = problems(document, result)
     if found:
-        print("Not submitted. Fix these and submit again:\n" + "\n".join(f"- {p}" for p in found))
-        return 1
+        raise NotSubmitted(found)
     function = {"research_cell": "submit_research", "find_photos": "submit_photos",
                 "calibrate": "submit_calibration"}.get(document["type"], "submit_task")
     if function not in ("submit_photos", "submit_calibration"):
@@ -295,15 +300,22 @@ def submit_result(args: argparse.Namespace) -> int:
         outcome = conn.execute(f"SELECT psst.{function}(%s, %s, %s, %s) AS r",
                                (token(), document["task"], Jsonb(result), document["prompt_version"])).fetchone()
     assert outcome
-    print(json.dumps(outcome["r"], ensure_ascii=False))
+    return outcome["r"]
+
+
+def submit_result(args: argparse.Namespace) -> int:
+    try:
+        outcome = submit(json.loads(args.task_file.read_text()), json.loads(args.result_file.read_text()))
+    except NotSubmitted as error:
+        print("Not submitted. Fix these and submit again:\n" + "\n".join(f"- {p}" for p in error.found))
+        return 1
+    print(json.dumps(outcome, ensure_ascii=False))
     return 0
 
 
-def submit_place(args: argparse.Namespace) -> int:
+def submit_one_place(document: dict[str, Any], payload: dict[str, Any]) -> Any:
     """One finished place of a research cell, stored at once so a session that stops loses at most the place in
-    hand; it also renews the lease (decision 26)."""
-    document = json.loads(args.task_file.read_text())
-    payload = json.loads(args.place_file.read_text())
+    hand; it also renews the lease (decision 26). Raises NotSubmitted with everything to fix."""
     if document["type"] != "research_cell":
         raise config.ConfigError("places are submitted one by one only for research")
     found = [f"{'/'.join(map(str, e.path)) or 'place'}: {e.message}"
@@ -314,13 +326,21 @@ def submit_place(args: argparse.Namespace) -> int:
         if not found:
             found += place_problems(conn, "place", payload["place"])
         if found:
-            print("Not submitted. Fix these and submit again:\n" + "\n".join(f"- {p}" for p in found))
-            return 1
+            raise NotSubmitted(found)
         outcome = conn.execute("SELECT psst.submit_research_place(%s, %s, %s, %s, %s, %s) AS r",
                                (token(), document["task"], Jsonb(payload["place"]), Jsonb(payload["leads"]),
                                 document["rulebook"], document.get("bar_version"))).fetchone()
     assert outcome
-    print(json.dumps(outcome["r"], ensure_ascii=False))
+    return outcome["r"]
+
+
+def submit_place(args: argparse.Namespace) -> int:
+    try:
+        outcome = submit_one_place(json.loads(args.task_file.read_text()), json.loads(args.place_file.read_text()))
+    except NotSubmitted as error:
+        print("Not submitted. Fix these and submit again:\n" + "\n".join(f"- {p}" for p in error.found))
+        return 1
+    print(json.dumps(outcome, ensure_ascii=False))
     return 0
 
 

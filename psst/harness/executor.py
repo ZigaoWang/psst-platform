@@ -17,7 +17,7 @@ from psycopg.types.json import Jsonb
 
 from psst.cli import tasks as task_cli
 from psst.core import db
-from psst.tasks import files
+from psst.tasks import files, prompts
 
 from . import providers, quotes, tools
 
@@ -46,6 +46,7 @@ class Limits:
 
 
 STEP_LIMITS = {
+    "tier_check": Limits(tool_calls=0, fixes=1, tokens=60_000, reply_tokens=600),
     "calibrate": Limits(tool_calls=0, fixes=2, tokens=300_000, reply_tokens=8000),
     "review": Limits(tool_calls=6, fixes=2, tokens=500_000, reply_tokens=12000),
     "audit": Limits(tool_calls=4, fixes=2, tokens=500_000, reply_tokens=8000),
@@ -54,6 +55,7 @@ STEP_LIMITS = {
     "write": Limits(tool_calls=14, fixes=3, tokens=500_000, reply_tokens=8000),
 }
 STEP_TOOLS = {
+    "tier_check": [],
     "calibrate": [],
     "review": ["search_snapshot", "fetch_source"],
     "audit": ["search_snapshot"],
@@ -270,8 +272,13 @@ class Executor:
                                     place_id=task.get("place_id"),
                                     item_id=task.get("item_id"))
                 def accept(answer: dict[str, Any]) -> Any:
+                    if step == "review":
+                        self.confirm_featured(task, document, answer, spend)
                     if step == "revise":
-                        quotes.repair(ctx.conn, answer, ctx.read | _snapshots_in(document))
+                        stats, repairs = quotes.repair(ctx.conn, answer, ctx.read | _snapshots_in(document))
+                        ctx.conn.execute("SELECT psst.record_quote_repairs(%s, %s, %s, %s, %s, %s, %s)",
+                                         (self.token, task["id"], task.get("place_id"), self.model,
+                                          spend.trace[-1], Jsonb(stats), Jsonb(repairs)))
                     return task_cli.submit(document, answer)
                 try:
                     outcome = self.converse(step, system, user, task, prompt_version, accept, ctx, spend)
@@ -303,7 +310,45 @@ class Executor:
                 ctx.conn.close()
         if len(answers) * 2 <= len(self.members):
             raise GaveUp(f"only {len(answers)} of {len(self.members)} models gave a usable answer")
-        return task_cli.submit(document, combine(step, answers))
+        combined = combine(step, answers)
+        if step == "review":
+            self.confirm_featured(task, document, combined, spend)
+        return task_cli.submit(document, combined)
+
+    def confirm_featured(self, task: dict[str, Any], document: dict[str, Any], answer: dict[str, Any],
+                         spend: Spend) -> None:
+        """A story tiered featured leads the feed only when a second model agrees; otherwise it publishes as a map
+        story (decision 30). The second model is routing.tier_check, never the reviewer itself."""
+        featured = [d for d in answer.get("decisions", []) if d.get("mark") == "good" and d.get("tier") == "featured"]
+        if not featured:
+            return
+        with db.connect("worker") as conn:
+            row = conn.execute("SELECT psst.setting('routing.tier_check') #>> '{}' AS m").fetchone()
+        second = row["m"] if row else None
+        if not second or second == self.model or second in self.members:
+            for d in featured:
+                d["tier"] = "map"  # no independent second reader: it doesn't lead the feed
+            return
+        prompt = prompts.load("tier_check").text
+        examples = [{k: e.get(k) for k in ("headline", "short", "tier")}
+                    for e in document["data"].get("marked_examples", []) if e.get("tier")]
+        system = prompt + "\n\n## Shared data\n\n" + json.dumps({"marked_examples": examples}, ensure_ascii=False)
+        items = {i["revision"]: i for i in document["data"]["items"]}
+        checker = Executor(self.token, second)
+        for d in featured:
+            body = items.get(d["revision"], {}).get("body", {})
+            user = json.dumps({"story": {k: body.get(k) for k in ("headline", "short", "long", "look")}},
+                              ensure_ascii=False)
+            ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=self.token)
+            try:
+                verdict = checker.converse("tier_check", system, user, task, version(prompt),
+                                           _tier_answer, ctx, spend)
+            except GaveUp:
+                verdict = {"tier": "map"}
+            finally:
+                ctx.conn.close()
+            if verdict["tier"] != "featured":
+                d["tier"] = "map"
 
     def give_back(self, document: dict[str, Any], reason: str) -> None:
         with db.connect("worker") as conn:
@@ -345,4 +390,10 @@ def combine(step: str, answers: list[dict[str, Any]]) -> dict[str, Any]:
 def _snapshots_in(document: dict[str, Any]) -> set[str]:
     """Snapshot ids a task file gives (a revision's sources), so a revision can quote them exactly."""
     return set(re.findall(r"\bsn_[0-9a-hjkmnp-tv-z]{10}\b", json.dumps(document["data"])))
+
+
+def _tier_answer(answer: dict[str, Any]) -> dict[str, Any]:
+    if answer.get("tier") not in ("featured", "map"):
+        raise task_cli.NotSubmitted(['answer {"tier": "featured" or "map", "reason": ...}'])
+    return answer
 

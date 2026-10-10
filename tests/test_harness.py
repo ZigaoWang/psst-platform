@@ -213,3 +213,30 @@ def test_a_city_without_a_budget_gets_nothing(database, city, roles):
         harness.check_budget(conn, None)  # calibrations count only against the total
         with pytest.raises(harness.BudgetReached, match="city's budget"):
             harness.check_budget(conn, sample.CITY_ID)
+
+
+def test_featured_needs_a_second_model_to_agree(database, city, roles, monkeypatch):
+    from tests.flow import research, tool_checks
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.settings SET value = %s WHERE key = 'routing.review'", (json.dumps(MODEL),))
+        conn.execute("UPDATE psst.settings SET value = '\"openrouter:test/second\"' WHERE key = 'routing.tier_check'")
+        conn.execute("""UPDATE psst.settings SET value = '{"testville": 1}' WHERE key = 'harness.city_budgets_usd'""")
+    story, guide = research(database, city)
+    tool_checks(database)
+    worker = Worker(database, MODEL)
+    with database.connect("worker") as conn:
+        task = dict(conn.execute("SELECT * FROM psst.lease_task(%s, ARRAY['review'])", (worker.token,)).fetchone())
+
+    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300):
+        if model == "openrouter:test/second":
+            return providers.Reply(text=json.dumps({"tier": "map", "reason": "a smaller surprise"}), cost_usd=0.0001)
+        return providers.Reply(text=json.dumps({"decisions": [
+            {"revision": story, "mark": "good", "tier": "featured", "reason": "a real surprise", "fix": None},
+            {"revision": guide, "mark": "good", "tier": None, "reason": "plain and claimed", "fix": None}],
+            "notes": "a clean batch"}), cost_usd=0.001)
+    monkeypatch.setattr(providers, "chat", chat)
+    harness.Executor(worker.token, MODEL).run(task)
+    with database.connect("admin") as conn:
+        tier = conn.execute("SELECT tier FROM psst.items WHERE current_revision = %s", (story,)).fetchone()
+        steps = [r["step"] for r in conn.execute("SELECT step FROM psst.harness_calls ORDER BY id")]
+    assert tier["tier"] == "map" and steps == ["review", "tier_check"]

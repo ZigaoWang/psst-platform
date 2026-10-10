@@ -178,18 +178,18 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
     elif kind == "calibrate":
         fold = int(task["input"]["fold"])
         golden = [dict(r) for r in conn.execute("""
-            SELECT id, place, headline, short, long, sources, mark, reason, psst.golden_fold(id) = %s AS blind
+            SELECT id, place, headline, short, long, sources, mark, tier, reason, psst.golden_fold(id) = %s AS blind
             FROM psst.golden_stories ORDER BY md5(id)""", (fold,))]
         data = {"items": [{k: g[k] for k in ("id", "place", "headline", "short", "long", "sources")}
                           for g in golden if g["blind"]],
                 "marked_examples": [{k: g[k] for k in ("place", "headline", "short", "long", "sources", "mark",
-                                                       "reason")} for g in golden if not g["blind"]],
+                                                       "tier", "reason")} for g in golden if not g["blind"]],
                 "reference_stories": style_references(conn, task["city_id"]),
                 "rules": {"story": rulebook.type("story"), "guide": rulebook.type("guide")},
                 "calibration": "These stories are already written and published or marked; there are no claims to "
                                "check. Mark each one good, weak, or bad as you would in a review, from its text "
-                               "alone, and return {'marks': [{'golden': <id>, 'mark': ..., 'reason': ...}], "
-                               "'notes': ...}."}
+                               "alone, with a tier for each good one, and return {'marks': [{'golden': <id>, "
+                               "'mark': ..., 'tier': ..., 'reason': ...}], 'notes': ...}."}
     elif kind == "review":
         data = {"items": [review_item(conn, lookups, revision_id)
                           for revision_id in task["input"]["revisions"] if being_checked(conn, revision_id)],
@@ -267,7 +267,7 @@ def review_item(conn: Connection, lookups: Lookups, revision_id: str) -> dict[st
 def golden_examples(conn: Connection) -> list[dict[str, Any]]:
     """The editor's marked stories with the mark and the reason: what good, weak, and bad mean here."""
     return [dict(r) for r in conn.execute("""
-        SELECT place, headline, short, long, sources, mark, reason FROM psst.golden_stories
+        SELECT place, headline, short, long, sources, mark, tier, reason FROM psst.golden_stories
         ORDER BY created_at, id""")]
 
 

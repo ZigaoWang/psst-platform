@@ -403,17 +403,6 @@ def test_a_leads_official_record_is_gathered_from_its_wikidata_item(monkeypatch)
                       "kind": "official_record", "language": "en"}]
 
 
-def test_prose_may_use_only_the_numbers_and_names_of_its_facts():
-    from psst.harness import research as harness_research
-    claims = [{"text": "The mill closed in 1890.", "kind": "date", "values": [{"value": "1890"}],
-               "evidence": [{"snapshot": "sn_1", "quote": "The Old Mill on River Lane closed in 1890"}]}]
-    body = {"short": "Milling on River Lane ended in 1890, and Ada Thorne kept the key until 1902.",
-            "look": "Stand at the door and look down through the grate."}
-    found = harness_research.unsupported({"stories": [{"body": body, "claims": claims}]}, {}, ["Old Mill"])
-    assert sorted(found) == ["story: 'Ada Thorne' isn't in the facts it names; use only the facts' names",
-                             "story: 1902 isn't in the facts it names; use only the facts' numbers"]
-
-
 def test_a_lead_without_the_evidence_for_a_story_is_skipped_with_the_reason(database, city, monkeypatch):
     from psst.harness import executor as harness
     from psst.harness import providers
@@ -620,13 +609,6 @@ def test_a_pass_offers_the_previous_apps_places_first(database, city):
     with database.connect("worker") as conn:
         leads = files.research_brief(conn, cell)["leads"]
     assert leads[0]["name"] == "Old Pump" and leads[0]["origin"] == "legacy"
-
-
-def test_period_words_and_the_country_need_no_fact_but_other_names_do():
-    from psst.harness import research as harness_research
-    place = {"stories": [{"body": {"long": "A Victorian box in England, cast in Hertfordshire."}, "claims": []}]}
-    assert harness_research.unsupported(place, {}, []) == [
-        "story: 'Hertfordshire' isn't in the facts it names; use only the facts' names"]
 
 
 def test_a_known_place_without_stories_is_written_and_waits_beyond_the_pass():

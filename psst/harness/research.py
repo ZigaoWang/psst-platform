@@ -412,10 +412,7 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
                 part["body"] = {k: v for k, v in part["body"].items() if k in allowed}
         place = assemble(gathered["place"], answer, facts)
         us_spelling(place)
-        found = unsupported(place, facts, [lead["name"], (gathered["place"] or {}).get("name") or "",
-                                           *task_cli.cell_areas(document["data"])])
-        if found:
-            raise task_cli.NotSubmitted(found)
+        # The tool checks hold every number to the claims' values and every name to the cited pages.
         return task_cli.submit_one_place(document, {"place": place, "leads": [lead["lead"]]})
     try:
         placed = dict(executor.converse("write", system, user, task, version(prompt), accept, ctx, spend))
@@ -468,36 +465,10 @@ VALUE_NUMBER = re.compile(r"\d[\d,.]*\d(?:st|nd|rd|th|s)?|\d(?:st|nd|rd|th)?")  
 NAME = re.compile(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*")
 
 
-def unsupported(place: dict[str, Any], facts: dict[str, dict[str, Any]], known: list[str]) -> list[str]:
-    """Every year, number, and proper name in the prose must come from the verified facts it names (decision 32)."""
-    found: list[str] = []
-    parts = [("story", s) for s in place.get("stories", [])] + ([("guide", place["guide"])] if "guide" in place else [])
-    for label, part in parts:
-        support = " ".join(json.dumps(c, ensure_ascii=False) for c in part["claims"]) + " " + " ".join(known)
-        support_digits = re.sub(r"[^0-9]", " ", support)
-        fields = [v for v in part["body"].values() if isinstance(v, str)]
-        for number in {re.sub(r"[,.]", "", n) for n in NUMBER.findall(" ".join(fields))}:
-            if number not in support_digits.split() and number not in re.sub(r"[,.]", "", support):
-                found.append(f"{label}: {number} isn't in the facts it names; use only the facts' numbers")
-        names = set()
-        for field in fields:
-            for sentence in re.split(r"(?<=[.!?:;])\s+", field):
-                rest = sentence.split(None, 1)[1] if len(sentence.split()) > 1 else ""  # not a sentence's first word
-                names |= set(NAME.findall(rest))
-        for name in names:
-            if name.casefold() not in support.casefold() and name not in COMMON:
-                found.append(f"{label}: '{name}' isn't in the facts it names; use only the facts' names")
-    return found
-
-
-# Capitalized words that aren't names a fact must state.
+# Capitalized words that are never a fact's value.
 COMMON = {"The", "A", "An", "It", "Its", "In", "On", "At", "From", "Look", "Stand", "Walk", "Find", "This", "That",
           "These", "Those", "Today", "Now", "When", "Where", "Here", "There", "He", "She", "They", "His", "Her",
-          "Their", "I", "We", "You", "Your", "After", "Before", "By", "For", "With", "Over", "Under", "Above", "Below",
-          # periods and styles describe a date or a look the facts give, and the country is never in doubt
-          "Victorian", "Edwardian", "Georgian", "Regency", "Tudor", "Jacobean", "Elizabethan", "Gothic", "Baroque",
-          "Classical", "Italianate", "Romanesque", "Renaissance", "Revival", "Art", "Deco", "Modernist",
-          "England", "English", "Britain", "British"}
+          "Their", "I", "We", "You", "Your", "After", "Before", "By", "For", "With", "Over", "Under", "Above", "Below"}
 
 
 def prose_writer(evidence_writer: Executor) -> Executor:

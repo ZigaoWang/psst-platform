@@ -12,8 +12,9 @@ For each lead in `data.leads`, decide one `action`:
   tied to the sign; `plaque` for what a plaque or memorial leaves out), the `tier` you expect (`featured` for a
   "wait, really?" story, `map` for a true, specific, visible story with a smaller surprise), and the `angle` in one
   sentence: what the surprise is and what the reader can see.
-- `known`: the lead is a place the platform already has (`data.places_nearby`); give its id in `existing`. Choose
-  `write` instead only for an angle its stories don't tell.
+- `known`: the lead is a place the platform already has (`data.places_nearby`) with stories; give its id in
+  `existing`. Choose `write` instead, with `existing`, for a place that has no stories yet or for an angle its
+  stories don't tell.
 - `skip`: not one physical thing (a district, a street network, an event, a firm, a constituency), nothing to see
   today, nothing beyond the encyclopedia's opening, or true of every place of its kind. Give a specific `reason`
   ("only a blog repeats the tunnel story", "nothing beyond its encyclopedia opening").

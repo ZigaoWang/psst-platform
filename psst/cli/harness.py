@@ -40,7 +40,7 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
 def run_tasks(args: argparse.Namespace) -> int:
     from psst.harness.executor import BudgetReached, Executor  # it uses the task commands, which load this module
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
-    providers.split(args.model)
+    providers.check(args.model)
     done: list[dict[str, Any]] = []
     with db.open_connection(db.conninfo("worker")) as conn, \
             session(conn, "worker", f"harness {args.task_type}", args.model) as token:
@@ -69,7 +69,7 @@ def run_tasks(args: argparse.Namespace) -> int:
 
 def run_calibration(args: argparse.Namespace) -> int:
     """Queue both folds for the model and do them with it; the gate counts it only when it is the routed reviewer."""
-    providers.split(args.model)
+    providers.check(args.model)
     with db.open_connection(db.conninfo("system")) as conn, session(conn, "system", "harness calibration") as token:
         bar = golden_bar(conn)
         queued = conn.execute("SELECT psst.queue_calibration(%s, %s, %s, %s) AS n",

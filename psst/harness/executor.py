@@ -147,7 +147,9 @@ def parse_json(text: str) -> dict[str, Any] | None:
 class Executor:
     def __init__(self, token: str, model: str) -> None:
         self.token, self.model = token, model
-        self.provider = providers.split(model)[0]
+        self.members = model.removeprefix("vote:").split("+") if model.startswith("vote:") else []
+        providers.check(model)
+        self.provider = "vote" if self.members else providers.split(model)[0]
         os.environ["PSST_RUN_TOKEN"] = token  # the command-line helpers the harness shares read it
 
     # Model calls ---------------------------------------------------------------------------------------------
@@ -250,6 +252,8 @@ class Executor:
             if step == "research_cell":
                 from .research import research_cell
                 outcome = research_cell(self, task, document, spend)
+            elif self.members:
+                outcome = self.vote(task, document, spend)
             else:
                 system, user, prompt_version = self.messages_for(document)
                 ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=self.token,
@@ -266,6 +270,61 @@ class Executor:
         return {"task": task["id"], "outcome": outcome, "calls": spend.calls, "tokens": spend.tokens,
                 "cost_usd": round(spend.cost_usd, 6)}
 
+    def vote(self, task: dict[str, Any], document: dict[str, Any], spend: Spend) -> Any:
+        """A panel of models marks the same items; each item takes the majority's mark and tier, and the combined
+        answer is checked and submitted like any other (decision 29). Only review and calibration vote."""
+        step = document["type"]
+        if step not in VOTING:
+            raise GaveUp(f"{step} is done by one model, not a panel")
+        system, user, prompt_version = self.messages_for(document)
+        answers = []
+        for member in self.members:
+            ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=self.token,
+                                place_id=task.get("place_id"), item_id=task.get("item_id"))
+            try:
+                answers.append(Executor(self.token, member).converse(
+                    step, system, user, task, prompt_version, lambda a: _checked(document, a), ctx, spend))
+            except GaveUp:
+                continue  # a member that can't answer properly doesn't vote
+            finally:
+                ctx.conn.close()
+        if len(answers) * 2 <= len(self.members):
+            raise GaveUp(f"only {len(answers)} of {len(self.members)} models gave a usable answer")
+        return task_cli.submit(document, combine(step, answers))
+
     def give_back(self, document: dict[str, Any], reason: str) -> None:
         with db.connect("worker") as conn:
             conn.execute("SELECT psst.return_task(%s, %s, %s)", (self.token, document["task"], reason[:1000]))
+
+
+VOTING = {"review": ("decisions", "revision"), "calibrate": ("marks", "golden")}
+
+
+def _checked(document: dict[str, Any], answer: dict[str, Any]) -> dict[str, Any]:
+    found = task_cli.problems(document, answer)
+    if found:
+        raise task_cli.NotSubmitted(found)
+    return answer
+
+
+def combine(step: str, answers: list[dict[str, Any]]) -> dict[str, Any]:
+    """Each item gets the mark most of the panel gave and, among them, the tier most gave; its reason and cut come
+    from the first member in that majority. A tie on the mark goes to the stricter mark."""
+    listing, key = VOTING[step]
+    strictness = {"bad": 0, "weak": 1, "good": 2}
+    by_item: dict[str, list[dict[str, Any]]] = {}
+    for answer in answers:
+        for entry in answer[listing]:
+            by_item.setdefault(entry[key], []).append(entry)
+    combined = []
+    for entries in by_item.values():
+        marks = [e["mark"] for e in entries]
+        mark = min(set(marks), key=lambda m: (-marks.count(m), strictness[m]))
+        agreeing = [e for e in entries if e["mark"] == mark]
+        tiers = [e.get("tier") for e in agreeing]
+        tier = max(set(tiers), key=lambda x: (tiers.count(x), x == "featured"))
+        chosen = next(e for e in agreeing if e.get("tier") == tier)
+        combined.append(chosen | {"mark": mark, "tier": tier})
+    notes = " / ".join(a.get("notes", "") for a in answers if a.get("notes"))[:600] or "Marked by a panel."
+    return {listing: combined, "notes": notes}
+

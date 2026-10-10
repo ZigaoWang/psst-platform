@@ -56,6 +56,12 @@ def split(model: str) -> tuple[str, str]:
     return provider, name
 
 
+def check(model: str) -> None:
+    """A harness model, or a panel of them (vote:<model>+<model>...), with known providers."""
+    for member in (model.removeprefix("vote:").split("+") if model.startswith("vote:") else [model]):
+        split(member)
+
+
 def chat(model: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None,
          max_tokens: int = 4000, json_only: bool = False, timeout: int = 300) -> Reply:
     provider, name = split(model)

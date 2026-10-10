@@ -159,3 +159,37 @@ def test_the_service_works_what_is_routed_to_a_harness_model(database, golden, m
         open_runs = conn.execute("SELECT count(*) AS n FROM psst.runs WHERE notes = 'harness service' "
                                  "AND ended_at IS NULL").fetchone()
     assert done["n"] == 2 and open_runs["n"] == 0
+
+
+def test_a_panel_takes_the_majority_mark_and_tier():
+    def answer(*marks):
+        return {"marks": [{"golden": f"gs_{n}", "mark": m, "tier": t, "reason": f"{m} {t}"}
+                          for n, (m, t) in enumerate(marks)], "notes": "marked"}
+    combined = harness.combine("calibrate", [answer(("good", "map"), ("weak", None), ("good", "featured")),
+                                             answer(("good", "featured"), ("bad", None), ("weak", None)),
+                                             answer(("good", "featured"), ("weak", None), ("bad", None))])
+    marks = {m["golden"]: (m["mark"], m["tier"]) for m in combined["marks"]}
+    assert marks == {"gs_0": ("good", "featured"), "gs_1": ("weak", None), "gs_2": ("bad", None)}  # a tie goes strict
+
+
+def test_a_panel_calibrates_as_one_model(database, golden, monkeypatch):
+    panel = "vote:openrouter:test/a+openrouter:test/b+openrouter:test/c"
+    system = Worker(database, kind="system")
+    with database.connect("system") as conn:
+        conn.execute("SELECT psst.queue_calibration(%s, %s, 'prompt000001', NULL)", (system.token, panel))
+    worker = Worker(database, panel)
+    with database.connect("worker") as conn:
+        task = dict(conn.execute("SELECT * FROM psst.lease_task(%s, ARRAY['calibrate'])", (worker.token,)).fetchone())
+
+    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300):
+        items = json.loads(messages[1]["content"])["data"]["items"]
+        wrong = model == "test/c"  # one member always says weak; the other two outvote it
+        marks = [{"golden": i["id"], "mark": "weak" if wrong else golden[i["id"]][0],
+                  "tier": None if wrong else golden[i["id"]][1], "reason": "read it"} for i in items]
+        return providers.Reply(text=json.dumps({"marks": marks, "notes": "marked the fold"}), cost_usd=0.001)
+    monkeypatch.setattr(providers, "chat", chat)
+    outcome = harness.Executor(worker.token, panel).run(task)
+    assert outcome["calls"] == 3
+    with database.connect("admin") as conn:
+        row = conn.execute("SELECT model, agreed, marked FROM psst.calibrations").fetchone()
+    assert row["model"] == panel and row["agreed"] == row["marked"]

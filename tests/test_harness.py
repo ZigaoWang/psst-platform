@@ -318,3 +318,20 @@ def test_a_story_on_one_source_is_never_featured(database, city, roles, monkeypa
     with database.connect("admin") as conn:
         tier = conn.execute("SELECT tier FROM psst.items WHERE current_revision = %s", (story,)).fetchone()
     assert tier["tier"] == "map"
+
+
+def test_an_unattended_window_caps_spend_and_stops_on_failing_passes(database, city):
+    from psst.cli.harness import window_stop
+    limits = {"types": None, "per_place": 0.02, "failed_share": 0.5}
+    with database.connect("admin") as conn:
+        conn.execute("""UPDATE psst.settings SET value = jsonb_build_object('from', now() - interval '1 hour',
+                        'usd', 3) WHERE key = 'harness.window'""")
+    with database.connect("worker") as conn:
+        assert window_stop(conn, {"chosen": 4, "failed": 2}, limits) is None  # half failed, nothing spent yet
+        assert window_stop(conn, {"chosen": 4, "failed": 3}, limits) == "3 of the pass's 4 places failed"
+        harness.check_budget(conn, None)
+    with database.connect("admin") as conn:
+        conn.execute("""UPDATE psst.settings SET value = jsonb_build_object('from', now() - interval '1 hour',
+                        'usd', 0) WHERE key = 'harness.window'""")
+    with database.connect("worker") as conn, pytest.raises(harness.BudgetReached, match="window"):
+        harness.check_budget(conn, None)

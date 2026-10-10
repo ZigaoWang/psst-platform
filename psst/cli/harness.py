@@ -111,19 +111,28 @@ CITYLESS = {"calibrate"}
 
 def run_work(args: argparse.Namespace) -> int:
     """Lease and do tasks with whichever harness model each type is routed to, city by city, skipping paused cities,
-    until a budget is reached (or, with --once, until nothing is waiting). One run per model, for the whole service."""
+    until a budget is reached (or, with --once, until nothing is waiting). One run per model, for the whole service.
+    After each research pass the city's next cell is queued, and the window's two stops are checked (decision 36)."""
     import time
     from contextlib import ExitStack
 
     from psst.harness.executor import BudgetReached, Executor
+    from psst.places import research
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
-    with db.open_connection(db.conninfo("worker")) as conn, ExitStack() as runs:
+    with db.open_connection(db.conninfo("worker")) as conn, db.open_connection(db.conninfo("system")) as system, \
+            ExitStack() as runs:
         tokens: dict[str, str] = {}
+        planner = runs.enter_context(session(system, "system", "research planning for the harness service"))
         while True:
             busy = False
+            limits = conn.execute("""SELECT psst.setting('harness.work_types') AS types,
+                                            psst.setting('harness.max_usd_per_place') AS per_place,
+                                            psst.setting('harness.max_failed_share') AS failed_share""").fetchone()
+            assert limits
+            order = [t for t in WORK_ORDER if limits["types"] is None or t in limits["types"]]
             routes = conn.execute("""
                 SELECT t.name AS type, psst.task_model(t.name, '{}') AS model FROM psst.task_types t
-                WHERE t.runner = 'worker' AND t.active AND t.name = ANY(%s)""", (WORK_ORDER,)).fetchall()
+                WHERE t.runner = 'worker' AND t.active AND t.name = ANY(%s)""", (order,)).fetchall()
             cities = conn.execute("""SELECT id, slug FROM psst.cities WHERE NOT slug IN (
                                        SELECT jsonb_array_elements_text(psst.setting('harness.paused_cities')))
                                      ORDER BY research_order""").fetchall()
@@ -136,23 +145,50 @@ def run_work(args: argparse.Namespace) -> int:
                     tokens[model] = runs.enter_context(session(conn, "worker", "harness service", model))
                 executor = Executor(tokens[model], model)
                 # A calibration belongs to no city; everything else is worked city by city.
-                for city_id in [None] if route["type"] in CITYLESS else [c["id"] for c in cities]:
+                for city in [None] if route["type"] in CITYLESS else cities:
                     task = conn.execute("SELECT * FROM psst.lease_task(%s, %s, %s)",
-                                        (tokens[model], [route["type"]], city_id)).fetchone()
+                                        (tokens[model], [route["type"]], city and city["id"])).fetchone()
                     conn.commit()
                     if task is None:
                         continue
                     busy = True
                     try:
-                        log.info("%s", json.dumps(executor.run(dict(task)), default=str)[:400])
+                        done = executor.run(dict(task))
+                        log.info("%s", json.dumps(done, default=str)[:400])
                     except BudgetReached as reason:
                         executor.give_back({"task": task["id"]}, f"the harness stopped: {reason}")
                         log.info("stopping: %s", reason)
+                        return 0
+                    if route["type"] != "research_cell" or city is None:
+                        continue
+                    # The city's next cell, often the same dense cell again, is queued for the next pass.
+                    log.info("queued: %s", json.dumps(research.queue(system, planner, city["slug"], 1)))
+                    stop = window_stop(conn, done.get("outcome"), limits)
+                    if stop:
+                        log.info("stopping: %s", stop)
                         return 0
             if not busy:
                 if args.once:
                     return 0
                 time.sleep(IDLE_SECONDS)
+
+
+def window_stop(conn: Any, outcome: Any, limits: dict[str, Any]) -> str | None:
+    """Why an unattended run stops after a research pass (decision 36): more than the allowed share of the pass's
+    places failed, or the window's spend per place still standing passed the limit. None to go on."""
+    if isinstance(outcome, dict) and limits["failed_share"] is not None and outcome.get("chosen"):
+        if outcome["failed"] / outcome["chosen"] > float(limits["failed_share"]):
+            return f"{outcome['failed']} of the pass's {outcome['chosen']} places failed"
+    row = conn.execute("SELECT psst.harness_window() AS w").fetchone()
+    conn.commit()
+    window = row["w"] if row else None
+    if window and limits["per_place"] is not None:
+        # Judged once the window has spent what ten places may cost, so one pass that finds nothing worth writing
+        # doesn't end the run.
+        spent, places, most = float(window["spent"]), int(window["places"]), float(limits["per_place"])
+        if spent >= 10 * most and spent / max(places, 1) > most:
+            return (f"{spent:.4f} USD for {places} places still standing, over {limits['per_place']} USD a place")
+    return None
 
 
 def run_negatives(args: argparse.Namespace) -> int:

@@ -459,12 +459,14 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
         return {"lead": d["lead"], "status": "added", "existing": placed["place"]}
 
     with ThreadPoolExecutor(max_workers=parallel_places()) as pool:
-        accounted += list(pool.map(place, range(len(chosen)), chosen))
+        written = list(pool.map(place, range(len(chosen)), chosen))
+    accounted += written
     # A pass ends here: leads left open or later stay with the cell, and the cell is queued again for its next pass.
     # Leads the place submissions already settled need no entry; the rest are accounted for here.
     final = {"places": [], "leads": [a for a in accounted if a["status"] != "added"],
              "notes": (plan.get("notes") or "Triaged and written by the harness.")[:600]}
-    return task_cli.submit(document, final)
+    failed = sum(w["reason"].startswith("couldn't be written") for w in written if w["status"] != "added")
+    return dict(task_cli.submit(document, final)) | {"chosen": len(chosen), "failed": failed}
 
 
 def parallel_places() -> int:

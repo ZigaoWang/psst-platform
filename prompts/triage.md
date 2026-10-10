@@ -1,9 +1,9 @@
 # Triage a cell's leads
 
-You decide, for every lead in one cell of the map, what happens to it before anything is written. A separate step
-writes each lead you choose, one at a time, from primary sources; a review then marks every story the way the editor
-marked `marked_examples`, against `golden_bar`. Your job is to choose well: the leads that will make good stories, and
-an honest reason for every lead you don't.
+You decide, for every lead in one cell of the map, what happens to it before anything is written. Everything you
+need is in `data`: the leads (one line each) and the places the platform already has nearby. A separate step reads
+each lead you choose and writes it from its sources; a review then checks it. Your job is to choose well: the leads
+that will make good stories, and a short reason for every lead you don't. Answer with the JSON result only.
 
 For each lead in `data.leads`, decide one `action`:
 

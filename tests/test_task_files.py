@@ -177,3 +177,14 @@ def test_research_carries_the_golden_bar_and_its_revisions_record_the_version(da
         conn.execute("SELECT psst.submit_research(%s, %s, %s, 'test')", (writer.token, task["id"], json.dumps(result)))
     with database.connect("admin") as conn:
         assert conn.execute("SELECT bar_version FROM psst.revisions").fetchone()["bar_version"] == "a1b2c3d4e5f6"
+
+
+def test_every_kind_of_command_run_ends(database):
+    from psst.cli.runs import session
+    for kind in ("system", "publisher"):
+        with psycopg.connect(database.url(kind), row_factory=psycopg.rows.dict_row) as conn:
+            with session(conn, kind, "a command") as token:
+                assert token
+    with database.connect("admin") as conn:
+        left = conn.execute("SELECT count(*) AS n FROM psst.runs WHERE notes = 'a command' AND ended_at IS NULL")
+        assert left.fetchone()["n"] == 0

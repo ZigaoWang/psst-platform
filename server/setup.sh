@@ -56,7 +56,7 @@ write_env console.env 640 psst-platform "PSST_CONSOLE_DATABASE_URL=postgresql://
 
 # Services and timers.
 for unit in psst-platform-fetch.service psst-platform-system.service psst-platform-console.service \
-            psst-platform-intake.service \
+            psst-platform-intake.service psst-platform-harness.service \
             psst-platform-publish.service psst-platform-publish.timer psst-platform-backup.service \
             psst-platform-backup.timer psst-platform-restore-test.service psst-platform-restore-test.timer \
             psst-platform-site.service psst-platform-site.timer; do

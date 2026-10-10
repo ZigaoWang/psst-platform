@@ -1,0 +1,23 @@
+[Unit]
+Description=Psst platform: the harness, working the task queue with API models
+After=network-online.target postgresql.service psst-platform-fetch.service
+
+[Service]
+Type=simple
+User=psst-platform
+Group=psst-platform
+EnvironmentFile=/www/wwwroot/psst-platform/env/worker.env
+EnvironmentFile=/www/wwwroot/psst-platform/env/system.env
+EnvironmentFile=/www/wwwroot/psst-platform/env/harness.env
+WorkingDirectory=/www/wwwroot/psst-platform/app
+ExecStart=/www/wwwroot/psst-platform/app/.venv/bin/psst harness work
+Restart=on-failure
+RestartSec=60
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/www/wwwroot/psst-platform/app/work
+
+[Install]
+WantedBy=multi-user.target

@@ -627,3 +627,12 @@ def test_period_words_and_the_country_need_no_fact_but_other_names_do():
     place = {"stories": [{"body": {"long": "A Victorian box in England, cast in Hertfordshire."}, "claims": []}]}
     assert harness_research.unsupported(place, {}, []) == [
         "story: 'Hertfordshire' isn't in the facts it names; use only the facts' names"]
+
+
+def test_a_known_place_without_stories_is_written_and_waits_beyond_the_pass():
+    from psst.harness import research as harness_research
+    decisions = [{"lead": "ld_a", "action": "known", "existing": "pl_a", "reason": "no stories yet"},
+                 {"lead": "ld_b", "action": "known", "existing": "pl_b", "reason": "no stories yet"},
+                 {"lead": "ld_c", "action": "known", "existing": "pl_c", "reason": "has two"}]
+    harness_research.settle_storyless(decisions, {"pl_a", "pl_b"}, {}, 1)
+    assert [d["action"] for d in decisions] == ["write", "later", "known"]

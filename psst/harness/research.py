@@ -62,9 +62,12 @@ def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], s
                        "result_schema": TRIAGE_SCHEMA}, ensure_ascii=False, default=str)
     leads = {lead["lead"]: lead for lead in brief["leads"]}
 
+    storyless = {p["id"] for p in brief["places_nearby"] if not p["stories"]}
+
     def accept(answer: dict[str, Any]) -> dict[str, Any]:
         found = results.problems(TRIAGE_SCHEMA, answer)
         if not found:
+            settle_storyless(answer["decisions"], storyless, leads, most)
             decided = {d["lead"] for d in answer["decisions"]}
             found += [f"decide lead {lead} ({leads[lead]['name']})" for lead in leads if lead not in decided]
             writes = sum(d["action"] == "write" for d in answer["decisions"])
@@ -86,6 +89,21 @@ def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], s
         return dict(executor.converse("triage", system, user, task, version(prompt), accept, ctx, spend))
     finally:
         ctx.conn.close()
+
+
+def settle_storyless(decisions: list[dict[str, Any]], storyless: set[str], leads: dict[str, Any], most: int) -> None:
+    """A lead answered known for a place that has no stories yet is written for that place, as the prompt asks;
+    beyond the pass's number of places it waits for the next pass."""
+    room = most - sum(d["action"] == "write" for d in decisions)
+    for d in decisions:
+        if d["action"] != "known" or d.get("existing") not in storyless:
+            continue
+        if room > 0:
+            d.update(action="write", form=d.get("form") or "story", tier=d.get("tier") or "map",
+                     angle=d.get("angle") or d.get("reason") or "")
+            room -= 1
+        elif not leads.get(d["lead"], {}).get("well_known"):
+            d.update(action="later", reason="a place with no stories yet, written in the next pass")
 
 
 PASSAGE_CHARS = 2500   # of each long page, the paragraphs that name the place, before any model sees it

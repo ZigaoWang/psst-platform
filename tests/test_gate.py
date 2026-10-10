@@ -110,3 +110,10 @@ def test_a_new_review_prompt_needs_a_new_calibration(database, city, golden, mon
 def test_nothing_publishes_while_the_gate_is_closed(database, city, golden, site):
     with pytest.raises(PublishError, match="review gate is closed"):
         run_publish(database, site)
+
+
+def test_a_reviewer_that_publishes_everything_does_not_open_the_gate(database, city, golden):
+    refresh(database, city)
+    calibrate(database, {g: ("good", t or "map") for g, (m, t) in golden.items()})
+    status = refresh(database, city)
+    assert status["open"] is False and float(status["agreement"]) == 1.0 and float(status["caught"]) == 0.0

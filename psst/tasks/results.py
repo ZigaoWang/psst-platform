@@ -80,7 +80,8 @@ def schema(task_type: str, item_type: str | None = None) -> dict[str, Any]:
     if task_type == "calibrate":
         mark = {"type": "object", "additionalProperties": False, "required": ["golden", "mark", "tier", "reason"],
                 "properties": {"golden": {"type": "string", "pattern": "^gs_"},
-                               "mark": {"enum": ["good", "weak", "bad"]}, "tier": TIER, "reason": NOTE}}
+                               "mark": {"enum": ["good", "weak", "bad"]}, "tier": TIER, "reason": NOTE,
+                               "fix": {"anyOf": [NOTE, {"type": "null"}]}}}
         return {"type": "object", "additionalProperties": False, "required": ["marks", "notes"],
                 "properties": {"marks": {"type": "array", "items": mark}, "notes": NOTE}}
     if task_type == "find_photos":

@@ -8,6 +8,8 @@ import json
 import logging
 from typing import Any
 
+from psycopg.types.json import Jsonb
+
 from psst.core import db
 from psst.harness import providers
 from psst.tasks import prompts
@@ -34,6 +36,9 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     work = commands.add_parser("work", help="work the queue continuously with the routed models (the service)")
     work.add_argument("--once", action="store_true", help="stop when nothing is waiting")
     work.set_defaults(run=run_work)
+    negatives = commands.add_parser("negatives", help="rebuild the golden set's constructed negatives")
+    negatives.add_argument("--per-defect", type=int, default=6)
+    negatives.set_defaults(run=run_negatives)
     status = commands.add_parser("status", help="spend against the budget, and the credit left")
     status.set_defaults(run=show_status)
 
@@ -148,3 +153,17 @@ def run_work(args: argparse.Namespace) -> int:
                 if args.once:
                     return 0
                 time.sleep(IDLE_SECONDS)
+
+
+def run_negatives(args: argparse.Namespace) -> int:
+    """Break each of the editor's good stories in known ways (decision 31) and replace the constructed set."""
+    from psst.harness import negatives
+    with db.open_connection(db.conninfo("system")) as conn, session(conn, "system", "constructed negatives") as token:
+        good = [dict(r) for r in conn.execute("""SELECT id, place, headline, short, long, look FROM psst.golden_stories
+                                                 WHERE mark = 'good' AND constructed_from IS NULL ORDER BY id""")]
+        rows = negatives.construct(good, args.per_defect)
+        count = conn.execute("SELECT psst.replace_constructed_negatives(%s, %s) AS n",
+                             (token, Jsonb(rows))).fetchone()
+    print(f"{count['n'] if count else 0} constructed negatives from {len(good)} good stories")
+    return 0
+

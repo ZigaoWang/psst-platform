@@ -35,7 +35,7 @@ def refresh(database, city):
 
 def calibrate(database, golden, wrong=0):
     """Mark both folds, getting `wrong` of the editor's marks wrong."""
-    flips = {"good": "weak", "weak": "bad", "bad": "good"}
+    flips = {"good": "weak", "weak": "good", "bad": "good"}  # each changes the publish decision
     misses = set(sorted(golden)[:wrong])
 
     def mark(g):
@@ -70,12 +70,23 @@ def test_the_gate_opens_when_both_folds_agree_with_the_editor(database, city, go
     assert Worker(database, SONNET).lease("review") is not None
 
 
-def test_a_good_mark_in_the_wrong_tier_disagrees(database, city, golden):
+def test_the_gate_counts_the_publish_decision_and_reports_the_tier_beside_it(database, city, golden):
     refresh(database, city)
     good = sorted(g for g, (mark, _) in golden.items() if mark == "good")[:2]
     swapped = {g: ("good", "map" if golden[g][1] == "featured" else "featured") for g in good}
     calibrate(database, golden | swapped)
-    assert float(refresh(database, city)["agreement"]) == 0.8
+    assert float(refresh(database, city)["agreement"]) == 1.0  # the tier isn't gated
+    with database.connect("admin") as conn:
+        tiers = conn.execute("SELECT sum(tier_agreed) AS agreed, sum(tier_marked) AS marked "
+                             "FROM psst.calibrations").fetchone()
+    assert (tiers["agreed"], tiers["marked"]) == (3, 5)
+
+
+def test_weak_and_bad_both_hold_back(database, city, golden):
+    refresh(database, city)
+    calibrate(database, {g: ("bad" if m == "weak" else "weak" if m == "bad" else m, t)
+                         for g, (m, t) in golden.items()})
+    assert float(refresh(database, city)["agreement"]) == 1.0
 
 
 def test_the_gate_stays_closed_below_the_agreement_required(database, city, golden):

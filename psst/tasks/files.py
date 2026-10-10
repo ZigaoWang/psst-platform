@@ -6,6 +6,7 @@ never the prose; the translation check gets the translation and the English clai
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -178,12 +179,13 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
     elif kind == "calibrate":
         fold = int(task["input"]["fold"])
         golden = [dict(r) for r in conn.execute("""
-            SELECT id, place, headline, short, long, sources, mark, tier, reason, psst.golden_fold(id) = %s AS blind
+            SELECT id, place, headline, short, long, look, sources, mark, tier, reason,
+                   psst.golden_fold(id) = %s AS blind
             FROM psst.golden_stories ORDER BY md5(id)""", (fold,))]
-        data = {"items": [{k: g[k] for k in ("id", "place", "headline", "short", "long", "sources")}
+        data = {"items": [{k: g[k] for k in ("id", "place", "headline", "short", "long", "look", "sources")}
                           for g in golden if g["blind"]],
-                "marked_examples": [{k: g[k] for k in ("place", "headline", "short", "long", "sources", "mark",
-                                                       "tier", "reason")} for g in golden if not g["blind"]],
+                "marked_examples": [{k: g[k] for k in ("place", "headline", "short", "long", "look", "sources",
+                                                       "mark", "tier", "reason")} for g in golden if not g["blind"]],
                 "reference_stories": style_references(conn, task["city_id"]),
                 "rules": {"story": rulebook.type("story"), "guide": rulebook.type("guide")},
                 "calibration": "These stories are already written and published or marked; there are no claims to "
@@ -258,16 +260,28 @@ def review_item(conn: Connection, lookups: Lookups, revision_id: str) -> dict[st
     item = conn.execute("SELECT id, place_id FROM psst.items WHERE current_revision = %s", (revision_id,)).fetchone()
     assert item
     place = place_summary(conn, item["place_id"])
+    claims = claims_with_passages(conn, revision_id)
     return {"revision": revision_id, "type": revision["type"], "place": place, "body": revision["body"],
-            "claims": claims_with_passages(conn, revision_id),
+            "claims": claims, "quote_repairs": quote_repairs(conn, item["place_id"], claims),
             "other_stories": other_items(conn, item["place_id"], item["id"]),
             "encyclopedia_lead": lookups.lead(place) if lookups.lead and place else None}
+
+
+def quote_repairs(conn: Connection, place_id: str | None, claims: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Passages the harness put in place of a writer's near quote (decision 30): judge each claim against the
+    passage, never against what the writer typed."""
+    if not place_id:
+        return []
+    quoted = json.dumps(claims, ensure_ascii=False, default=str)
+    return [dict(r) for r in conn.execute("""
+        SELECT snapshot_id AS snapshot, written, exact, similarity FROM psst.quote_repairs
+        WHERE place_id = %s ORDER BY id""", (place_id,)) if r["exact"] in quoted]
 
 
 def golden_examples(conn: Connection) -> list[dict[str, Any]]:
     """The editor's marked stories with the mark and the reason: what good, weak, and bad mean here."""
     return [dict(r) for r in conn.execute("""
-        SELECT place, headline, short, long, sources, mark, tier, reason FROM psst.golden_stories
+        SELECT place, headline, short, long, look, sources, mark, tier, reason FROM psst.golden_stories
         ORDER BY created_at, id""")]
 
 

@@ -452,5 +452,5 @@ def test_a_facts_values_come_from_its_quotes():
     from psst.harness import research as harness_research
     fact = {"values": [{"value": "around 1800"}], "evidence": [
         {"snapshot": "sn_1", "quote": "House, c.1800, No.33 Peckham Road, listed at Grade: II in 1954"}]}
-    assert [v["value"] for v in harness_research.values_in(fact)] == ["1800", "33", "1954", "House", "No", "Peckham Road",
-                                                                       "Grade"]
+    values = [v["value"] for v in harness_research.values_in(fact)]
+    assert values == ["1800", "33", "1954", "House", "No", "Peckham Road", "Grade"]

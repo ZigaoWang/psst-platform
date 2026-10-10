@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, cast
 
 import psycopg
@@ -99,11 +100,14 @@ def gather(executor: Executor, lead: dict[str, Any]) -> list[dict[str, Any]]:
                          "kind": "reference" if wiki else "community",
                          "language": "zh" if "zh." in lead["url"] else "en"})
     requests += records(lead.get("wikidata"))
-    ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=executor.token)
-    try:
-        pages = [tools.call(ctx, "fetch_source", r) for r in requests]
-    finally:
-        ctx.conn.close()
+    def fetch(request: dict[str, Any]) -> dict[str, Any]:
+        ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=executor.token)
+        try:
+            return tools.call(ctx, "fetch_source", request)
+        finally:
+            ctx.conn.close()
+    with ThreadPoolExecutor(max_workers=max(1, len(requests))) as pool:  # a place's sources are read together
+        pages = list(pool.map(fetch, requests))
     return [page for page in pages if not page.get("error")]
 
 
@@ -375,48 +379,53 @@ def prose_writer(evidence_writer: Executor) -> Executor:
 
 
 def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, Any], spend: Spend) -> Any:
+    """Triage, then write the chosen places in parallel (harness.parallel_places at once), each submitted as soon as
+    it passes, then account for every lead."""
     leads = {lead["lead"]: lead for lead in document["data"]["leads"]}
     # A rotation triages with its first model and hands each place to the next writer in turn.
     writers = [Executor(executor.token, m) for m in executor.members] if executor.mode == "rotate" else [executor]
     plan = triage(writers[0], task, document, spend)
     accounted: list[dict[str, Any]] = []
-    turn = 0
-    capped = False
+    chosen = [d for d in plan["decisions"] if d["action"] == "write" and d["lead"] in leads]
+    capped = len(chosen) > executor.max_places
+    chosen = chosen[:executor.max_places]
     for d in plan["decisions"]:
-        lead = leads.get(d["lead"])
-        if lead is None:
+        if d["lead"] not in leads or d["action"] == "write":
             continue
-        if d["action"] == "write" and turn >= executor.max_places:
-            capped = True
-            continue
-        if d["action"] == "write":
-            writer = writers[turn % len(writers)]
-            turn += 1
-            try:
-                gathered = evidence(writer, task, document, d, lead, Spend())
-                if gathered.get("skip"):
-                    accounted.append({"lead": d["lead"], "status": "skipped",
-                                      "reason": f"the evidence isn't there: {gathered['skip']}"[:300]})
-                    continue
-                placed = write(prose_writer(writer), task, document, d, lead, gathered, Spend())
-            except (GaveUp, ValueError, TypeError, KeyError, psycopg.Error) as reason:
-                # One place that fails, for any reason, is given back; the rest of the cell goes on.
-                status = "skipped" if lead.get("well_known") else "later"
-                accounted.append({"lead": d["lead"], "status": status,
-                                  "reason": f"couldn't be written to the bar: {reason}"[:300]})
-                continue
-            accounted.append({"lead": d["lead"], "status": "added", "existing": placed["place"]})
-        elif d["action"] == "known":
+        if d["action"] == "known":
             accounted.append({"lead": d["lead"], "status": "known", "existing": d["existing"]})
         else:
             accounted.append({"lead": d["lead"], "status": "skipped" if d["action"] == "skip" else "later",
                               "reason": d["reason"][:300]})
+
+    def place(turn: int, d: dict[str, Any]) -> dict[str, Any]:
+        lead, writer = leads[d["lead"]], writers[turn % len(writers)]
+        try:
+            gathered = evidence(writer, task, document, d, lead, Spend())
+            if gathered.get("skip"):
+                return {"lead": d["lead"], "status": "skipped",
+                        "reason": f"the evidence isn't there: {gathered['skip']}"[:300]}
+            placed = write(prose_writer(writer), task, document, d, lead, gathered, Spend())
+        except (GaveUp, ValueError, TypeError, KeyError, psycopg.Error) as reason:
+            # One place that fails, for any reason, is given back; the rest of the cell goes on.
+            return {"lead": d["lead"], "status": "skipped" if lead.get("well_known") else "later",
+                    "reason": f"couldn't be written to the bar: {reason}"[:300]}
+        return {"lead": d["lead"], "status": "added", "existing": placed["place"]}
+
+    with ThreadPoolExecutor(max_workers=parallel_places()) as pool:
+        accounted += list(pool.map(place, range(len(chosen)), chosen))
     if capped:
         # The run wrote as many places as it was asked to: the places are stored, and the cell goes back to the
         # queue so the next run continues it.
-        executor.give_back(document, f"wrote {turn} places as asked; the rest of the cell continues in the next run")
-        return {"places_written": turn, "continues": True}
+        executor.give_back(document, f"wrote {len(chosen)} places as asked; the rest of the cell continues next run")
+        return {"places_written": len(chosen), "continues": True}
     # Leads the place submissions already settled need no entry; the rest are accounted for here.
     final = {"places": [], "leads": [a for a in accounted if a["status"] != "added"],
              "notes": (plan.get("notes") or "Triaged and written by the harness.")[:600]}
     return task_cli.submit(document, final)
+
+
+def parallel_places() -> int:
+    with db.connect("worker") as conn:
+        row = conn.execute("SELECT psst.setting('harness.parallel_places') #>> '{}' AS n").fetchone()
+    return max(1, int(row["n"])) if row and row["n"] else 8

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import jsonschema
+
 from psst import rules
 
 VERDICT = {"enum": ["supported", "unsupported", "contradicted", "unclear"]}
@@ -164,3 +166,22 @@ def photos() -> dict[str, Any]:
                              "pair": {"type": "string", "pattern": "^it_"}}}
     return {"type": "object", "additionalProperties": False, "required": ["choices", "notes"],
             "properties": {"choices": {"type": "array", "maxItems": 6, "items": choice}, "notes": NOTE}}
+
+
+def problems(schema: dict[str, Any], instance: Any) -> list[str]:
+    """What is wrong with a result against its schema, field by field. Where a value may take one of several shapes
+    (a new place or an existing one), the errors of the shape it comes closest to are reported, since the general
+    "is not valid under any of the given schemas" tells a writer nothing about what to fix."""
+    def where(error: jsonschema.ValidationError) -> str:
+        return "/".join(map(str, error.absolute_path)) or "result"
+
+    found: list[str] = []
+    for error in jsonschema.Draft202012Validator(schema).iter_errors(instance):
+        if error.validator in ("oneOf", "anyOf") and error.context:
+            branches: dict[Any, list[jsonschema.ValidationError]] = {}
+            for sub in error.context:
+                branches.setdefault(sub.schema_path[0], []).append(sub)
+            found += [f"{where(sub)}: {sub.message[:300]}" for sub in min(branches.values(), key=len)]
+        else:
+            found.append(f"{where(error)}: {error.message[:300]}")
+    return found

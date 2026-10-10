@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import jsonschema
 import psycopg
 from psycopg.types.json import Jsonb
 
@@ -50,8 +49,7 @@ def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], s
     leads = {lead["lead"]: lead for lead in brief["leads"]}
 
     def accept(answer: dict[str, Any]) -> dict[str, Any]:
-        found = [f"{'/'.join(map(str, e.path)) or 'result'}: {e.message}"
-                 for e in jsonschema.Draft202012Validator(TRIAGE_SCHEMA).iter_errors(answer)]
+        found = results.problems(TRIAGE_SCHEMA, answer)
         if not found:
             decided = {d["lead"] for d in answer["decisions"]}
             found += [f"decide lead {lead} ({leads[lead]['name']})" for lead in leads if lead not in decided]

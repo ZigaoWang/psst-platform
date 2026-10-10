@@ -7,7 +7,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import jsonschema
 import psycopg
 from psycopg.types.json import Jsonb
 
@@ -160,8 +159,7 @@ def lease_next(args: argparse.Namespace) -> int:
 
 def problems(document: dict[str, Any], result: dict[str, Any]) -> list[str]:
     """Everything wrong with a result that can be found before submitting it."""
-    found = [f"{'/'.join(map(str, e.path)) or 'result'}: {e.message}"
-             for e in jsonschema.Draft202012Validator(document["result_schema"]).iter_errors(result)]
+    found = results.problems(document["result_schema"], result)
     if found:
         return found
     kind = document["type"]
@@ -318,8 +316,7 @@ def submit_one_place(document: dict[str, Any], payload: dict[str, Any]) -> Any:
     hand; it also renews the lease (decision 26). Raises NotSubmitted with everything to fix."""
     if document["type"] != "research_cell":
         raise config.ConfigError("places are submitted one by one only for research")
-    found = [f"{'/'.join(map(str, e.path)) or 'place'}: {e.message}"
-             for e in jsonschema.Draft202012Validator(results.research_place()).iter_errors(payload)]
+    found = results.problems(results.research_place(), payload)
     if not found:
         brief = {lead["lead"] for lead in document["data"]["leads"]}
         found += [f"lead {lead} isn't in this cell's brief" for lead in payload["leads"] if lead not in brief]

@@ -189,3 +189,13 @@ def test_every_kind_of_command_run_ends(database):
     with database.connect("admin") as conn:
         left = conn.execute("SELECT count(*) AS n FROM psst.runs WHERE notes = 'a command' AND ended_at IS NULL")
         assert left.fetchone()["n"] == 0
+
+
+def test_a_place_in_the_wrong_shape_is_told_which_fields_are_wrong():
+    from psst.tasks import results
+    found = results.problems(results.research_place(), {"place": {"name": "Invented Hall", "kind": "building",
+                                                                    "size": "medium", "ordinary": True,
+                                                                    "wikidata": "Q900001", "stories": []},
+                                                          "leads": []})
+    assert found and all("not valid under any" not in p for p in found)
+    assert any("guide" in p for p in found)

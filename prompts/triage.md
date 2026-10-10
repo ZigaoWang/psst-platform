@@ -27,4 +27,5 @@ count: the goal is something worth looking at within a few steps anywhere. Never
 guess, or speculate to make interesting.
 
 Reply with only `{"decisions": [{"lead", "action", "existing", "reason", "form", "tier", "angle"}], "notes"}`,
-leaving out the fields an action doesn't use, with one decision for every lead.
+leaving out the fields an action doesn't use, with one decision for every lead. Keep each reason and angle to a short
+phrase: a cell can have hundreds of leads.

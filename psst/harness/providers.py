@@ -47,6 +47,7 @@ class Reply:
     cost_usd: float = 0.0
     latency_ms: int = 0
     raw: dict[str, Any] = field(default_factory=dict)
+    cut_off: bool = False   # the answer stopped at the length limit
 
 
 def split(model: str) -> tuple[str, str]:
@@ -118,7 +119,8 @@ def _openai(provider: str, name: str, messages: list[dict[str, Any]], tools: lis
     raw, latency = _post(f"{base}/chat/completions", body, {"Authorization": f"Bearer {_key(variable)}"}, timeout)
     if "error" in raw:
         raise ProviderError(f"{provider}: {raw['error']}")
-    message = raw["choices"][0]["message"]
+    choice = raw["choices"][0]
+    message = choice["message"]
     usage = raw.get("usage") or {}
     calls = [ToolCall(c["id"], c["function"]["name"], _arguments(c["function"].get("arguments")))
              for c in message.get("tool_calls") or []]
@@ -126,7 +128,8 @@ def _openai(provider: str, name: str, messages: list[dict[str, Any]], tools: lis
                  input_tokens=int(usage.get("prompt_tokens") or 0),
                  cached_tokens=int((usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0),
                  output_tokens=int(usage.get("completion_tokens") or 0),
-                 cost_usd=float(usage.get("cost") or 0), latency_ms=latency, raw=raw)
+                 cost_usd=float(usage.get("cost") or 0), latency_ms=latency, raw=raw,
+                 cut_off=choice.get("finish_reason") == "length")
 
 
 def _arguments(text: str | None) -> dict[str, Any]:

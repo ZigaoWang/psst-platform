@@ -53,7 +53,7 @@ STEP_LIMITS = {
     "review": Limits(tool_calls=6, fixes=2, tokens=500_000, reply_tokens=12000),
     "audit": Limits(tool_calls=4, fixes=2, tokens=500_000, reply_tokens=8000),
     "revise": Limits(tool_calls=10, fixes=3, tokens=400_000, reply_tokens=8000),
-    "triage": Limits(tool_calls=0, fixes=2, tokens=300_000, reply_tokens=12000),
+    "triage": Limits(tool_calls=0, fixes=2, tokens=400_000, reply_tokens=32000, reasoning="low"),
     "evidence": Limits(tool_calls=10, fixes=2, tokens=600_000, reply_tokens=8000),
     "write": Limits(tool_calls=0, fixes=2, tokens=250_000, reply_tokens=8000, reasoning="low"),
 }
@@ -210,6 +210,9 @@ class Executor:
             messages.append({"role": "assistant", "content": reply.text})
             answer = parse_json(reply.text)
             try:
+                if reply.cut_off:
+                    raise task_cli.NotSubmitted(["your answer was cut off at the length limit; answer again more "
+                                                 "briefly (short reasons, nothing the result doesn't need)"])
                 if answer is None:
                     raise task_cli.NotSubmitted(["reply with only the JSON result, in the shape result_schema gives"])
                 return accept(answer)

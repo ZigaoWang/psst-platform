@@ -263,3 +263,14 @@ def test_openrouter_requests_ask_for_the_fastest_private_provider_and_the_reason
     providers.chat("openrouter:test/model", [{"role": "user", "content": "x"}], reasoning="low")
     assert sent["provider"] == {"data_collection": "deny", "sort": "throughput"}
     assert sent["reasoning"] == {"effort": "low"}
+
+
+def test_an_answer_cut_off_at_the_length_limit_is_asked_again_briefly(database, golden, monkeypatch):
+    queue(database)
+    worker, task = lease(database)
+    replies = [providers.Reply(text='{"marks": [{"golden": "gs_', cut_off=True, cost_usd=0.001),
+               marks_for(database, golden, task)]
+    chat, calls = scripted(replies)
+    monkeypatch.setattr(providers, "chat", chat)
+    harness.Executor(worker.token, MODEL).run(task)
+    assert "cut off at the length limit" in calls[1]["messages"][-1]["content"]

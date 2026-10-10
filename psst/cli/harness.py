@@ -30,6 +30,9 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     calibrate = commands.add_parser("calibrate", help="measure a model against the editor's golden set")
     calibrate.add_argument("--model", required=True)
     calibrate.set_defaults(run=run_calibration)
+    work = commands.add_parser("work", help="work the queue continuously with the routed models (the service)")
+    work.add_argument("--once", action="store_true", help="stop when nothing is waiting")
+    work.set_defaults(run=run_work)
     status = commands.add_parser("status", help="spend against the budget, and the credit left")
     status.set_defaults(run=show_status)
 
@@ -92,3 +95,55 @@ def show_status(args: argparse.Namespace) -> int:
         status["openrouter"] = f"unavailable: {error}"
     print(json.dumps(status, ensure_ascii=False, indent=2, default=str))
     return 0
+
+
+# The order the service works in: what unblocks publishing first, research last (workers.md).
+WORK_ORDER = ["audit", "review", "calibrate", "revise", "research_cell"]
+IDLE_SECONDS = 60
+CITYLESS = {"calibrate"}
+
+
+def run_work(args: argparse.Namespace) -> int:
+    """Lease and do tasks with whichever harness model each type is routed to, city by city, skipping paused cities,
+    until a budget is reached (or, with --once, until nothing is waiting). One run per model, for the whole service."""
+    import time
+    from contextlib import ExitStack
+
+    from psst.harness.executor import BudgetReached, Executor
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    with db.open_connection(db.conninfo("worker")) as conn, ExitStack() as runs:
+        tokens: dict[str, str] = {}
+        while True:
+            busy = False
+            routes = conn.execute("""
+                SELECT t.name AS type, psst.task_model(t.name, '{}') AS model FROM psst.task_types t
+                WHERE t.runner = 'worker' AND t.active AND t.name = ANY(%s)""", (WORK_ORDER,)).fetchall()
+            cities = conn.execute("""SELECT id, slug FROM psst.cities WHERE NOT slug IN (
+                                       SELECT jsonb_array_elements_text(psst.setting('harness.paused_cities')))
+                                     ORDER BY research_order""").fetchall()
+            conn.commit()
+            for route in sorted(routes, key=lambda r: WORK_ORDER.index(r["type"])):
+                model = route["model"] or ""
+                if ":" not in model:
+                    continue  # routed to a worker session, not the harness
+                if model not in tokens:
+                    tokens[model] = runs.enter_context(session(conn, "worker", "harness service", model))
+                executor = Executor(tokens[model], model)
+                # A calibration belongs to no city; everything else is worked city by city.
+                for city_id in [None] if route["type"] in CITYLESS else [c["id"] for c in cities]:
+                    task = conn.execute("SELECT * FROM psst.lease_task(%s, %s, %s)",
+                                        (tokens[model], [route["type"]], city_id)).fetchone()
+                    conn.commit()
+                    if task is None:
+                        continue
+                    busy = True
+                    try:
+                        log.info("%s", json.dumps(executor.run(dict(task)), default=str)[:400])
+                    except BudgetReached as reason:
+                        executor.give_back({"task": task["id"]}, f"the harness stopped: {reason}")
+                        log.info("stopping: %s", reason)
+                        return 0
+            if not busy:
+                if args.once:
+                    return 0
+                time.sleep(IDLE_SECONDS)

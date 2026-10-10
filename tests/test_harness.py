@@ -137,3 +137,25 @@ def test_tool_calls_are_run_and_traced(database, city, roles, monkeypatch):
 @pytest.mark.parametrize("text", ['{"a": 1}', '```json\n{"a": 1}\n```', 'Here it is: {"a": 1} done'])
 def test_a_json_answer_is_read_with_or_without_a_fence(text):
     assert harness.parse_json(text) == {"a": 1}
+
+
+def test_the_service_works_what_is_routed_to_a_harness_model(database, golden, monkeypatch):
+    import argparse
+
+    from psst.cli import harness as harness_cli
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.settings SET value = %s WHERE key = 'routing.review'", (json.dumps(MODEL),))
+    queue(database)
+
+    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300):
+        items = json.loads(messages[1]["content"])["data"]["items"]
+        marks = [{"golden": i["id"], "mark": golden[i["id"]][0], "tier": golden[i["id"]][1], "reason": "read it"}
+                 for i in items]
+        return providers.Reply(text=json.dumps({"marks": marks, "notes": "marked the fold"}), cost_usd=0.001)
+    monkeypatch.setattr(providers, "chat", chat)
+    assert harness_cli.run_work(argparse.Namespace(once=True)) == 0
+    with database.connect("admin") as conn:
+        done = conn.execute("SELECT count(*) AS n FROM psst.calibrations WHERE model = %s", (MODEL,)).fetchone()
+        open_runs = conn.execute("SELECT count(*) AS n FROM psst.runs WHERE notes = 'harness service' "
+                                 "AND ended_at IS NULL").fetchone()
+    assert done["n"] == 2 and open_runs["n"] == 0

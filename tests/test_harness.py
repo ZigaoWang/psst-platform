@@ -183,7 +183,7 @@ def test_a_panel_calibrates_as_one_model(database, golden, monkeypatch):
 
     def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300):
         items = json.loads(messages[1]["content"])["data"]["items"]
-        wrong = model == "test/c"  # one member always says weak; the other two outvote it
+        wrong = model == "openrouter:test/c"  # one member always says weak; the other two outvote it
         marks = [{"golden": i["id"], "mark": "weak" if wrong else golden[i["id"]][0],
                   "tier": None if wrong else golden[i["id"]][1], "reason": "read it"} for i in items]
         return providers.Reply(text=json.dumps({"marks": marks, "notes": "marked the fold"}), cost_usd=0.001)

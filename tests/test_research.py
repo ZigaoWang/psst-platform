@@ -305,3 +305,44 @@ def test_places_and_dense_cells_get_density_hexagons(database, city, monkeypatch
         density = conn.execute("SELECT stories FROM psst.hexagon_density WHERE cell = %s", (cell,)).fetchone()
     assert cell and hexagons["own"] == 1 and hexagons["n"] > 49  # its own, plus every hexagon of the dense cells
     assert density["stories"] == 0
+
+
+def test_the_harness_researches_a_cell_place_by_place(database, city, monkeypatch):
+    from psst.harness import executor as harness
+    from psst.harness import providers
+    for role in ("worker", "system"):
+        monkeypatch.setenv(f"PSST_DATABASE_URL_{role.upper()}", database.url(role))
+    monkeypatch.setattr(coords, "resolve", lambda places: {
+        p["id"]: coords.Position(51.5, -0.05, "wikidata", p["wikidata"] or "Q900010") for p in places})
+    rotation = "rotate:openrouter:test/writer-a+openrouter:test/writer-b"
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.settings SET value = %s WHERE key IN ('routing.research_cell', "
+                     "'routing.research_cell_dense')", (json.dumps(rotation),))
+    worker = Worker(database, rotation)
+    task = worker.lease("research_cell")
+    with database.connect("worker") as conn:
+        document = files.build(conn, task)
+    first, second = (lead["lead"] for lead in document["data"]["leads"])
+    place = result_for(database, document)["places"][0]
+    place["stories"][0]["body"] |= {"tier": "map", "form": "story"}
+    written = []
+
+    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300):
+        if "Triage a cell's leads" in messages[0]["content"]:
+            answer = {"decisions": [{"lead": first, "action": "write", "form": "story", "tier": "map",
+                                     "angle": "the wheel pit under the grate"},
+                                    {"lead": second, "action": "skip", "reason": "an office block, nothing more"}],
+                      "notes": "One place worth writing."}
+        else:
+            written.append(model)
+            answer = {"place": place, "leads": [first]}
+        return providers.Reply(text=json.dumps(answer), cost_usd=0.002)
+    monkeypatch.setattr(providers, "chat", chat)
+    outcome = harness.Executor(worker.token, rotation).run(dict(task))
+    assert outcome["outcome"]["leads_open"] == 0 and written == ["openrouter:test/writer-a"]
+    with database.connect("admin") as conn:
+        lead = conn.execute("SELECT status FROM psst.leads WHERE id = %s", (first,)).fetchone()
+        tied = conn.execute("SELECT count(*) AS n FROM psst.harness_calls WHERE step = 'write' "
+                            "AND place_id IS NOT NULL AND model = 'openrouter:test/writer-a'").fetchone()
+        state = conn.execute("SELECT state FROM psst.tasks WHERE id = %s", (task["id"],)).fetchone()
+    assert lead["status"] == "added" and tied["n"] == 1 and state["state"] == "done"

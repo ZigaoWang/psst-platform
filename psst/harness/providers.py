@@ -57,8 +57,9 @@ def split(model: str) -> tuple[str, str]:
 
 
 def check(model: str) -> None:
-    """A harness model, or a panel of them (vote:<model>+<model>...), with known providers."""
-    for member in (model.removeprefix("vote:").split("+") if model.startswith("vote:") else [model]):
+    """A harness model, or a group of them (vote:<model>+<model>... or rotate:...), with known providers."""
+    group = model.startswith(("vote:", "rotate:"))
+    for member in (model.partition(":")[2].split("+") if group else [model]):
         split(member)
 
 

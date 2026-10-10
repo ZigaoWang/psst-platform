@@ -24,7 +24,7 @@ from . import providers, tools
 Connection = psycopg.Connection[dict[str, Any]]
 
 # Task data every item of a step shares: it goes first and unchanged, so providers can cache it.
-SHARED = ("golden_bar", "marked_examples", "reference_stories", "rules", "research_brief")
+SHARED = ("golden_bar", "marked_examples", "reference_stories", "rules")
 
 PREAMBLE = """You work inside an automated pipeline, not a terminal. Where the instructions below mention commands,
 use the tools instead: fetch_source reads and saves a page (`psst fetch`), search_snapshot finds a passage in a saved
@@ -147,9 +147,11 @@ def parse_json(text: str) -> dict[str, Any] | None:
 class Executor:
     def __init__(self, token: str, model: str) -> None:
         self.token, self.model = token, model
-        self.members = model.removeprefix("vote:").split("+") if model.startswith("vote:") else []
+        # A panel (vote:) marks together; a rotation (rotate:) takes turns writing, one model per place.
+        self.mode = model.partition(":")[0] if model.startswith(("vote:", "rotate:")) else "one"
+        self.members = model.partition(":")[2].split("+") if self.mode != "one" else []
         providers.check(model)
-        self.provider = "vote" if self.members else providers.split(model)[0]
+        self.provider = self.mode if self.members else providers.split(model)[0]
         os.environ["PSST_RUN_TOKEN"] = token  # the command-line helpers the harness shares read it
 
     # Model calls ---------------------------------------------------------------------------------------------
@@ -249,11 +251,15 @@ class Executor:
         spend = Spend()
         step = document["type"]
         try:
+            if step == "research_cell" and self.mode == "vote":
+                raise GaveUp("research is written by one model or a rotation, not a panel")
             if step == "research_cell":
                 from .research import research_cell
                 outcome = research_cell(self, task, document, spend)
-            elif self.members:
+            elif self.mode == "vote":
                 outcome = self.vote(task, document, spend)
+            elif self.mode == "rotate":
+                raise GaveUp(f"{step} is done by one model or a panel, not a rotation")
             else:
                 system, user, prompt_version = self.messages_for(document)
                 ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=self.token,

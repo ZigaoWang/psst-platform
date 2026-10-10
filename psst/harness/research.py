@@ -39,7 +39,7 @@ def shared_data(document: dict[str, Any]) -> str:
 
 
 def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], spend: Spend) -> dict[str, Any]:
-    brief = document["data"]["research_brief"]
+    brief = document["data"]
     prompt = prompts.load("triage").text
     system = PREAMBLE + "\n\n" + prompt + "\n\n## Shared data\n\n" + shared_data(document)
     user = json.dumps({"data": {"leads": brief["leads"], "places_nearby": brief["places_nearby"],
@@ -91,7 +91,7 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
           lead: dict[str, Any], spend: Spend) -> dict[str, Any]:
     prompt = prompts.load("research_cell").text
     system = PREAMBLE + "\n\n" + WRITE_INTRO + "\n\n" + prompt + "\n\n## Shared data\n\n" + shared_data(document)
-    brief = document["data"]["research_brief"]
+    brief = document["data"]
     user = json.dumps({"data": {"lead": lead, "angle": decision.get("angle"), "form": decision.get("form"),
                                 "tier": decision.get("tier"), "existing": decision.get("existing"),
                                 "cell": {"bounds": brief["bounds"], "neighborhoods": brief["neighborhoods"]},
@@ -100,23 +100,30 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
     ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=executor.token,
                         place_id=decision.get("existing"))
     try:
-        return dict(executor.converse("write", system, user, task, version(PREAMBLE + WRITE_INTRO + prompt),
-                                      lambda answer: task_cli.submit_one_place(document, answer), ctx, spend))
+        placed = dict(executor.converse("write", system, user, task, version(PREAMBLE + WRITE_INTRO + prompt),
+                                        lambda answer: task_cli.submit_one_place(document, answer), ctx, spend))
+        ctx.conn.execute("SELECT psst.tie_harness_calls(%s, %s, %s)", (executor.token, spend.trace, placed["place"]))
+        return placed
     finally:
         ctx.conn.close()
 
 
 def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, Any], spend: Spend) -> Any:
-    leads = {lead["lead"]: lead for lead in document["data"]["research_brief"]["leads"]}
-    plan = triage(executor, task, document, spend)
+    leads = {lead["lead"]: lead for lead in document["data"]["leads"]}
+    # A rotation triages with its first model and hands each place to the next writer in turn.
+    writers = [Executor(executor.token, m) for m in executor.members] if executor.mode == "rotate" else [executor]
+    plan = triage(writers[0], task, document, spend)
     accounted: list[dict[str, Any]] = []
+    turn = 0
     for d in plan["decisions"]:
         lead = leads.get(d["lead"])
         if lead is None:
             continue
         if d["action"] == "write":
+            writer = writers[turn % len(writers)]
+            turn += 1
             try:
-                placed = write(executor, task, document, d, lead, Spend())
+                placed = write(writer, task, document, d, lead, Spend())
             except GaveUp as reason:
                 status = "skipped" if lead.get("well_known") else "later"
                 accounted.append({"lead": d["lead"], "status": status,

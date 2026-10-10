@@ -21,19 +21,19 @@ USED_AREAS = """
 
 
 def export(conn: psycopg.Connection[Any], directory: Path) -> dict[str, int]:
-    tables = [r[0] for r in conn.execute("""
+    conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")  # one consistent view of every table
+    tables = [r["relname"] for r in conn.execute("""
         SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname = 'psst' AND c.relkind = 'r' ORDER BY c.relname""")]
     counts: dict[str, int] = {}
-    conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
     for table in tables:
         if table in SKIPPED:
             continue
         key = conn.execute("""
-            SELECT string_agg(quote_ident(a.attname), ', ' ORDER BY array_position(i.indkey, a.attnum))
+            SELECT string_agg(quote_ident(a.attname), ', ' ORDER BY array_position(i.indkey, a.attnum)) AS key
             FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
             WHERE i.indrelid = %s::regclass AND i.indisprimary""", (f"psst.{table}",)).fetchone()
-        order = key[0] if key and key[0] else "1"
+        order = key["key"] if key and key["key"] else "1"
         where = f" WHERE id IN ({USED_AREAS})" if table == "areas" else ""
         if table == "area_names":
             where = f" WHERE area_id IN ({USED_AREAS})"

@@ -333,7 +333,7 @@ def test_the_harness_researches_a_cell_place_by_place(database, city, monkeypatc
     facts = [{"id": f"f{n}"} | c for n, c in enumerate(claims + claims[:1], 1)]  # a story needs three facts
     identity = {k: place[k] for k in ("wikidata", "name", "kind", "size", "ordinary")}
 
-    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300):
+    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
         if "Triage a cell's leads" in messages[0]["content"]:
             answer = {"decisions": [{"lead": first, "action": "write", "form": "story", "tier": "map",
                                      "angle": "the wheel pit under the grate"},
@@ -426,7 +426,7 @@ def test_a_lead_without_the_evidence_for_a_story_is_skipped_with_the_reason(data
         document = files.build(conn, task)
     first, second = (lead["lead"] for lead in document["data"]["leads"])
 
-    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300):
+    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
         if "Triage a cell's leads" in messages[0]["content"]:
             answer = {"decisions": [{"lead": first, "action": "write", "form": "story", "tier": "map", "angle": "x"},
                                     {"lead": second, "action": "skip", "reason": "an office block, nothing more"}]}
@@ -490,3 +490,16 @@ def test_a_fact_resting_only_on_a_reference_work_is_sent_back(database, city):
     with database.connect("worker") as conn:
         found = harness_research.verify(conn, [fact])
     assert any("fact f1: rests only on reference works" in p for p in found)
+
+
+def test_items_with_an_official_record_become_leads(monkeypatch):
+    payload = {"results": {"bindings": [
+        {"item": {"value": "http://www.wikidata.org/entity/Q900020"},
+         "itemLabel": {"value": "Invented Drinking Fountain"},
+         "coord": {"value": "Point(-0.05 51.5)"}, "record": {"value": "1000002"}},
+        {"item": {"value": "http://www.wikidata.org/entity/Q900021"}, "itemLabel": {"value": "Q900021"},
+         "coord": {"value": "Point(-0.06 51.5)"}, "record": {"value": "1000003"}}]}}
+    monkeypatch.setattr(leads.http, "get_json", lambda url, attempts=3: payload)
+    found = leads.record_items("P1216", 51.4, -0.1, 51.6, 0.0)
+    assert found == [{"wikidata": "Q900020", "name": "Invented Drinking Fountain", "lat": 51.5, "lon": -0.05,
+                      "record": "1000002"}]  # an item with no name is left out

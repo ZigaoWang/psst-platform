@@ -98,6 +98,17 @@ def sweep(conn: Connection, cell: str, country: str | None) -> tuple[list[dict[s
             add(tags.get("wikidata") or f"name:{name}", {
                 "origin": "osm", "name": name, "lat": point["lat"], "lon": point["lon"],
                 "osm": f"{element['type']}/{element['id']}", "wikidata": tags.get("wikidata"), "what": what})
+    for prop, how in rules.load().sources.get("record_properties", {}).items():
+        try:
+            records = record_items(prop, south, west, north, east)
+        except (ConnectionError, urllib.error.HTTPError, KeyError, ValueError) as error:
+            problems.append(f"the {how['publisher']} records search failed: {error}")
+            continue
+        for item in records:
+            add(item["wikidata"], {"origin": "record", "name": item["name"], "lat": item["lat"], "lon": item["lon"],
+                                   "wikidata": item["wikidata"], "url": how["url"].format(item["record"]),
+                                   "what": how["title"].format(item["record"])})
+        time.sleep(0.3)
     for row in conn.execute("""
             SELECT l.id, l.name, l.wikidata_id, l.osm_ref, ST_Y(l.geom) AS lat, ST_X(l.geom) AS lon
             FROM psst.legacy_places l, psst.research_cells c
@@ -124,3 +135,25 @@ def sweep(conn: Connection, cell: str, country: str | None) -> tuple[list[dict[s
         if found_classes and found_classes <= set(abstract) and lead["origin"] != "legacy":
             lead["skip"] = "not a place to stand in front of: " + abstract[sorted(found_classes)[0]]
     return leads, problems
+
+
+def record_items(prop: str, south: float, west: float, north: float, east: float) -> list[dict[str, Any]]:
+    """Every Wikidata item in a box that carries an official record's id (a heritage list entry, say), with its
+    name, point, and record id: the listed buildings, kiosks, bollards, and walls a city center is made of."""
+    query = f"""SELECT ?item ?itemLabel ?coord ?record WHERE {{
+      SERVICE wikibase:box {{ ?item wdt:P625 ?coord .
+        bd:serviceParam wikibase:cornerSouthWest "Point({west} {south})"^^geo:wktLiteral .
+        bd:serviceParam wikibase:cornerNorthEast "Point({east} {north})"^^geo:wktLiteral . }}
+      ?item wdt:{prop} ?record .
+      SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en,zh". }} }}"""
+    payload = http.get_json("https://query.wikidata.org/sparql?format=json&query=" + urllib.parse.quote(query),
+                            attempts=3)
+    items = []
+    for row in payload["results"]["bindings"]:
+        lon, lat = (float(x) for x in row["coord"]["value"].removeprefix("Point(").rstrip(")").split())
+        qid = row["item"]["value"].rsplit("/", 1)[-1]
+        name = row.get("itemLabel", {}).get("value", qid)
+        if name != qid:
+            items.append({"wikidata": qid, "name": name, "lat": lat, "lon": lon, "record": row["record"]["value"]})
+    return items
+

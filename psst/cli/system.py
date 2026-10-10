@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import signal
 
 from psst.checks import rechecks
 from psst.core import db
@@ -33,16 +32,8 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     audits.set_defaults(run=run_plan_audits)
 
 
-def _stop_on_sigterm() -> None:
-    """A stop from a deploy or restart unwinds like an interrupt, so the run ends."""
-    def stop(signum: int, frame: object) -> None:
-        raise SystemExit(0)
-    signal.signal(signal.SIGTERM, stop)
-
-
 def run_work(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
-    _stop_on_sigterm()
     info = db.conninfo("system")
     with db.open_connection(info) as conn, session(conn, "system", "system worker") as token:
         SystemWorker(lambda: db.open_connection(info), token).work(once=args.once)
@@ -59,7 +50,6 @@ def run_plan_audits(args: argparse.Namespace) -> int:
 
 def run_fetch(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
-    _stop_on_sigterm()
     info = db.conninfo("system")
     with db.open_connection(info) as conn, session(conn, "system", "fetch service") as token:
         server = serve(FetchService(lambda: db.open_connection(info), token))

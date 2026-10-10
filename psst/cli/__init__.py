@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import signal
 import sys
 
 import psycopg
@@ -22,8 +23,15 @@ def parser() -> argparse.ArgumentParser:
     return root
 
 
+def _stop(signum: int, frame: object) -> None:
+    """A stop (SIGTERM from a deploy, a restart, or an operator) unwinds like an interrupt, so whatever run the
+    command started is ended."""
+    raise SystemExit(0)  # a requested stop is a clean exit for the service manager
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
+    signal.signal(signal.SIGTERM, _stop)
     try:
         return int(args.run(args) or 0)
     except (ConfigError, ConnectionError) as error:

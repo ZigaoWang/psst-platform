@@ -278,3 +278,13 @@ def test_an_answer_cut_off_at_the_length_limit_is_asked_again_briefly(database, 
     monkeypatch.setattr(providers, "chat", chat)
     harness.Executor(worker.token, MODEL).run(task)
     assert "cut off at the length limit" in calls[1]["messages"][-1]["content"]
+
+
+def test_a_tool_that_times_out_answers_with_an_error(database, city, roles, monkeypatch):
+    from psst.harness import tools
+
+    def slow(ctx, **arguments):
+        raise TimeoutError("timed out")
+    monkeypatch.setitem(tools.IMPLEMENTATIONS, "fetch_source", slow)
+    ctx = tools.Context(conn=None, token="t")
+    assert tools.call(ctx, "fetch_source", {"url": "https://a.example"}) == {"error": "timed out"}

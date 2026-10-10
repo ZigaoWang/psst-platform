@@ -23,7 +23,8 @@ from psst.evidence import fetch, urls, wikidata
 
 PORT = 8471
 CACHE_DAYS = 30
-SITE_PAUSE_SECONDS = 1.0
+SITE_PAUSE_SECONDS = 0.3
+SITE_READS = 3
 MAX_REQUEST_BYTES = 16_384
 log = logging.getLogger("psst.fetch")
 
@@ -39,7 +40,7 @@ class FetchService:
         self.system_token = system_token
         self.reader = reader or fetch.Reader()
         self.slots = threading.BoundedSemaphore(16)  # pages read at once, across all sites
-        self.sites: dict[str, threading.Lock] = {}     # one page at a time from any one site
+        self.sites: dict[str, threading.BoundedSemaphore] = {}  # SITE_READS pages at a time from any one site
         self.sites_lock = threading.Lock()
 
     def read(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -81,10 +82,10 @@ class FetchService:
                 "links": page.links[:500]}
 
 
-    def site(self, address: str) -> threading.Lock:
+    def site(self, address: str) -> threading.BoundedSemaphore:
         host = urllib.parse.urlsplit(address).netloc.lower()
         with self.sites_lock:
-            return self.sites.setdefault(host, threading.Lock())
+            return self.sites.setdefault(host, threading.BoundedSemaphore(SITE_READS))
 
     def recent(self, key: str) -> dict[str, Any] | None:
         """A page read in the last CACHE_DAYS is reused, not read again: the same snapshot, so every claim on it

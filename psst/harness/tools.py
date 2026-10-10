@@ -157,5 +157,5 @@ def call(ctx: Context, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return IMPLEMENTATIONS[name](ctx, **arguments)
     except TypeError as error:
         return {"error": f"bad arguments for {name}: {error}"}
-    except (ConnectionError, LookupError, ValueError, psycopg.Error) as error:
+    except (OSError, LookupError, ValueError, psycopg.Error) as error:  # a timeout included
         return {"error": str(error)[:500]}

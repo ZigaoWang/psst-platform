@@ -23,6 +23,7 @@ log = logging.getLogger("psst.system")
 Connection = psycopg.Connection[dict[str, Any]]
 AUDIT_PLAN_SECONDS = 600
 GATE_SECONDS = 300
+REVIEW_PLAN_SECONDS = 600  # long enough for a reviser's batch of revisions to gather
 
 
 class SystemWorker:
@@ -38,6 +39,7 @@ class SystemWorker:
         }
         self._audits_planned = 0.0
         self._gate_refreshed = 0.0
+        self._reviews_planned = 0.0
 
     def tool_check(self, conn: Connection, task: dict[str, Any]) -> dict[str, Any]:
         result = runner.run(conn, self.token, task["revision_id"], task["id"])
@@ -87,6 +89,14 @@ class SystemWorker:
         self._gate_refreshed = time.monotonic()
         return dict(row["s"]) if row else {}
 
+    def plan_reviews(self) -> int:
+        """Batch the items waiting for a review that no research cell's review covers (revisions, rechecks)."""
+        with self.connect() as conn:
+            row = conn.execute("SELECT psst.plan_reviews(%s) AS n", (self.token,)).fetchone()
+            conn.commit()
+        self._reviews_planned = time.monotonic()
+        return int(row["n"]) if row else 0
+
     def plan_audits(self, force: bool = False) -> int:
         with self.connect() as conn:
             row = conn.execute("SELECT psst.plan_audits(%s, %s) AS n", (self.token, force)).fetchone()
@@ -101,6 +111,8 @@ class SystemWorker:
             busy = self.step()
             if time.monotonic() - self._audits_planned > AUDIT_PLAN_SECONDS:
                 self.plan_audits()
+            if time.monotonic() - self._reviews_planned > REVIEW_PLAN_SECONDS:
+                self.plan_reviews()
             if time.monotonic() - self._gate_refreshed > GATE_SECONDS:
                 self.refresh_gate()
             if once and not busy:

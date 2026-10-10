@@ -116,6 +116,8 @@ def tool_checks(database, system=None):
             result = runner.run(conn, system.token, task["revision_id"], task["id"])
         system.submit(task, {"pass": result.ok})
         results.append(result)
+    with database.connect("system") as conn:
+        conn.execute("SELECT psst.plan_reviews(%s)", (system.token,))  # the worker batches waiting reviews
     return results
 
 

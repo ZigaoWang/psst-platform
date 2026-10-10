@@ -246,3 +246,21 @@ def test_a_revision_is_not_compared_with_its_own_story(database, city):
         as_revision = runner.context_for(conn, "story", row["place_id"], row["body"], None, row["item_id"])
         as_new_story = runner.context_for(conn, "story", row["place_id"], row["body"], None)
     assert as_revision.siblings == [] and len(as_new_story.siblings) == 1
+
+
+def test_revisions_from_different_cells_are_reviewed_in_one_batch(database, city):
+    with database.connect("admin") as conn:
+        other = sample.place(conn, city["admin"], wikidata="Q900002")
+    first, _ = research(database, city)
+    second, _ = research(database, city, place=other, n=1)
+    tool_checks(database)
+    weak = {"mark": "weak", "reason": "the surprise is buried under background"}
+    for _ in range(2):
+        review(database, lambda r: weak if r in (first, second) else {"mark": "good", "reason": "fine"})
+    reviser = Worker(database, SONNET)
+    while (task := reviser.lease("revise")) is not None:
+        reviser.submit(task, story_result(city))
+    tool_checks(database)
+    with database.connect("admin") as conn:
+        reviews = conn.execute("SELECT input FROM psst.tasks WHERE type = 'review' AND state = 'queued'").fetchall()
+    assert [len(r["input"]["revisions"]) for r in reviews] == [2]

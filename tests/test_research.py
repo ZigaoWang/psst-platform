@@ -319,6 +319,7 @@ def test_the_harness_researches_a_cell_place_by_place(database, city, monkeypatc
         conn.execute("UPDATE psst.settings SET value = %s WHERE key IN ('routing.research_cell', "
                      "'routing.research_cell_dense')", (json.dumps(rotation),))
         conn.execute("""UPDATE psst.settings SET value = '{"testville": 1}' WHERE key = 'harness.city_budgets_usd'""")
+        conn.execute("UPDATE psst.settings SET value = 'null' WHERE key = 'routing.research_writer'")
     worker = Worker(database, rotation)
     task = worker.lease("research_cell")
     with database.connect("worker") as conn:

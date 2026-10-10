@@ -359,6 +359,15 @@ COMMON = {"The", "A", "An", "It", "Its", "In", "On", "At", "From", "Look", "Stan
           "Their", "I", "We", "You", "Your", "After", "Before", "By", "For", "With", "Over", "Under", "Above", "Below"}
 
 
+def prose_writer(evidence_writer: Executor) -> Executor:
+    """The model for the writing step: routing.research_writer when set (writing needs craft, not tools, and its
+    context is small), otherwise the model that gathered the evidence."""
+    with db.connect("worker") as conn:
+        row = conn.execute("SELECT psst.setting('routing.research_writer') #>> '{}' AS m").fetchone()
+    model = row["m"] if row else None
+    return Executor(evidence_writer.token, model) if model else evidence_writer
+
+
 def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, Any], spend: Spend) -> Any:
     leads = {lead["lead"]: lead for lead in document["data"]["leads"]}
     # A rotation triages with its first model and hands each place to the next writer in turn.
@@ -383,7 +392,7 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
                     accounted.append({"lead": d["lead"], "status": "skipped",
                                       "reason": f"the evidence isn't there: {gathered['skip']}"[:300]})
                     continue
-                placed = write(writer, task, document, d, lead, gathered, Spend())
+                placed = write(prose_writer(writer), task, document, d, lead, gathered, Spend())
             except (GaveUp, ValueError, TypeError, KeyError, psycopg.Error) as reason:
                 # One place that fails, for any reason, is given back; the rest of the cell goes on.
                 status = "skipped" if lead.get("well_known") else "later"

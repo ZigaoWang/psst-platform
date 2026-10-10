@@ -70,14 +70,15 @@ def claims_from_result(raw: list[dict[str, Any]]) -> list[Claim]:
 
 
 def preflight(conn: Connection, item_type: str, place_id: str | None, result: dict[str, Any],
-              translation_of: str | None = None, item_id: str | None = None) -> Result:
+              translation_of: str | None = None, item_id: str | None = None, names: list[str] | None = None) -> Result:
     """The tool checks on a result before it is submitted; `item_id` is the item a revision revises, so it is not
-    compared with itself."""
+    compared with itself, and `names` are a new place's own name and areas, which it has no record of yet."""
     body = result.get("body") or {}
     claims = claims_from_result(result.get("claims") or [])
     snapshots = snapshots_for(conn, sorted({e.snapshot for c in claims for e in c.evidence}))
-    return check(item_type, body, claims, snapshots,
-                 context_for(conn, item_type, place_id, body, translation_of, item_id))
+    context = context_for(conn, item_type, place_id, body, translation_of, item_id)
+    context.names += [n for n in names or [] if n]
+    return check(item_type, body, claims, snapshots, context)
 
 
 def load(conn: Connection, revision_id: str) -> tuple[str, dict[str, Any], list[Claim], dict[str, Snapshot], Context]:

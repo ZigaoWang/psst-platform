@@ -287,7 +287,7 @@ def test_a_new_place_that_already_exists_is_caught_before_submitting(database, c
     mill = result_for(database, document)["places"][0]
     submit_place(database, worker, task, mill, [])
     with database.connect("worker") as conn:
-        found = place_problems(conn, "place 0", mill)
+        found = place_problems(conn, "place 0", mill, [])
     assert len(found) == 1 and "is already" in found[0] and "submit it as existing" in found[0]
 
 

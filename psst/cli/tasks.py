@@ -173,7 +173,7 @@ def problems(document: dict[str, Any], result: dict[str, Any]) -> list[str]:
                 ([lead["lead"] for lead in document["data"]["leads"]],))}
             found += research_problems(document["data"], result, settled)
             for index, place in enumerate(result["places"]):
-                found += place_problems(conn, f"place {index}", place)
+                found += place_problems(conn, f"place {index}", place, cell_areas(document["data"]))
     if kind == "review":
         found += review_problems(document["data"], result)
     if kind == "calibrate":
@@ -215,7 +215,7 @@ def review_problems(data: dict[str, Any], result: dict[str, Any]) -> list[str]:
     return found
 
 
-def place_problems(conn: Connection, label: str, place: dict[str, Any]) -> list[str]:
+def place_problems(conn: Connection, label: str, place: dict[str, Any], areas: list[str]) -> list[str]:
     """What is wrong with one place of a research result: a new place that already exists (another session may have
     added it since the lease), a new place without a precise coordinate, and every tool check on its writing."""
     found: list[str] = []
@@ -235,9 +235,15 @@ def place_problems(conn: Connection, label: str, place: dict[str, Any]) -> list[
     written = [("story", n, s) for n, s in enumerate(place["stories"], 1)]
     written += [("guide", 1, place["guide"])] if place.get("guide") else []
     for written_type, n, item in written:
-        check = runner.preflight(conn, written_type, place.get("existing"), item)
+        names = [] if place.get("existing") else [str(place.get("name") or ""), *areas]  # its own, and its areas'
+        check = runner.preflight(conn, written_type, place.get("existing"), item, names=names)
         found += [f"{label} {written_type} {n}: {r}" for r in check.report.refusals]
     return found
+
+
+def cell_areas(brief: dict[str, Any]) -> list[str]:
+    """The names of a research cell's city and neighborhoods, which its places' prose may use."""
+    return [brief.get("city") or "", *brief.get("neighborhoods", [])]
 
 
 def position_problems(label: str, place: dict[str, Any]) -> list[str]:
@@ -322,7 +328,7 @@ def submit_one_place(document: dict[str, Any], payload: dict[str, Any]) -> Any:
         found += [f"lead {lead} isn't in this cell's brief" for lead in payload["leads"] if lead not in brief]
     with db.connect("worker") as conn:
         if not found:
-            found += place_problems(conn, "place", payload["place"])
+            found += place_problems(conn, "place", payload["place"], cell_areas(document["data"]))
         if found:
             raise NotSubmitted(found)
         outcome = conn.execute("SELECT psst.submit_research_place(%s, %s, %s, %s, %s, %s) AS r",

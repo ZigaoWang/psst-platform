@@ -329,8 +329,10 @@ def research_brief(conn: Connection, cell: str) -> dict[str, Any]:
     neighborhoods = [r["name"] for r in conn.execute("""
         SELECT DISTINCT a.name FROM psst.areas a JOIN psst.research_cells c ON c.cell = %s
         WHERE a.level = 'neighborhood' AND ST_Intersects(a.geom, c.geom) ORDER BY a.name""", (cell,))]
+    city = conn.execute("""SELECT a.name FROM psst.research_cells c JOIN psst.areas a ON a.id = c.city_id
+                           WHERE c.cell = %s""", (cell,)).fetchone()
     return {"cell": cell, "bounds": {"south": south, "west": west, "north": north, "east": east},
-            "neighborhoods": neighborhoods, "leads": leads,
+            "city": city["name"] if city else None, "neighborhoods": neighborhoods, "leads": leads,
             "leads_after_this_pass": max(0, int(waiting["n"] if waiting else 0) - len(leads)),
             "places_nearby": places,
             "rules": {"kinds": spec["kinds"], "sizes": spec["sizes"],

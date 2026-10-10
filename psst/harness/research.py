@@ -400,7 +400,8 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
                 part["body"] = {k: v for k, v in part["body"].items() if k in allowed}
         place = assemble(gathered["place"], answer, facts)
         us_spelling(place)
-        found = unsupported(place, facts, [lead["name"], *document["data"]["neighborhoods"]])
+        found = unsupported(place, facts, [lead["name"], (gathered["place"] or {}).get("name") or "",
+                                           *task_cli.cell_areas(document["data"])])
         if found:
             raise task_cli.NotSubmitted(found)
         return task_cli.submit_one_place(document, {"place": place, "leads": [lead["lead"]]})

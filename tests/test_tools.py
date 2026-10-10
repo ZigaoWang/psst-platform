@@ -279,3 +279,10 @@ def test_a_long_name_shared_with_the_source_is_not_copying():
 
 def test_a_possessive_name_is_the_name():
     assert proper_names("We walked past Highbury's clock") == ["Highbury"]
+
+
+def test_a_new_places_own_name_and_city_may_be_used_in_its_prose():
+    body = story(short="The pump house at 12 Mill Lane in Testville was built in 1871 as a pumping station.")
+    names = Context(names=["12 Mill Lane", "Testville"])
+    result = check("story", body, claims(), SNAPSHOTS, names)
+    assert not any("'12'" in r or "Testville" in r for r in refusals(result))

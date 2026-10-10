@@ -226,3 +226,14 @@ def test_a_second_session_skips_a_guide_the_place_already_has(database, city):
     again, second, document = lease_research(database)
     outcome = submit_research(database, again, second, result_for(database, document))
     assert outcome["guides"] == 0 and outcome["guides_skipped"] == [LEGACY_ID] and outcome["stories"] == 1
+
+
+def test_a_place_without_a_precise_coordinate_is_caught_before_submitting(monkeypatch):
+    from psst.cli.tasks import position_problems
+    monkeypatch.setattr(coords, "resolve", lambda places: {
+        "0": "Q900098's coordinate is only precise to 0.01 degrees; give the OpenStreetMap element",
+        "1": coords.Position(51.5, -0.05, "osm", "way/1")})
+    result = {"places": [{"name": "Invented Square", "wikidata": "Q900098"},
+                         {"name": "Invented Hall", "osm": "way/1"}, {"existing": "pl_x"}]}
+    assert position_problems(result) == ["place 0 (Invented Square): Q900098's coordinate is only precise to 0.01 "
+                                         "degrees; give the OpenStreetMap element"]

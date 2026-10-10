@@ -15,6 +15,7 @@ from psst.checks import runner
 from psst.core import config, db
 from psst.evidence import encyclopedia, wikidata
 from psst.photos import commons, importing
+from psst.places import coords
 from psst.tasks import files
 
 from . import fetching
@@ -162,6 +163,7 @@ def problems(document: dict[str, Any], result: dict[str, Any]) -> list[str]:
                   for v in result.get("verdicts", []) if v["verdict"] == "unclear"]
     if kind == "research_cell":
         found += research_problems(document["data"], result)
+        found += position_problems(result)
         with db.connect("worker") as conn:
             for index, place in enumerate(result["places"]):
                 written = [("story", n, s) for n, s in enumerate(place["stories"], 1)]
@@ -198,6 +200,17 @@ def review_problems(data: dict[str, Any], result: dict[str, Any]) -> list[str]:
     found += [f"{d['revision']}: only a good mark names a cut in fix; a weak or bad reason says what is wrong"
               for d in result["decisions"] if d["fix"] is not None and d["mark"] != "good"]
     return found
+
+
+def position_problems(result: dict[str, Any]) -> list[str]:
+    """Every new place must resolve to a precise coordinate, the way the system worker will resolve it, so a place
+    that can't is fixed now (usually by giving its OpenStreetMap element) instead of refused after submitting."""
+    new = {str(i): p for i, p in enumerate(result["places"]) if not p.get("existing")}
+    if not new:
+        return []
+    positions = coords.resolve([{"id": i, "wikidata": p.get("wikidata"), "osm": p.get("osm")} for i, p in new.items()])
+    return [f"place {i} ({new[i]['name']}): {position}" for i, position in positions.items()
+            if not isinstance(position, coords.Position)]
 
 
 def research_problems(brief: dict[str, Any], result: dict[str, Any]) -> list[str]:

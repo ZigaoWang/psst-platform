@@ -204,3 +204,12 @@ def test_a_namespaced_tool_name_reaches_the_tool(database, city, roles):
                                              autocommit=True), token=worker.token)
     found = tools.call(ctx, "psst:search_snapshot", {"snapshot": snapshot, "words": "1871"})
     assert "error" not in found and "1871" in found["passages"]
+
+
+def test_a_city_without_a_budget_gets_nothing(database, city, roles):
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.settings SET value = '{}' WHERE key = 'harness.city_budgets_usd'")
+    with database.connect("worker") as conn:
+        harness.check_budget(conn, None)  # calibrations count only against the total
+        with pytest.raises(harness.BudgetReached, match="city's budget"):
+            harness.check_budget(conn, sample.CITY_ID)

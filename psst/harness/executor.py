@@ -124,6 +124,8 @@ def check_budget(conn: Connection, city_id: int | None) -> None:
         raise BudgetReached("the harness is paused")
     if float(spent["total"]) >= float(row["total"]):
         raise BudgetReached(f"spent {float(spent['total']):.4f} of the {row['total']} USD budget")
+    if city_id is not None and float(spent["city_total"]) >= float(spent["city_budget"] or 0):
+        raise BudgetReached(f"the city's budget of {spent['city_budget'] or 0} USD is spent")
     if city_id is not None and row["daily"] is not None and float(spent["city_today"]) >= float(row["daily"]):
         raise BudgetReached(f"the city's daily budget of {row['daily']} USD is spent")
     if city_id is not None and row["monthly"] is not None and float(spent["city_month"]) >= float(row["monthly"]):

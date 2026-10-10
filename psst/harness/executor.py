@@ -47,7 +47,7 @@ class Limits:
 
 STEP_LIMITS = {
     "tier_check": Limits(tool_calls=0, fixes=1, tokens=60_000, reply_tokens=600),
-    "calibrate": Limits(tool_calls=0, fixes=2, tokens=300_000, reply_tokens=8000),
+    "calibrate": Limits(tool_calls=0, fixes=2, tokens=400_000, reply_tokens=16000),
     "review": Limits(tool_calls=6, fixes=2, tokens=500_000, reply_tokens=12000),
     "audit": Limits(tool_calls=4, fixes=2, tokens=500_000, reply_tokens=8000),
     "revise": Limits(tool_calls=10, fixes=3, tokens=400_000, reply_tokens=8000),

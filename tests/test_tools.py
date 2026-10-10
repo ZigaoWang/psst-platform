@@ -265,3 +265,11 @@ def test_a_second_story_on_the_same_angle_is_refused():
     other = "Ada Thorne won the commission at twenty three, the youngest engineer the water company ever hired."
     result = check("story", story(), claims(), SNAPSHOTS, Context(names=["Old Pump House"], siblings=[other]))
     assert "tells the same story as" not in refusals(result)
+
+
+def test_a_long_name_shared_with_the_source_is_not_copying():
+    record = dataclasses.replace(RECORD, text=RECORD.text + " Concerts are given by the Academy of St Martin in the "
+                                              "Fields Orchestra each spring.")
+    named = story(long=LONG + " Concerts are now given here by the Academy of St Martin in the Fields Orchestra.")
+    result = check("story", named, claims(), SNAPSHOTS | {RECORD.id: record})
+    assert "copies" not in refusals(result)

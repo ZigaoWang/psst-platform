@@ -200,6 +200,10 @@ def proper_names(text: str) -> list[str]:
 QUOTED = re.compile(r"\"[^\"]*\"")
 
 
+# Small words inside a proper name ("the Academy of St Martin in the Fields").
+NAME_JOINERS = {"of", "the", "in", "and", "on", "at", "for", "de", "la", "le", "du", "von", "van"}
+
+
 def _own_words(report: Report, prose: dict[str, str], claims: list[Claim], snapshots: dict[str, Snapshot],
                rulebook: Rulebook) -> None:
     size = int(rulebook.writing["max_shared_words"]) + 1
@@ -211,9 +215,11 @@ def _own_words(report: Report, prose: dict[str, str], claims: list[Claim], snaps
             runs.setdefault(tuple(source_words[i:i + size]), snapshot_id)
     for where, text in prose.items():
         own = words(QUOTED.sub(" | ", fold(text)[0]))
+        named = {w.casefold() for w in CAPITAL_WORD.findall(text)} | NAME_JOINERS
         for i in range(len(own) - size + 1):
             shared = tuple(own[i:i + size])
-            if shared in runs:
+            # A long name shared with the source is a fact; copying shares the ordinary words around it.
+            if shared in runs and sum(w not in named for w in shared) >= 3:
                 report.refuse(where, f"copies \"{' '.join(shared)}\" from snapshot {runs[shared]}; "
                                      "write it in your own words or quote it")
                 break

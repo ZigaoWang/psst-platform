@@ -392,6 +392,8 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
                 story["body"].setdefault("tags", [])
                 story["body"].setdefault("veracity", "fact")
                 story["body"].setdefault("category", "history")
+        if isinstance(answer.get("guide"), dict) and isinstance(answer["guide"].get("body"), dict):
+            answer["guide"]["body"].setdefault("key_facts", [])  # left empty here, as the prompt asks
         place = assemble(gathered["place"], answer, facts)
         us_spelling(place)
         found = unsupported(place, facts, [lead["name"], *document["data"]["neighborhoods"]])

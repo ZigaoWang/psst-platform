@@ -152,7 +152,7 @@ def lease_next(args: argparse.Namespace) -> int:
             return 3
         document = files.build(conn, task, files.Lookups(_lead, _key_facts, _photo_candidates, _photo_file))
     args.out.mkdir(parents=True, exist_ok=True)
-    path = args.out / f"{task['id']}.json"
+    path = args.out / f"{task['id']}.{task['leased_by']}.json"  # a task can pass between runs; each keeps its own file
     path.write_text(json.dumps(document, ensure_ascii=False, indent=2, default=str))
     print(path)
     return 0

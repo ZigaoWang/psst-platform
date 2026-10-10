@@ -264,3 +264,14 @@ def test_revisions_from_different_cells_are_reviewed_in_one_batch(database, city
     with database.connect("admin") as conn:
         reviews = conn.execute("SELECT input FROM psst.tasks WHERE type = 'review' AND state = 'queued'").fetchall()
     assert [len(r["input"]["revisions"]) for r in reviews] == [2]
+
+
+def test_a_finished_cell_waiting_without_a_review_gets_one(database, city):
+    story, guide = research(database, city)
+    tool_checks(database)
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.tasks SET state = 'cancelled' WHERE type = 'review'")  # as a replanning leaves it
+    tool_checks(database)  # plans reviews, as the system worker does
+    with database.connect("admin") as conn:
+        review_task = conn.execute("SELECT input FROM psst.tasks WHERE type = 'review' AND state = 'queued'").fetchone()
+    assert sorted(review_task["input"]["revisions"]) == sorted([story, guide])

@@ -41,6 +41,10 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     negatives.set_defaults(run=run_negatives)
     status = commands.add_parser("status", help="spend against the budget, and the credit left")
     status.set_defaults(run=show_status)
+    report = commands.add_parser("report", help="what the harness did since a time: cells, places, cost, skips")
+    report.add_argument("--since", required=True, help="a time, such as 2026-10-11T00:00:00Z")
+    report.add_argument("--samples", type=int, default=5, help="stories to show")
+    report.set_defaults(run=show_report)
 
 
 def run_tasks(args: argparse.Namespace) -> int:
@@ -101,6 +105,85 @@ def show_status(args: argparse.Namespace) -> int:
         status["openrouter"] = f"unavailable: {error}"
     print(json.dumps(status, ensure_ascii=False, indent=2, default=str))
     return 0
+
+
+def show_report(args: argparse.Namespace) -> int:
+    """Cells worked since a time, with places that still stand (with stories, and guide-only) against the previous
+    app's count in each cell, what failed, cost per step and per place, review marks, skips by reason, and sample
+    stories: the report on an unattended run (decision 36)."""
+    with db.open_connection(db.conninfo("system")) as conn:
+        print(json.dumps(report(conn, args.since, args.samples), ensure_ascii=False, indent=2, default=str))
+    return 0
+
+
+def report(conn: Any, since: str, samples: int) -> dict[str, Any]:
+    window = {"s": since}
+    steps = [dict(r) for r in conn.execute("""
+        SELECT step, count(*) AS calls, round(sum(cost_usd), 4) AS usd, round(sum(latency_ms) / 1000.0) AS seconds
+        FROM psst.harness_calls WHERE created_at >= %(s)s GROUP BY step ORDER BY usd DESC""", window)]
+    cells = [dict(r) for r in conn.execute("""
+        WITH worked AS (
+            SELECT input ->> 'cell' AS cell, count(*) AS passes FROM psst.tasks
+            WHERE type = 'research_cell' AND state = 'done' AND done_at >= %(s)s GROUP BY 1),
+        placed AS (
+            SELECT p.h3_r7 AS cell, i.place_id,
+                   count(*) FILTER (WHERE i.type = 'story') AS stories,
+                   count(*) FILTER (WHERE i.type = 'story'
+                                    AND i.state IN ('checking', 'accepted', 'published')) AS kept,
+                   bool_or(i.state IN ('checking', 'accepted', 'published')) AS standing
+            FROM psst.items i JOIN psst.places p ON p.id = i.place_id
+            WHERE i.created_at >= %(s)s AND i.type IN ('story', 'guide') GROUP BY 1, 2)
+        SELECT w.cell, w.passes,
+               (SELECT count(*) FROM psst.legacy_places l JOIN psst.research_cells r ON ST_Intersects(l.geom, r.geom)
+                WHERE r.cell = w.cell) AS previous_app,
+               count(pl.place_id) FILTER (WHERE pl.kept > 0) AS with_stories,
+               count(pl.place_id) FILTER (WHERE pl.standing AND pl.stories = 0) AS guide_only,
+               count(pl.place_id) FILTER (WHERE pl.standing AND pl.stories > 0 AND pl.kept = 0) AS story_sent_back,
+               count(pl.place_id) FILTER (WHERE NOT pl.standing) AS failed,
+               (SELECT count(*) FROM psst.leads d WHERE d.cell = w.cell AND d.status IN ('open', 'later')) AS leads_left
+        FROM worked w LEFT JOIN placed pl ON pl.cell = w.cell GROUP BY w.cell, w.passes ORDER BY w.cell""", window)]
+    marks = [dict(r) for r in conn.execute("""
+        SELECT i.type, i.state, i.tier, count(*) AS n FROM psst.items i
+        WHERE i.created_at >= %(s)s AND i.type IN ('story', 'guide') GROUP BY 1, 2, 3 ORDER BY 1, 2, 3""", window)]
+    skips: dict[str, int] = {}
+    for r in conn.execute("""SELECT reason FROM psst.leads
+                             WHERE decided_at >= %(s)s AND status IN ('skipped', 'later')""", window):
+        skips[skip_kind(r["reason"])] = skips.get(skip_kind(r["reason"]), 0) + 1
+    stories = [dict(r) for r in conn.execute("""
+        SELECT (SELECT name FROM psst.place_names n WHERE n.place_id = i.place_id AND n.role = 'display') AS place,
+               i.state, coalesce(i.tier, v.body ->> 'tier') AS tier, v.body ->> 'headline' AS headline,
+               v.body ->> 'short' AS short, v.body ->> 'look' AS look
+        FROM psst.items i JOIN psst.revisions v ON v.id = i.current_revision
+        WHERE i.created_at >= %(s)s AND i.type = 'story' AND i.state IN ('checking', 'accepted', 'published')
+        ORDER BY md5(i.id) LIMIT %(n)s""", window | {"n": samples})]
+    spent = sum(float(s["usd"]) for s in steps)
+    standing = sum(c["with_stories"] + c["guide_only"] + c["story_sent_back"] for c in cells)
+    return {"since": since, "spent_usd": round(spent, 4), "places_standing": standing,
+            "usd_per_place": round(spent / standing, 4) if standing else None, "cells": cells, "steps": steps,
+            "items": marks, "skips": dict(sorted(skips.items(), key=lambda s: -s[1])), "samples": stories}
+
+
+def skip_kind(reason: str | None) -> str:
+    """A lead's skip reason, sorted into the step that gave it and a short kind."""
+    text = (reason or "").casefold()
+    if text.startswith("couldn't be written"):
+        problem = text.split("allowed: ", 1)[-1]
+        kind = ("values" if "values" in problem or "isn't in the facts" in problem else
+                "length" if "too long" in problem or "too short" in problem else
+                "own words" if "copies" in problem else "other")
+        return f"writing: {kind}"
+    if text.startswith("the evidence isn't there"):
+        return "evidence: " + ("pages unreadable" if "none of its pages" in text else "too little in the sources")
+    kinds = [("not one physical thing", ("not one physical", "not a place", "an area", "district", "event",
+                                         "organisation", "organization", "route")),
+             ("no record or primary source", ("no record", "need its listing", "need a source")),
+             ("nothing beyond its record or encyclopedia", ("nothing beyond", "generic", "similar", "no story",
+                                                           "no specific", "thin")),
+             ("nothing to see", ("nothing visible", "nothing to see", "nothing to point"))]
+    for kind, words in kinds:
+        if any(w in text for w in words):
+            return f"triage: {kind}"
+    return "triage: other"
 
 
 # The order the service works in: what unblocks publishing first, research last (workers.md).

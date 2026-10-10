@@ -335,3 +335,15 @@ def test_an_unattended_window_caps_spend_and_stops_on_failing_passes(database, c
                         'usd', 0) WHERE key = 'harness.window'""")
     with database.connect("worker") as conn, pytest.raises(harness.BudgetReached, match="window"):
         harness.check_budget(conn, None)
+
+
+def test_the_report_counts_places_against_the_previous_app_and_sorts_skips(database, city):
+    from psst.cli.harness import report, skip_kind
+    from tests.flow import research
+    research(database, city)
+    with database.connect("system") as conn:
+        found = report(conn, "2000-01-01T00:00:00Z", 5)
+    assert found["places_standing"] >= 1 and found["samples"][0]["headline"]
+    assert skip_kind("not a place to stand in front of: an area of London") == "triage: not one physical thing"
+    assert skip_kind("couldn't be written to the bar: still not right after the fixes allowed: x is too long") \
+        == "writing: length"

@@ -8,6 +8,7 @@ import json
 from typing import Any
 
 import jsonschema
+import psycopg
 
 from psst.cli import tasks as task_cli
 from psst.core import db
@@ -124,7 +125,8 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
             turn += 1
             try:
                 placed = write(writer, task, document, d, lead, Spend())
-            except GaveUp as reason:
+            except (GaveUp, ValueError, TypeError, KeyError, psycopg.Error) as reason:
+                # One place that fails, for any reason, is given back; the rest of the cell goes on.
                 status = "skipped" if lead.get("well_known") else "later"
                 accounted.append({"lead": d["lead"], "status": status,
                                   "reason": f"couldn't be written to the bar: {reason}"[:300]})

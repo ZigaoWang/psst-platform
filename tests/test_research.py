@@ -346,3 +346,12 @@ def test_the_harness_researches_a_cell_place_by_place(database, city, monkeypatc
                             "AND place_id IS NOT NULL AND model = 'openrouter:test/writer-a'").fetchone()
         state = conn.execute("SELECT state FROM psst.tasks WHERE id = %s", (task["id"],)).fetchone()
     assert lead["status"] == "added" and tied["n"] == 1 and state["state"] == "done"
+
+
+def test_a_place_with_malformed_leads_is_refused_not_crashed(database, city, monkeypatch):
+    from psst.cli import tasks as task_cli
+    monkeypatch.setenv("PSST_DATABASE_URL_WORKER", database.url("worker"))
+    worker, task, document = lease_research(database)
+    place = result_for(database, document)["places"][0]
+    with pytest.raises(task_cli.NotSubmitted, match="leads"):
+        task_cli.submit_one_place(document, {"place": place, "leads": [{"lead": "ld_x"}]})

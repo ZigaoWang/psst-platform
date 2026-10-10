@@ -320,8 +320,9 @@ def submit_one_place(document: dict[str, Any], payload: dict[str, Any]) -> Any:
         raise config.ConfigError("places are submitted one by one only for research")
     found = [f"{'/'.join(map(str, e.path)) or 'place'}: {e.message}"
              for e in jsonschema.Draft202012Validator(results.research_place()).iter_errors(payload)]
-    brief = {lead["lead"] for lead in document["data"]["leads"]}
-    found += [f"lead {lead} isn't in this cell's brief" for lead in payload.get("leads", []) if lead not in brief]
+    if not found:
+        brief = {lead["lead"] for lead in document["data"]["leads"]}
+        found += [f"lead {lead} isn't in this cell's brief" for lead in payload["leads"] if lead not in brief]
     with db.connect("worker") as conn:
         if not found:
             found += place_problems(conn, "place", payload["place"])

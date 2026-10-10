@@ -309,6 +309,7 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
                 story["body"].setdefault("veracity", "fact")
                 story["body"].setdefault("category", "history")
         place = assemble(gathered["place"], answer, facts)
+        us_spelling(place)
         found = unsupported(place, facts, [lead["name"], *document["data"]["neighborhoods"]])
         if found:
             raise task_cli.NotSubmitted(found)
@@ -452,3 +453,15 @@ def parallel_places() -> int:
     with db.connect("worker") as conn:
         row = conn.execute("SELECT psst.setting('harness.parallel_places') #>> '{}' AS n").fetchone()
     return max(1, int(row["n"])) if row and row["n"] else 8
+
+
+def us_spelling(place: dict[str, Any]) -> None:
+    """The words the rulebook lists as British take their US form in the prose (storeys becomes stories): a
+    mechanical change that never alters a fact, made in code rather than paid for as a fix round."""
+    british = rules.load().writing["british_spellings"]
+    pattern = re.compile(r"\b(" + "|".join(map(re.escape, sorted(british, key=len, reverse=True))) + r")\b")
+    for part in [*place.get("stories", []), place.get("guide") or {}]:
+        body = part.get("body") or {}
+        for key, value in body.items():
+            if isinstance(value, str):
+                body[key] = pattern.sub(lambda m: british[m.group(1)], value)

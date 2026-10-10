@@ -529,3 +529,12 @@ def test_a_record_lead_is_stored(database, city):
     with database.connect("admin") as conn:
         stored = conn.execute("SELECT origin FROM psst.leads WHERE name = 'Invented Kiosk'").fetchone()
     assert stored["origin"] == "record"
+
+
+def test_british_spellings_take_their_us_form_before_checking():
+    from psst.harness import research as harness_research
+    place = {"stories": [{"body": {"long": "A house of two storeys, its colour unchanged.", "tags": []}}],
+             "guide": {"body": {"about": "Three storey houses."}}}
+    harness_research.us_spelling(place)
+    assert place["stories"][0]["body"]["long"] == "A house of two stories, its color unchanged."
+    assert place["guide"]["body"]["about"] == "Three story houses."

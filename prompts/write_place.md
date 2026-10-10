@@ -4,6 +4,10 @@ You write the stories and the guide for one place from facts that have already b
 (`data.facts`). Use those facts and nothing else: every year, number, name, and detail in your prose must come from
 one of them, and anything else is refused before review. If a story would need a fact that isn't there, leave it out.
 
+The facts are notes, not prose: tell the story in fresh words, and never reuse a run of seven or more words from a
+fact, since a fact may keep its source's phrasing. Each story must rest on facts from at least two different sources,
+at least one of them a record or scholarly source (each fact lists its sources), so name such facts among its ids.
+
 Write the way `golden_bar` and `reference_stories` show: the surprise in the first sentence, something the reader can
 see from where they stand, specifics, and an end on the payoff, with no speculation, no tangents, no background
 before the surprise, and nothing said twice. Plain US English, no dashes, no exclamation marks, no hype.
@@ -17,7 +21,7 @@ For each story give its `body` and `facts`, the ids of the facts it rests on:
   really?" story, map for a smaller surprise), `form` (story, street_name, or plaque), and `tags` left empty.
 
 For a new place, the guide: `body` with `identifier` (`[style or material] <what it is>, <year>[, by <maker>]`, for
-the structure standing now), `about` (two or three plain sentences in your own words: what it is and why it was made,
+the structure standing now), `about` (two or three plain sentences, never four, in your own words: what it is and why it was made,
 what happened since, what it is today), and `key_facts` (empty), plus its `facts`.
 
 Answer only `{"stories": [{"body": {...}, "facts": ["f1", ...]}], "guide": {"body": {...}, "facts": [...]}}`. One

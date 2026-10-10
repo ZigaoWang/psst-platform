@@ -241,7 +241,14 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
     facts = {f["id"]: f for f in gathered["facts"]}
     # The writer sees each fact in plain words with its values, not the quoted source, so it tells the story in its
     # own words; the claims it rests on still carry the exact quotes.
-    shown = [{k: f[k] for k in ("id", "text", "kind", "values") if k in f} for f in facts.values()]
+    with db.connect("worker") as conn:
+        origin = {r["id"]: r for r in conn.execute("""
+            SELECT n.id, s.publisher, s.kind FROM psst.snapshots n JOIN psst.sources s ON s.id = n.source_id
+            WHERE n.id = ANY(%s)""", ([e["snapshot"] for f in facts.values() for e in f["evidence"]],))}
+    shown = [{k: f[k] for k in ("id", "text", "kind", "values") if k in f}
+             | {"sources": sorted({f"{origin[e['snapshot']]['publisher']} ({origin[e['snapshot']]['kind']})"
+                                   for e in f["evidence"] if e["snapshot"] in origin})}
+             for f in facts.values()]
     user = json.dumps({"data": {"place": gathered["place"], "lead": lead["name"], "angle": decision.get("angle"),
                                 "tier": decision.get("tier"), "form": decision.get("form"),
                                 "facts": shown}}, ensure_ascii=False, default=str)

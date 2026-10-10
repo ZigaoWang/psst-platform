@@ -11,7 +11,7 @@ pages give (an article's references lead to the records it rests on); never gues
 
 For each fact give:
 - `id`: f1, f2, ...
-- `text`: the fact in one plain sentence of your own.
+- `text`: the fact in one plain sentence of your own, never in the source's phrasing.
 - `kind`: date, name, number, place, event, or attribute.
 - `values`: leave empty; the numbers and names are taken from your quotes.
 - `evidence`: the snapshot id and the exact words copied from that snapshot, long enough to contain every name, date,

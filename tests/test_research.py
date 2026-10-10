@@ -231,9 +231,61 @@ def test_a_second_session_skips_a_guide_the_place_already_has(database, city):
 def test_a_place_without_a_precise_coordinate_is_caught_before_submitting(monkeypatch):
     from psst.cli.tasks import position_problems
     monkeypatch.setattr(coords, "resolve", lambda places: {
-        "0": "Q900098's coordinate is only precise to 0.01 degrees; give the OpenStreetMap element",
-        "1": coords.Position(51.5, -0.05, "osm", "way/1")})
-    result = {"places": [{"name": "Invented Square", "wikidata": "Q900098"},
-                         {"name": "Invented Hall", "osm": "way/1"}, {"existing": "pl_x"}]}
-    assert position_problems(result) == ["place 0 (Invented Square): Q900098's coordinate is only precise to 0.01 "
-                                         "degrees; give the OpenStreetMap element"]
+        places[0]["id"]: "Q900098's coordinate is only precise to 0.01 degrees; give the OpenStreetMap element"})
+    assert position_problems("place 0", {"name": "Invented Square", "wikidata": "Q900098"}) == [
+        "place 0 (Invented Square): Q900098's coordinate is only precise to 0.01 degrees; give the OpenStreetMap "
+        "element"]
+
+
+def submit_place(database, worker, task, place, leads):
+    with database.connect("worker") as conn:
+        return conn.execute("SELECT psst.submit_research_place(%s, %s, %s, %s, %s, NULL) AS r",
+                            (worker.token, task["id"], json.dumps(place), json.dumps(leads),
+                             sample.RULEBOOK)).fetchone()["r"]
+
+
+def test_a_place_is_stored_as_soon_as_it_is_submitted_and_reviewed_with_the_cell(database, city):
+    worker, task, document = lease_research(database)
+    full = result_for(database, document)
+    first, second = (lead["lead"] for lead in document["data"]["leads"])
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.tasks SET leased_until = now() + interval '1 minute' WHERE id = %s", (task["id"],))
+    outcome = submit_place(database, worker, task, full["places"][0], [first])
+    assert outcome["new"] is True and outcome["written"] == 2
+    tool_checks(database)
+    with database.connect("admin") as conn:
+        lead = conn.execute("SELECT status, place_id FROM psst.leads WHERE id = %s", (first,)).fetchone()
+        lease = conn.execute("SELECT leased_until > now() + interval '1 hour' AS renewed FROM psst.tasks "
+                             "WHERE id = %s", (task["id"],)).fetchone()
+        reviews = conn.execute("SELECT count(*) AS n FROM psst.tasks WHERE type = 'review'").fetchone()
+    assert lead == {"status": "added", "place_id": outcome["place"]} and lease["renewed"]
+    assert reviews["n"] == 0  # the cell isn't finished
+    final = {"places": [], "leads": [{"lead": second, "status": "skipped", "reason": "an office block, nothing more"}],
+             "notes": "One place.", "rulebook": sample.RULEBOOK}
+    assert research_problems(document["data"], final, {first}) == []
+    assert submit_research(database, worker, task, final)["leads_open"] == 0
+    with database.connect("admin") as conn:
+        review = conn.execute("SELECT input FROM psst.tasks WHERE type = 'review'").fetchone()
+    assert len(review["input"]["revisions"]) == 2
+
+
+def test_a_stopped_session_hands_its_cell_to_the_next_researcher(database, city):
+    worker, task, document = lease_research(database)
+    submit_place(database, worker, task, result_for(database, document)["places"][0], [])
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.tasks SET leased_until = now() - interval '1 minute' WHERE id = %s", (task["id"],))
+    resumed = Worker(database, SONNET).lease("research_cell")
+    with database.connect("admin") as conn:
+        stopped = conn.execute("SELECT ended_at IS NOT NULL AS ended, notes FROM psst.runs WHERE id = %s",
+                               (worker.run,)).fetchone()
+    assert resumed["id"] == task["id"] and stopped["ended"] and "lease ran out" in stopped["notes"]
+
+
+def test_a_new_place_that_already_exists_is_caught_before_submitting(database, city):
+    from psst.cli.tasks import place_problems
+    worker, task, document = lease_research(database)
+    mill = result_for(database, document)["places"][0]
+    submit_place(database, worker, task, mill, [])
+    with database.connect("worker") as conn:
+        found = place_problems(conn, "place 0", mill)
+    assert len(found) == 1 and "is already" in found[0] and "submit it as existing" in found[0]

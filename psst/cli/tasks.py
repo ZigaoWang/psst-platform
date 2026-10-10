@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import jsonschema
+import psycopg
 from psycopg.types.json import Jsonb
 
 from psst import rules
@@ -16,13 +17,15 @@ from psst.core import config, db
 from psst.evidence import encyclopedia, wikidata
 from psst.photos import commons, importing
 from psst.places import coords
-from psst.tasks import files
+from psst.tasks import files, results
 
 from . import fetching
 from .runs import token
 
 WORK = config.ROOT / "work" / "tasks"
 WRITING = {"write_trail": "trail"}
+
+Connection = psycopg.Connection[dict[str, Any]]
 
 
 def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -38,6 +41,10 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     submit.add_argument("task_file", type=Path)
     submit.add_argument("result_file", type=Path)
     submit.set_defaults(run=submit_result)
+    place = commands.add_parser("place", help="check one finished place of a research cell and submit it")
+    place.add_argument("task_file", type=Path)
+    place.add_argument("place_file", type=Path)
+    place.set_defaults(run=submit_place)
     give_back = commands.add_parser("return", help="give a task back with the reason")
     give_back.add_argument("task_file", type=Path)
     give_back.add_argument("--problem", required=True)
@@ -162,15 +169,13 @@ def problems(document: dict[str, Any], result: dict[str, Any]) -> list[str]:
         found += [f"claim {v['claim']}: decide; 'unclear' isn't an option here"
                   for v in result.get("verdicts", []) if v["verdict"] == "unclear"]
     if kind == "research_cell":
-        found += research_problems(document["data"], result)
-        found += position_problems(result)
         with db.connect("worker") as conn:
+            settled = {r["id"] for r in conn.execute(
+                "SELECT id FROM psst.leads WHERE id = ANY(%s) AND status NOT IN ('open', 'later')",
+                ([lead["lead"] for lead in document["data"]["leads"]],))}
+            found += research_problems(document["data"], result, settled)
             for index, place in enumerate(result["places"]):
-                written = [("story", n, s) for n, s in enumerate(place["stories"], 1)]
-                written += [("guide", 1, place["guide"])] if place.get("guide") else []
-                for written_type, n, item in written:
-                    check = runner.preflight(conn, written_type, place.get("existing"), item)
-                    found += [f"place {index} {written_type} {n}: {r}" for r in check.report.refusals]
+                found += place_problems(conn, f"place {index}", place)
     if kind == "review":
         found += review_problems(document["data"], result)
     if kind == "calibrate":
@@ -202,25 +207,49 @@ def review_problems(data: dict[str, Any], result: dict[str, Any]) -> list[str]:
     return found
 
 
-def position_problems(result: dict[str, Any]) -> list[str]:
-    """Every new place must resolve to a precise coordinate, the way the system worker will resolve it, so a place
-    that can't is fixed now (usually by giving its OpenStreetMap element) instead of refused after submitting."""
-    new = {str(i): p for i, p in enumerate(result["places"]) if not p.get("existing")}
-    if not new:
-        return []
-    positions = coords.resolve([{"id": i, "wikidata": p.get("wikidata"), "osm": p.get("osm")} for i, p in new.items()])
-    return [f"place {i} ({new[i]['name']}): {position}" for i, position in positions.items()
-            if not isinstance(position, coords.Position)]
+def place_problems(conn: Connection, label: str, place: dict[str, Any]) -> list[str]:
+    """What is wrong with one place of a research result: a new place that already exists (another session may have
+    added it since the lease), a new place without a precise coordinate, and every tool check on its writing."""
+    found: list[str] = []
+    if not place.get("existing"):
+        same = conn.execute("""
+            SELECT p.id, (SELECT name FROM psst.place_names WHERE place_id = p.id AND role = 'display') AS name,
+                   coalesce((SELECT string_agg(r.body ->> 'headline', '; ') FROM psst.items i
+                             JOIN psst.revisions r ON r.id = i.current_revision
+                             WHERE i.place_id = p.id AND i.type = 'story' AND i.state <> 'retired'), 'none') AS stories
+            FROM psst.places p WHERE p.state IN ('pending', 'active')
+              AND (p.wikidata_id = %s OR p.osm_ref = %s) LIMIT 1""",
+                            (place.get("wikidata"), place.get("osm"))).fetchone()
+        if same:
+            return [f"{label} ({place['name']}) is already {same['id']} ({same['name']}), with stories: "
+                    f"{same['stories']}; submit it as existing, with an angle they don't tell"]
+        found += position_problems(label, place)
+    written = [("story", n, s) for n, s in enumerate(place["stories"], 1)]
+    written += [("guide", 1, place["guide"])] if place.get("guide") else []
+    for written_type, n, item in written:
+        check = runner.preflight(conn, written_type, place.get("existing"), item)
+        found += [f"{label} {written_type} {n}: {r}" for r in check.report.refusals]
+    return found
 
 
-def research_problems(brief: dict[str, Any], result: dict[str, Any]) -> list[str]:
-    """What the database can't judge from a research result alone: every lead accounted for, the best-known leads
-    covered in the first pass, and enough ordinary places (content.md, section 1.3)."""
+def position_problems(label: str, place: dict[str, Any]) -> list[str]:
+    """A new place must resolve to a precise coordinate, the way the system worker will resolve it, so a place that
+    can't is fixed now (usually by giving its OpenStreetMap element) instead of refused after submitting."""
+    position = coords.resolve([{"id": label, "wikidata": place.get("wikidata"), "osm": place.get("osm")}])[label]
+    return [] if isinstance(position, coords.Position) else [f"{label} ({place['name']}): {position}"]
+
+
+def research_problems(brief: dict[str, Any], result: dict[str, Any], settled: set[str] | None = None) -> list[str]:
+    """What the database can't judge from a research result alone: every lead accounted for (here or by a place
+    submitted earlier, `settled`), the best-known leads covered in the first pass, and enough ordinary places
+    (content.md, section 1.3)."""
     found: list[str] = []
     places = result["places"]
     given = {lead["lead"]: lead for lead in result["leads"]}
     for lead in brief["leads"]:
         decision = given.get(lead["lead"])
+        if decision is None and lead["lead"] in (settled or set()):
+            continue
         if decision is None:
             found.append(f"lead {lead['lead']} ({lead['name']}) isn't accounted for")
         elif decision["status"] == "later" and lead["well_known"]:
@@ -229,8 +258,10 @@ def research_problems(brief: dict[str, Any], result: dict[str, Any]) -> list[str
         status = decision["status"]
         if status in ("skipped", "later") and not decision.get("reason"):
             found.append(f"lead {lead_id}: say why it is {status}")
-        if status == "added" and not (isinstance(decision.get("place"), int) and decision["place"] < len(places)):
-            found.append(f"lead {lead_id}: 'place' is the index of the place it became")
+        if status == "added" and not decision.get("existing") \
+                and not (isinstance(decision.get("place"), int) and decision["place"] < len(places)):
+            found.append(f"lead {lead_id}: 'place' is the index of the place it became in this result, or "
+                         "'existing' the id of a place submitted earlier")
         if status == "known" and not decision.get("existing"):
             found.append(f"lead {lead_id}: 'existing' is the place it already is")
     share = rules.load().places["min_ordinary_share"]
@@ -253,6 +284,31 @@ def submit_result(args: argparse.Namespace) -> int:
     with db.connect("worker") as conn:
         outcome = conn.execute(f"SELECT psst.{function}(%s, %s, %s, %s) AS r",
                                (token(), document["task"], Jsonb(result), document["prompt_version"])).fetchone()
+    assert outcome
+    print(json.dumps(outcome["r"], ensure_ascii=False))
+    return 0
+
+
+def submit_place(args: argparse.Namespace) -> int:
+    """One finished place of a research cell, stored at once so a session that stops loses at most the place in
+    hand; it also renews the lease (decision 26)."""
+    document = json.loads(args.task_file.read_text())
+    payload = json.loads(args.place_file.read_text())
+    if document["type"] != "research_cell":
+        raise config.ConfigError("places are submitted one by one only for research")
+    found = [f"{'/'.join(map(str, e.path)) or 'place'}: {e.message}"
+             for e in jsonschema.Draft202012Validator(results.research_place()).iter_errors(payload)]
+    brief = {lead["lead"] for lead in document["data"]["leads"]}
+    found += [f"lead {lead} isn't in this cell's brief" for lead in payload.get("leads", []) if lead not in brief]
+    with db.connect("worker") as conn:
+        if not found:
+            found += place_problems(conn, "place", payload["place"])
+        if found:
+            print("Not submitted. Fix these and submit again:\n" + "\n".join(f"- {p}" for p in found))
+            return 1
+        outcome = conn.execute("SELECT psst.submit_research_place(%s, %s, %s, %s, %s, %s) AS r",
+                               (token(), document["task"], Jsonb(payload["place"]), Jsonb(payload["leads"]),
+                                document["rulebook"], document.get("bar_version"))).fetchone()
     assert outcome
     print(json.dumps(outcome["r"], ensure_ascii=False))
     return 0

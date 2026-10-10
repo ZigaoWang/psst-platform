@@ -91,9 +91,29 @@ def translation() -> dict[str, Any]:
                            "reason": NOTE}}
 
 
+def research_place() -> dict[str, Any]:
+    """One finished place, submitted while the cell's research goes on, with the leads it covers."""
+    return {"type": "object", "additionalProperties": False, "required": ["place", "leads"],
+            "properties": {"place": _place(), "leads": {"type": "array",
+                                                        "items": {"type": "string", "pattern": "^ld_"}}}}
+
+
 def research() -> dict[str, Any]:
-    """Places found in the cell, each with its stories and (for a new place) its guide, and every lead accounted
-    for."""
+    """The cell's final result: places not yet submitted, each with its stories and (for a new place) its guide, and
+    every lead the cell still holds accounted for."""
+    lead = {"type": "object", "additionalProperties": False, "required": ["lead", "status"],
+            "properties": {"lead": {"type": "string", "pattern": "^ld_"},
+                           "status": {"enum": ["added", "known", "skipped", "later"]},
+                           "place": {"type": "integer", "minimum": 0},
+                           "existing": {"type": "string", "pattern": "^pl_"},
+                           "reason": {"type": "string", "minLength": 5, "maxLength": 300}}}
+    return {"type": "object", "additionalProperties": False, "required": ["places", "leads", "notes"],
+            "properties": {"places": {"type": "array", "items": _place()},
+                           "leads": {"type": "array", "items": lead}, "notes": NOTE}}
+
+
+def _place() -> dict[str, Any]:
+    """A new place with its stories and guide, or more stories (and a missing guide) for a place that exists."""
     spec = rules.load()
     item = {"story": {"type": "object", "additionalProperties": False, "required": ["body", "claims"],
                       "properties": {"body": spec.type("story")["schema"], "claims": CLAIMS}},
@@ -115,15 +135,7 @@ def research() -> dict[str, Any]:
     existing = {"type": "object", "additionalProperties": False, "required": ["existing", "ordinary", "stories"],
                 "properties": {"existing": {"type": "string", "pattern": "^pl_"}, "ordinary": {"type": "boolean"},
                                "stories": place["stories"], "guide": item["guide"]}}
-    lead = {"type": "object", "additionalProperties": False, "required": ["lead", "status"],
-            "properties": {"lead": {"type": "string", "pattern": "^ld_"},
-                           "status": {"enum": ["added", "known", "skipped", "later"]},
-                           "place": {"type": "integer", "minimum": 0},
-                           "existing": {"type": "string", "pattern": "^pl_"},
-                           "reason": {"type": "string", "minLength": 5, "maxLength": 300}}}
-    return {"type": "object", "additionalProperties": False, "required": ["places", "leads", "notes"],
-            "properties": {"places": {"type": "array", "items": {"oneOf": [new_place, existing]}},
-                           "leads": {"type": "array", "items": lead}, "notes": NOTE}}
+    return {"oneOf": [new_place, existing]}
 
 
 def review() -> dict[str, Any]:

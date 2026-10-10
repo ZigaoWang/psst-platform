@@ -30,7 +30,6 @@ Where the build stands. Updated before every milestone and whenever the plan cha
 ## Open issues
 
 - Calibration sits at 85 to 88.5 percent. Two stories disagree in most rounds (the reviewer marks weak what the editor marked good with a cut), and the rest move from round to round. With 26 stories one mark is 3.8 points, so part of the gap is noise; more editor marks (the console sample) would steady it.
-- 35 places in the platform's queue still sit in research cells planned under the old loop; they are researched in order of open leads.
 
 ## Measurements
 

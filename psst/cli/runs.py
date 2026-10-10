@@ -65,11 +65,12 @@ def token() -> str:
 
 
 @contextmanager
-def session(conn: psycopg.Connection[dict[str, Any]], kind: str, notes: str) -> Iterator[str]:
-    """A run of `kind` for a command that works on its own (system, publisher), ended however the command ends.
-    Yields the run's token."""
-    row = conn.execute("SELECT * FROM psst.start_run(%s, %s, NULL, %s)",
-                       (kind, os.environ.get("USER") or kind, notes)).fetchone()
+def session(conn: psycopg.Connection[dict[str, Any]], kind: str, notes: str,
+            model: str | None = None) -> Iterator[str]:
+    """A run of `kind` for a command that works on its own (system, publisher, the harness's worker), ended however
+    the command ends. Yields the run's token."""
+    row = conn.execute("SELECT * FROM psst.start_run(%s, %s, %s, %s)",
+                       (kind, os.environ.get("USER") or kind, model, notes)).fetchone()
     conn.commit()
     assert row
     try:

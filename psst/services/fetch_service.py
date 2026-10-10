@@ -17,6 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 import psycopg
+from psycopg.types.json import Jsonb
 
 from psst import rules
 from psst.evidence import fetch, urls, wikidata
@@ -74,6 +75,9 @@ class FetchService:
                 "SELECT * FROM psst.record_snapshot(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (self.system_token, token, address, urls.key(address), title, publisher, kind, language, page.status,
                  page.via, page.url, page.title, page.text)).fetchone()
+            assert row
+            conn.execute("SELECT psst.record_snapshot_links(%s, %s, %s)",
+                         (self.system_token, row["snapshot_id"], Jsonb([list(link) for link in page.links[:500]])))
             conn.commit()
         assert row
         return {"source": row["source_id"], "kind": row["source_kind"], "snapshot": row["snapshot_id"],
@@ -92,8 +96,9 @@ class FetchService:
         cites the same text."""
         with self.connect() as conn:
             row = conn.execute("""
-                SELECT n.id AS snapshot, s.id AS source, s.kind, s.url, n.read_url, n.via, n.title, n.text
+                SELECT n.id AS snapshot, s.id AS source, s.kind, s.url, n.read_url, n.via, n.title, n.text, l.links
                 FROM psst.snapshots n JOIN psst.sources s ON s.id = n.source_id
+                LEFT JOIN psst.snapshot_links l ON l.snapshot_id = n.id
                 WHERE s.url_key = %s AND n.fetched_at > now() - make_interval(days => %s) AND n.http_status < 400
                 ORDER BY n.fetched_at DESC LIMIT 1""", (key, CACHE_DAYS)).fetchone()
         if row is None:
@@ -101,7 +106,7 @@ class FetchService:
         return {"source": row["source"], "kind": row["kind"], "snapshot": row["snapshot"], "new": False,
                 "url": row["url"], "read_url": row["read_url"], "via": row["via"], "archived_at": None,
                 "title": row["title"], "note": "read earlier; the saved snapshot is reused", "text": row["text"],
-                "links": []}  # a snapshot keeps its text, not its links
+                "links": [tuple(link) for link in row["links"] or []]}
 
     def read_page(self, url: str, archive: bool) -> fetch.Page:
         """A Wikidata item is saved as its key-fact lines (psst/evidence/wikidata.py); anything else as page text."""

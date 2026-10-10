@@ -177,3 +177,18 @@ def test_a_page_read_recently_is_reused_without_reading_the_site_again(database)
     first = read(service, token, "https://records.example.org/pump-house")
     again = read(service, token, "https://records.example.org/pump-house")
     assert len(reads) == 1 and again["snapshot"] == first["snapshot"] and not again["new"]
+
+
+def test_a_reused_page_keeps_its_links(database):
+    class LinkingReader(FakeReader):
+        def read(self, url: str, archive: bool = False) -> Page:
+            page = super().read(url, archive)
+            page.links = [("list entry", "https://records.example.org/entry/1")]
+            return page
+    _, system_token = database.start_run("system")
+    service = FetchService(lambda: psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row),
+                           system_token, LinkingReader())
+    _, token = database.start_run("worker", "claude-sonnet-5-5")
+    read(service, token, "https://records.example.org/pump-house")
+    again = read(service, token, "https://records.example.org/pump-house")
+    assert again["links"] == [("list entry", "https://records.example.org/entry/1")]

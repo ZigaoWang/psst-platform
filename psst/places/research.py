@@ -43,20 +43,26 @@ def _distance_km(a: tuple[float, float], b: tuple[float, float]) -> float:
     return 12_742 * math.asin(math.sqrt(h))
 
 
+SWEEP_DAYS = 7  # a cell's leads are swept again for a new pass once they are this old
+
+
 def priorities(conn: Connection, city: dict[str, Any]) -> list[tuple[str, int]]:
     """Open cells with their priority, highest first. The score is absolute, so cells queued at different times
-    compare: nearer the city's middle scores higher, each earlier pass costs as much as 20 km, and an area app users
-    looked at while it was empty gains 1 km per view once its views pass the rulebook's minimum."""
+    compare: nearer the city's middle scores higher, each place the previous app had in the cell counts as 1 km
+    nearer, so the densest cells come first, each earlier pass costs as much as 20 km, and an area app users looked
+    at while it was empty gains 1 km per view once its views pass the rulebook's minimum."""
     minimum = int(rules.load().places["demand_min_views"])
-    rows = conn.execute("SELECT cell, passes FROM psst.research_cells WHERE city_id = %s AND state = 'open'",
-                        (city["id"],)).fetchall()
+    rows = conn.execute("""
+        SELECT r.cell, r.passes,
+               (SELECT count(*) FROM psst.legacy_places l WHERE ST_Intersects(l.geom, r.geom)) AS known
+        FROM psst.research_cells r WHERE r.city_id = %s AND r.state = 'open'""", (city["id"],)).fetchall()
     demand = {r["cell"]: int(r["n"]) for r in conn.execute(
         "SELECT cell, sum(count) AS n FROM psst.demand WHERE day > current_date - 90 GROUP BY cell")}
     middle = (city["lat"], city["lon"])
     scored = []
     for row in rows:
         views = demand.get(str(h3.cell_to_parent(row["cell"], cells.DEMAND)), 0)
-        km = _distance_km(h3.cell_to_latlng(row["cell"]), middle) + 20 * row["passes"]
+        km = _distance_km(h3.cell_to_latlng(row["cell"]), middle) + 20 * row["passes"] - row["known"]
         km -= views if views >= minimum else 0
         scored.append((row["cell"], max(0, 100_000 - round(km * 100))))
     return sorted(scored, key=lambda s: -s[1])
@@ -79,11 +85,15 @@ def queue(conn: Connection, token: str, slug: str, count: int) -> dict[str, Any]
     chosen = priorities(conn, city)[:count]
     problems: list[str] = []
     entries = []
+    fresh = {r["cell"] for r in conn.execute(
+        "SELECT cell FROM psst.research_cells WHERE cell = ANY(%s) AND swept_at > now() - make_interval(days => %s)",
+        ([c for c, _ in chosen], SWEEP_DAYS))}
     for cell, priority in chosen:
-        found, issues = leads.sweep(conn, cell, city["country_code"])
-        problems += [f"{cell}: {issue}" for issue in issues]
-        conn.execute("SELECT psst.record_leads(%s, %s, %s)", (token, cell, Jsonb(found)))
-        conn.commit()
+        if cell not in fresh:  # a cell swept in the last week keeps its leads; a dense one is worked many passes
+            found, issues = leads.sweep(conn, cell, city["country_code"])
+            problems += [f"{cell}: {issue}" for issue in issues]
+            conn.execute("SELECT psst.record_leads(%s, %s, %s)", (token, cell, Jsonb(found)))
+            conn.commit()
         entries.append({"cell": cell, "priority": priority})
     row = conn.execute("SELECT psst.queue_research(%s, %s) AS n", (token, Jsonb(entries))).fetchone()
     conn.commit()

@@ -549,3 +549,15 @@ def test_a_map_story_may_rest_on_its_record_alone_and_a_plain_record_makes_a_gui
                  for n, q in enumerate(["closed in 1890", "its wheel pit survives", "the millstream still runs"], 1)]
         assert harness_research.verify(conn, facts) == []
         assert harness_research.verify(conn, facts, "guide") == []
+
+
+def test_a_cell_swept_this_week_is_queued_without_sweeping_again(database, city, monkeypatch):
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.research_cells SET swept_at = now()")
+
+    def no_sweep(conn, cell, country):
+        raise AssertionError("swept again")
+    monkeypatch.setattr(research.leads, "sweep", no_sweep)
+    with database.connect("system") as conn:
+        conn.autocommit = False
+        assert research.queue(conn, city.token, "testville", 1)["queued"] == 1

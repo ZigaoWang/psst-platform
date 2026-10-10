@@ -53,9 +53,9 @@ STEP_LIMITS = {
     "review": Limits(tool_calls=6, fixes=2, tokens=500_000, reply_tokens=12000),
     "audit": Limits(tool_calls=4, fixes=2, tokens=500_000, reply_tokens=8000),
     "revise": Limits(tool_calls=10, fixes=3, tokens=400_000, reply_tokens=8000),
-    "triage": Limits(tool_calls=0, fixes=2, tokens=400_000, reply_tokens=32000, reasoning="low"),
-    "evidence": Limits(tool_calls=10, fixes=2, tokens=600_000, reply_tokens=8000),
-    "write": Limits(tool_calls=0, fixes=2, tokens=250_000, reply_tokens=8000, reasoning="low"),
+    "triage": Limits(tool_calls=0, fixes=1, tokens=200_000, reply_tokens=32000, reasoning="off"),
+    "evidence": Limits(tool_calls=0, fixes=1, tokens=60_000, reply_tokens=4000, reasoning="off"),
+    "write": Limits(tool_calls=0, fixes=1, tokens=40_000, reply_tokens=4000, reasoning="off"),
 }
 STEP_TOOLS = {
     "tier_check": [],
@@ -64,7 +64,7 @@ STEP_TOOLS = {
     "audit": ["search_snapshot"],
     "revise": ["search_snapshot", "fetch_source", "check_draft"],
     "triage": [],
-    "evidence": ["fetch_source", "search_snapshot", "lookup_wikidata", "find_osm", "nearby_places"],
+    "evidence": [],
     "write": [],
 }
 
@@ -238,7 +238,8 @@ class Executor:
                 "error": error, "tools": ran,
                 "input_tokens": reply.input_tokens if reply else 0,
                 "cached_tokens": reply.cached_tokens if reply else 0,
-                "output_tokens": reply.output_tokens if reply else 0, "cost_usd": reply.cost_usd if reply else 0,
+                "output_tokens": reply.output_tokens if reply else 0,
+                "reasoning_tokens": reply.reasoning_tokens if reply else 0, "cost_usd": reply.cost_usd if reply else 0,
                 "latency_ms": reply.latency_ms if reply else 0}
         with db.connect("worker") as conn:
             row = conn.execute("SELECT psst.record_harness_call(%s, %s) AS id", (self.token, Jsonb(call))).fetchone()

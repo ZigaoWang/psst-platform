@@ -23,8 +23,20 @@ kinds:
     role: secondary
     examples: blogs, forums, personal sites
 
-# Hosts whose kind is fixed, whatever a writer says. A subdomain takes its parent's kind.
+# Hosts whose kind is fixed, whatever a writer says. A subdomain takes its parent's kind. The harness also follows a
+# lead page's links to the official, archive, and scholarly hosts here before anything is written (decision 34).
 host_kinds:
+  official_record:
+    - historicengland.org.uk
+    - thegazette.co.uk
+    - legislation.gov.uk
+    - hansard.parliament.uk
+  archive:
+    - nationalarchives.gov.uk
+    - britishnewspaperarchive.co.uk
+  scholarly:
+    - british-history.ac.uk
+    - ucl.ac.uk
   reference:
     - wikipedia.org
     - wikidata.org

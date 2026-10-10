@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, cast
 
@@ -16,12 +17,13 @@ from psst import rules
 from psst.checks.tools import Claim, Evidence, Snapshot, own_words
 from psst.cli import tasks as task_cli
 from psst.core import db, http
+from psst.evidence import fetch as reading
 from psst.evidence import urls
 from psst.rules.report import Report
 from psst.tasks import prompts, results
 
 from . import quotes, tools
-from .executor import PREAMBLE, Executor, GaveUp, Spend, version
+from .executor import Executor, GaveUp, Spend, version
 
 MAX_WRITES = 12  # places one pass writes, best first
 
@@ -33,12 +35,6 @@ TRIAGE_SCHEMA = {
                        "existing": {"type": "string"}, "reason": {"type": "string"},
                        "form": {"enum": ["story", "street_name", "plaque"]},
                        "tier": {"enum": ["featured", "map"]}, "angle": {"type": "string"}}}}}}
-
-
-def shared_data(document: dict[str, Any]) -> str:
-    data = document["data"]
-    keys = ("golden_bar", "marked_examples", "reference_stories", "rules")
-    return json.dumps({k: data[k] for k in keys if k in data}, ensure_ascii=False, sort_keys=True, default=str)
 
 
 def mark_records(leads: list[dict[str, Any]]) -> None:
@@ -59,9 +55,11 @@ def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], s
     brief = document["data"]
     mark_records(brief["leads"])
     prompt = prompts.load("triage").text
-    system = PREAMBLE + "\n\n" + prompt + "\n\n## Shared data\n\n" + shared_data(document)
-    user = json.dumps({"data": {"leads": brief["leads"], "places_nearby": brief["places_nearby"],
-                                "neighborhoods": brief["neighborhoods"], "max_writes": MAX_WRITES},
+    system = prompt  # compact on purpose (decision 34): one line per lead, no examples
+    compact = [{k: lead[k] for k in ("lead", "name", "what", "record", "well_known") if lead.get(k)}
+               for lead in brief["leads"]]
+    nearby = [{"id": p["id"], "name": p["name"], "stories": p["stories"]} for p in brief["places_nearby"]]
+    user = json.dumps({"data": {"leads": compact, "places_nearby": nearby, "max_writes": MAX_WRITES},
                        "result_schema": TRIAGE_SCHEMA}, ensure_ascii=False, default=str)
     leads = {lead["lead"]: lead for lead in brief["leads"]}
 
@@ -83,15 +81,19 @@ def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], s
 
     ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=executor.token)
     try:
-        return dict(executor.converse("triage", system, user, task, version(PREAMBLE + prompt), accept, ctx, spend))
+        return dict(executor.converse("triage", system, user, task, version(prompt), accept, ctx, spend))
     finally:
         ctx.conn.close()
 
 
+PASSAGE_CHARS = 2500   # of each page, the paragraphs that name the place, before any model sees it
+FOLLOWED_LINKS = 2     # links from the lead's page to official, archive, or scholarly hosts read as well
+
+
 def gather(executor: Executor, lead: dict[str, Any]) -> list[dict[str, Any]]:
-    """What code can read for a lead before the writer starts: its own page and the official records its Wikidata
-    item points to (a heritage list entry), so the writer begins from snapshots of the record, not the
-    encyclopedia alone."""
+    """Everything a place's evidence comes from, read in code (decision 34): its own page, the official records its
+    Wikidata item points to, and up to two links from its page to official, archive, or scholarly hosts, all read
+    together and reused when read before; each cut to the paragraphs that name the place."""
     requests = []
     if lead.get("url"):
         wiki = "wikipedia.org" in lead["url"]
@@ -100,13 +102,28 @@ def gather(executor: Executor, lead: dict[str, Any]) -> list[dict[str, Any]]:
                          "kind": "reference" if wiki else "community",
                          "language": "zh" if "zh." in lead["url"] else "en"})
     requests += records(lead.get("wikidata"))
+    pages = read_all(executor, requests)
+    strong = {"official_record", "archive", "scholarly"}
+    followed = [link["url"] for page in pages for link in page.get("links", [])
+                if urls.host_kind(link["url"]) in strong and link["url"] not in {r["url"] for r in requests}]
+    pages += read_all(executor, [{"url": u, "title": lead["name"], "publisher": urllib.parse.urlsplit(u).netloc,
+                                  "kind": urls.host_kind(u), "language": "en"}
+                                 for u in list(dict.fromkeys(followed))[:FOLLOWED_LINKS]])
+    terms = " ".join([lead["name"], lead.get("what") or ""])
+    return [{"snapshot": page["snapshot"], "kind": page["kind"], "url": page["url"],
+             "text": reading.passages(page["text"], terms, PASSAGE_CHARS)} for page in pages]
+
+
+def read_all(executor: Executor, requests: list[dict[str, Any]]) -> list[dict[str, Any]]:
     def fetch(request: dict[str, Any]) -> dict[str, Any]:
         ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=executor.token)
         try:
-            return tools.call(ctx, "fetch_source", request)
+            return tools.call(ctx, "fetch_source", request | {"full": True})
         finally:
             ctx.conn.close()
-    with ThreadPoolExecutor(max_workers=max(1, len(requests))) as pool:  # a place's sources are read together
+    if not requests:
+        return []
+    with ThreadPoolExecutor(max_workers=len(requests)) as pool:  # a place's sources are read together
         pages = list(pool.map(fetch, requests))
     return [page for page in pages if not page.get("error")]
 
@@ -150,13 +167,13 @@ def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any],
     before anything is written: every quote in its snapshot, every value in its quote, and enough independent and
     primary sources for a story. Returns {"skip": reason} when the evidence for a real story isn't there."""
     prompt = prompts.load("evidence").text
-    system = PREAMBLE + "\n\n" + prompt
-    brief = document["data"]
+    system = prompt  # one call over passages code has read; no tools, no browsing
     gathered = gather(executor, lead)
-    user = json.dumps({"data": {"lead": lead, "angle": decision.get("angle"), "form": decision.get("form"),
-                                "tier": decision.get("tier"), "existing": decision.get("existing"),
-                                "cell": {"bounds": brief["bounds"], "neighborhoods": brief["neighborhoods"]},
-                                "gathered": gathered},
+    if not gathered:
+        return {"skip": "none of its pages could be read"}
+    user = json.dumps({"data": {"lead": {k: lead.get(k) for k in ("name", "what", "wikidata", "osm", "record")},
+                                "angle": decision.get("angle"), "existing": decision.get("existing"),
+                                "passages": gathered},
                        "result_schema": EVIDENCE_SCHEMA}, ensure_ascii=False, default=str)
     ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=executor.token,
                         place_id=decision.get("existing"))
@@ -182,8 +199,7 @@ def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any],
         kept.update(repairs=repairs)
         return answer
     try:
-        answer = dict(executor.converse("evidence", system, user, task, version(PREAMBLE + prompt), accept, ctx,
-                                        spend))
+        answer = dict(executor.converse("evidence", system, user, task, version(prompt), accept, ctx, spend))
     finally:
         ctx.conn.close()
     return answer | kept
@@ -259,7 +275,8 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
     claims from the facts each part names, refuses any year, number, or name that isn't in them, and then submits
     the place through the same checks as any submission."""
     prompt = prompts.load("write_place").text
-    system = PREAMBLE + "\n\n" + prompt + "\n\n## Shared data\n\n" + shared_data(document)
+    # Slim on purpose (decision 34): the golden bar shows the voice; the full golden set and rules stay out.
+    system = prompt + "\n\n## The golden bar\n\n" + str(document["data"].get("golden_bar") or "")
     facts = {f["id"]: f for f in gathered["facts"]}
     # The writer sees each fact in plain words with its values, not the quoted source, so it tells the story in its
     # own words; the claims it rests on still carry the exact quotes.
@@ -290,8 +307,7 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
             raise task_cli.NotSubmitted(found)
         return task_cli.submit_one_place(document, {"place": place, "leads": [lead["lead"]]})
     try:
-        placed = dict(executor.converse("write", system, user, task, version(PREAMBLE + prompt), accept, ctx,
-                                        spend))
+        placed = dict(executor.converse("write", system, user, task, version(prompt), accept, ctx, spend))
         ctx.conn.execute("SELECT psst.record_quote_repairs(%s, %s, %s, %s, NULL, NULL, %s)",
                          (executor.token, task["id"], placed["place"], executor.model,
                           Jsonb(gathered.get("repairs", []))))

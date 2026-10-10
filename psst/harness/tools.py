@@ -83,11 +83,11 @@ def definitions(names: list[str]) -> list[dict[str, Any]]:
 
 
 def fetch_source(ctx: Context, url: str, title: str, publisher: str, kind: str, language: str,
-                 find: str | None = None) -> dict[str, Any]:
+                 find: str | None = None, full: bool = False) -> dict[str, Any]:
     result = fetching.request({"token": ctx.token, "url": url, "title": title, "publisher": publisher, "kind": kind,
                                "language": language, "archive": False})
     text = result["text"]
-    shown = reading.passages(text, find, TEXT_LIMIT) if find else text[:TEXT_LIMIT]
+    shown = text if full else reading.passages(text, find, TEXT_LIMIT) if find else text[:TEXT_LIMIT]
     # The page's own links to other sites: an article's references are the way to the records it rests on, so the
     # writer follows real citations instead of guessing addresses.
     links = [{"text": label, "url": href} for label, href in result.get("links") or []

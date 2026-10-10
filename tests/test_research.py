@@ -331,6 +331,10 @@ def test_the_harness_researches_a_cell_place_by_place(database, city, monkeypatc
 
     claims = place["stories"][0]["claims"]
     facts = [{"id": f"f{n}"} | c for n, c in enumerate(claims + claims[:1], 1)]  # a story needs three facts
+    from psst.harness import research as harness_research
+    passages = [{"snapshot": e["snapshot"], "kind": "official_record", "url": "https://records.example.org/mill",
+                 "text": e["quote"]} for c in claims for e in c["evidence"]]
+    monkeypatch.setattr(harness_research, "gather", lambda executor, lead: passages)
     identity = {k: place[k] for k in ("wikidata", "name", "kind", "size", "ordinary")}
 
     def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
@@ -339,7 +343,7 @@ def test_the_harness_researches_a_cell_place_by_place(database, city, monkeypatc
                                      "angle": "the wheel pit under the grate"},
                                     {"lead": second, "action": "skip", "reason": "an office block, nothing more"}],
                       "notes": "One place worth writing."}
-        elif "Gather the evidence for one place" in messages[0]["content"]:
+        elif "Pick the evidence for one place" in messages[0]["content"]:
             answer = {"place": identity, "facts": facts}
         else:
             written.append(model)
@@ -425,6 +429,9 @@ def test_a_lead_without_the_evidence_for_a_story_is_skipped_with_the_reason(data
     with database.connect("worker") as conn:
         document = files.build(conn, task)
     first, second = (lead["lead"] for lead in document["data"]["leads"])
+    from psst.harness import research as harness_research
+    monkeypatch.setattr(harness_research, "gather", lambda executor, lead: [
+        {"snapshot": "sn_0000000000", "kind": "community", "url": "https://blog.example.org/mill", "text": "A blog."}])
 
     def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
         if "Triage a cell's leads" in messages[0]["content"]:
@@ -503,3 +510,23 @@ def test_items_with_an_official_record_become_leads(monkeypatch):
     found = leads.record_items("P1216", 51.4, -0.1, 51.6, 0.0)
     assert found == [{"wikidata": "Q900020", "name": "Invented Drinking Fountain", "lat": 51.5, "lon": -0.05,
                       "record": "1000002"}]  # an item with no name is left out
+
+
+def test_gathering_follows_official_links_and_keeps_the_paragraphs_that_name_the_place(monkeypatch):
+    from psst.harness import research as harness_research
+    asked = []
+
+    def read_all(executor, requests):
+        asked.append([r["url"] for r in requests])
+        if requests and "wikipedia" in requests[0]["url"]:
+            return [{"snapshot": "sn_1", "kind": "reference", "url": requests[0]["url"],
+                     "text": "Unrelated opening.\nThe Old Mill closed in 1890.\nMore unrelated text.",
+                     "links": [{"text": "list entry", "url": "https://historicengland.org.uk/listing/1000001"},
+                               {"text": "a blog", "url": "https://blog.example.org/mill"}]}]
+        return [{"snapshot": "sn_2", "kind": "official_record", "url": r["url"], "text": "Old Mill, listed 1972.",
+                 "links": []} for r in requests]
+    monkeypatch.setattr(harness_research, "read_all", read_all)
+    monkeypatch.setattr(harness_research, "records", lambda qid, entities=None: [])
+    pages = harness_research.gather(None, {"name": "Old Mill", "url": "https://en.wikipedia.org/wiki/Old_Mill"})
+    assert asked[1] == ["https://historicengland.org.uk/listing/1000001"]  # the official link, not the blog
+    assert "The Old Mill closed in 1890." in pages[0]["text"] and "More unrelated" not in pages[0]["text"]

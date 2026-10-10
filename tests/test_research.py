@@ -538,3 +538,14 @@ def test_british_spellings_take_their_us_form_before_checking():
     harness_research.us_spelling(place)
     assert place["stories"][0]["body"]["long"] == "A house of two stories, its color unchanged."
     assert place["guide"]["body"]["about"] == "Three story houses."
+
+
+def test_a_map_story_may_rest_on_its_record_alone_and_a_plain_record_makes_a_guide(database, city):
+    from psst.harness import research as harness_research
+    with database.connect("admin") as conn:
+        record = _snapshot(conn, MILL, "https://historicengland.org.uk/listing/1000001", "official_record")
+    with database.connect("worker") as conn:
+        facts = [{"id": f"f{n}", "values": [], "evidence": [{"snapshot": record, "quote": q}]}
+                 for n, q in enumerate(["closed in 1890", "its wheel pit survives", "the millstream still runs"], 1)]
+        assert harness_research.verify(conn, facts) == []
+        assert harness_research.verify(conn, facts, "guide") == []

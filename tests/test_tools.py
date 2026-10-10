@@ -100,12 +100,14 @@ def test_claims_resting_only_on_reference_works_are_refused():
     assert "claim 3: rests only on reference works" in refusals(result)
 
 
-def test_a_story_needs_two_sources():
+def test_a_featured_story_needs_two_sources_and_a_map_story_may_rest_on_its_record():
     single = [c for c in claims() if all(e.snapshot == RECORD.id for e in c.evidence)]
-    result = check("story", story(short="The library on Mill Lane was built in 1871 as a pumping station.",
-                                  long=LONG.replace(" Readers now sit under the original boiler beams.", "")),
-                   single, SNAPSHOTS)
+    shorter = {"short": "The library on Mill Lane was built in 1871 as a pumping station.",
+               "long": LONG.replace(" Readers now sit under the original boiler beams.", "")}
+    result = check("story", story(**shorter, tier="featured"), single, SNAPSHOTS)
     assert "needs at least 2 independent sources; has 1" in refusals(result)
+    result = check("story", story(**shorter, tier="map"), single, SNAPSHOTS)
+    assert not any("independent sources" in r for r in refusals(result))
 
 
 def test_copied_wording_is_refused():

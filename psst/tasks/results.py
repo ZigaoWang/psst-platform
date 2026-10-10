@@ -134,7 +134,7 @@ def _place() -> dict[str, Any]:
              "kind": {"enum": list(spec.places["kinds"])},
              "size": {"enum": list(spec.places["sizes"])},
              "ordinary": {"type": "boolean"},
-             "stories": {"type": "array", "minItems": 1, "items": item["story"]},
+             "stories": {"type": "array", "items": item["story"]},  # none for a guide-only place
              "guide": item["guide"]}
     new_place = {"type": "object", "additionalProperties": False,
                  "required": ["name", "kind", "size", "ordinary", "stories", "guide"],

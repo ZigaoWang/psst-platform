@@ -288,3 +288,33 @@ def test_a_tool_that_times_out_answers_with_an_error(database, city, roles, monk
     monkeypatch.setitem(tools.IMPLEMENTATIONS, "fetch_source", slow)
     ctx = tools.Context(conn=None, token="t")
     assert tools.call(ctx, "fetch_source", {"url": "https://a.example"}) == {"error": "timed out"}
+
+
+def test_a_story_on_one_source_is_never_featured(database, city, roles, monkeypatch):
+    from tests.flow import research, tool_checks
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.settings SET value = %s WHERE key = 'routing.review'", (json.dumps(MODEL),))
+        conn.execute("UPDATE psst.settings SET value = '\"openrouter:test/second\"' WHERE key = 'routing.tier_check'")
+        conn.execute("""UPDATE psst.settings SET value = '{"testville": 1}' WHERE key = 'harness.city_budgets_usd'""")
+    story, guide = research(database, city)
+    tool_checks(database)
+    with database.connect("superuser") as conn:  # every claim of the story now quotes one page
+        conn.execute("SET session_replication_role = replica")  # past the guard that keeps evidence fixed
+        conn.execute("""UPDATE psst.evidence e SET snapshot_id = (SELECT min(snapshot_id) FROM psst.evidence x
+                        JOIN psst.claims c ON c.id = x.claim_id WHERE c.revision_id = %s)
+                        FROM psst.claims c WHERE c.id = e.claim_id AND c.revision_id = %s""", (story, story))
+    worker = Worker(database, MODEL)
+    with database.connect("worker") as conn:
+        task = dict(conn.execute("SELECT * FROM psst.lease_task(%s, ARRAY['review'])", (worker.token,)).fetchone())
+
+    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
+        assert model != "openrouter:test/second"  # no second reading is paid for
+        return providers.Reply(text=json.dumps({"decisions": [
+            {"revision": story, "mark": "good", "tier": "featured", "reason": "a real surprise", "fix": None},
+            {"revision": guide, "mark": "good", "tier": None, "reason": "plain and claimed", "fix": None}],
+            "notes": "a clean batch"}), cost_usd=0.001)
+    monkeypatch.setattr(providers, "chat", chat)
+    harness.Executor(worker.token, MODEL).run(task)
+    with database.connect("admin") as conn:
+        tier = conn.execute("SELECT tier FROM psst.items WHERE current_revision = %s", (story,)).fetchone()
+    assert tier["tier"] == "map"

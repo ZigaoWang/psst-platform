@@ -4,11 +4,7 @@ Where the build stands. Updated before every milestone and whenever the plan cha
 
 ## Questions for the editor
 
-1. The gate (asked 2026-10-10). On the re-marked golden set no model reaches 90 percent: best GLM 5.3 Flash 77, GLM 5.3 and GPT-6 Luna 73, the others 65 (Qwen and the panel still running). Seven stories are missed by nearly every model:
-   - Tier, featured against map: barges under the warehouse (map; models say featured), Napoleon III's donation (map; featured), the wartime shelter (map; featured), the King's Cross nanny (map; featured), Scotland Yard's back door (featured; models say map).
-   - Something to see: the Gorsedd on Primrose Hill (bad, nothing to see; models say good, since the hill is there) and South Kentish Town (map; models say weak or bad, since the old name is on painted-over tiles).
-   Waiting for your call: sharpen the featured and map definitions with invented examples, accept tier agreement separately from the mark, or something else.
-2. Budget: total 18 USD; London up to 8, Shanghai up to 6 until the proof cells are reviewed (set).
+None open. Sources for map stories: answered (decision 35). Budget: total 18 USD; London up to 8, Shanghai up to 6 until the proof cells are reviewed.
 
 ## Done
 

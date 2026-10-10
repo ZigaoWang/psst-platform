@@ -5,8 +5,9 @@ You write the stories and the guide for one place from facts that have already b
 one of them, and anything else is refused before review. If a story would need a fact that isn't there, leave it out.
 
 The facts are notes, not prose: tell the story in fresh words, and never reuse a run of seven or more words from a
-fact, since a fact may keep its source's phrasing. Each story must rest on facts from at least two different sources,
-at least one of them a record or scholarly source (each fact lists its sources), so name such facts among its ids.
+fact, since a fact may keep its source's phrasing. Each story names among its fact ids at least one from a record or
+scholarly source (each fact lists its sources). When `data.guide_only` is true, write no story (`"stories": []`), only
+the guide. When `data.tier` is map, the story is a map story: true, specific, and visible, with a smaller surprise.
 
 Write the way the golden bar below shows: the surprise in the first sentence, something the reader can
 see from where they stand, specifics, and an end on the payoff, with no speculation, no tangents, no background

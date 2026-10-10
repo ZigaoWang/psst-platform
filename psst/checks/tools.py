@@ -312,7 +312,10 @@ def _sources(report: Report, item_type: str, body: dict[str, Any], claims: list[
     need = rulebook.sources["rules"][item_type]
     strong = set(rulebook.sources["strong_roles"])
     used = {s.source: s for passages in quotes.values() for s, _ in passages}
-    if len(used) < need["min_sources"]:
+    on_record = (need.get("map_story_on_record") and body.get("tier") == "map" and len(used) == 1
+                 and (urls.host_kind(next(iter(used.values())).url) or next(iter(used.values())).kind)
+                 == "official_record")
+    if len(used) < need["min_sources"] and not on_record:
         report.refuse("sources", f"needs at least {need['min_sources']} independent sources; has {len(used)}")
     strong_sources = [s for s in used.values() if _role(s, rulebook) in strong]
     if len(strong_sources) < need["min_strong_sources"]:

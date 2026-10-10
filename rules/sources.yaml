@@ -79,6 +79,9 @@ rules:
     min_sources: 2
     min_strong_sources: 1
     non_reference_per_claim: true
+    # A map story may rest on its official record alone, where the record is the authority on it (decision 35); a
+    # featured story keeps two independent sources.
+    map_story_on_record: true
   trail:
     min_sources: 1
     min_strong_sources: 0

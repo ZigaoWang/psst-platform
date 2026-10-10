@@ -160,6 +160,7 @@ CLAIM_PROPERTIES: dict[str, Any] = cast(dict[str, Any], results.CLAIMS["items"])
 EVIDENCE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {"skip": {"type": "string", "minLength": 5},
+                   "story": {"type": "boolean"},  # false: the record holds no story angle, a guide-only place
                    "place": results.place_identity(),
                    "facts": {"type": "array", "items": {
                        "type": "object", "required": ["id", "text", "kind", "values", "evidence"],
@@ -202,7 +203,7 @@ def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any],
             fact["values"] = values_in(fact)  # the exact numbers and names its quotes state, never the model's own
         # A fact resting only on a reference work can't stand in a story: it is dropped, not sent back.
         answer["facts"] = [f for f in answer.get("facts") or [] if not reference_only(ctx.conn, f)]
-        found = verify(ctx.conn, answer["facts"])
+        found = verify(ctx.conn, answer["facts"], "story" if answer.get("story", True) else "guide")
         if found:
             raise task_cli.NotSubmitted(found)
         kept.update(repairs=repairs)
@@ -226,6 +227,15 @@ def values_in(fact: dict[str, Any]) -> list[dict[str, str]]:
     return [{"value": v} for v in found[:12]]
 
 
+def single_source(facts: dict[str, dict[str, Any]]) -> bool:
+    """Whether the facts rest on one source: several snapshots of the same page are one source."""
+    snapshots = sorted({e["snapshot"] for f in facts.values() for e in f["evidence"]})
+    with db.connect("worker") as conn:
+        row = conn.execute("SELECT count(DISTINCT source_id) AS n FROM psst.snapshots WHERE id = ANY(%s)",
+                           (snapshots,)).fetchone()
+    return row is not None and row["n"] <= 1
+
+
 def reference_only(conn: Any, fact: dict[str, Any]) -> bool:
     snapshots = [e.get("snapshot") for e in fact.get("evidence", [])]
     rows = conn.execute("""SELECT s.url, s.kind FROM psst.snapshots n JOIN psst.sources s ON s.id = n.source_id
@@ -235,8 +245,9 @@ def reference_only(conn: Any, fact: dict[str, Any]) -> bool:
                               for r in rows)
 
 
-def verify(conn: Any, facts: list[dict[str, Any]]) -> list[str]:
-    """What is wrong with a set of facts before anything is written from them."""
+def verify(conn: Any, facts: list[dict[str, Any]], item: str = "story") -> list[str]:
+    """What is wrong with a set of facts before anything is written from them, for a story or, for a guide-only
+    place, a guide."""
     from psst.core.text import contains, find_quote
     found: list[str] = []
     texts = {r["id"]: r for r in conn.execute("""
@@ -262,13 +273,15 @@ def verify(conn: Any, facts: list[dict[str, Any]]) -> list[str]:
             if quoted and not any(contains(q, v.get("source_form") or v["value"]) for q in quoted):
                 found.append(f"fact {fact.get('id')}: '{v['value']}' isn't in its quoted passages; quote the words "
                              "that state it")
-    need = rulebook.sources["rules"]["story"]
+    need = rulebook.sources["rules"][item]
     strong = [k for k in sources.values()
               if rulebook.sources["kinds"].get(k, {}).get("role") in rulebook.sources["strong_roles"]]
     if len(facts) < MIN_FACTS:
-        found.append(f"a story needs at least {MIN_FACTS} facts; find more, or answer skip with the reason")
-    if len(sources) < need["min_sources"]:
-        found.append(f"the facts rest on {len(sources)} source; a story needs {need['min_sources']} independent ones")
+        found.append(f"a place needs at least {MIN_FACTS} facts; find more, or answer skip with the reason")
+    on_record = need.get("map_story_on_record") and list(sources.values()) == ["official_record"]
+    if len(sources) < need["min_sources"] and not on_record:  # a map story may rest on its record alone
+        found.append(f"the facts rest on {len(sources)} source; a story needs {need['min_sources']} independent ones, "
+                     "or the official record alone; or set story to false for a guide-only place")
     if len(strong) < need["min_strong_sources"]:
         found.append("no primary record or scholarly source among the facts; find one, or answer skip with the reason")
     return found
@@ -283,6 +296,9 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
     # Slim on purpose (decision 34): the golden bar shows the voice; the full golden set and rules stay out.
     system = prompt + "\n\n## The golden bar\n\n" + str(document["data"].get("golden_bar") or "")
     facts = {f["id"]: f for f in gathered["facts"]}
+    one_source = single_source(facts)
+    tier = "map" if one_source else decision.get("tier")  # featured keeps two independent sources (decision 35)
+    guide_only = gathered.get("story") is False  # the record holds no story angle: a guide-only place
     # The writer sees each fact in plain words with its values, not the quoted source, so it tells the story in its
     # own words; the claims it rests on still carry the exact quotes.
     with db.connect("worker") as conn:
@@ -294,16 +310,20 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
                                    for e in f["evidence"] if e["snapshot"] in origin})}
              for f in facts.values()]
     user = json.dumps({"data": {"place": gathered["place"], "lead": lead["name"], "angle": decision.get("angle"),
-                                "tier": decision.get("tier"), "form": decision.get("form"),
+                                "tier": tier, "form": decision.get("form"), "guide_only": guide_only,
                                 "facts": shown}}, ensure_ascii=False, default=str)
     ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=executor.token,
                         place_id=decision.get("existing"))
 
     def accept(answer: dict[str, Any]) -> Any:
+        if guide_only:
+            answer["stories"] = []
         for story in answer.get("stories") or []:
             if isinstance(story, dict) and isinstance(story.get("body"), dict):
                 # What triage planned stands when the writer leaves it out; tags are added at publishing.
-                story["body"].setdefault("tier", decision.get("tier") or "map")
+                story["body"].setdefault("tier", tier or "map")
+                if one_source:
+                    story["body"]["tier"] = "map"
                 story["body"].setdefault("form", decision.get("form") or "story")
                 story["body"].setdefault("tags", [])
                 story["body"].setdefault("veracity", "fact")
@@ -465,3 +485,4 @@ def us_spelling(place: dict[str, Any]) -> None:
         for key, value in body.items():
             if isinstance(value, str):
                 body[key] = pattern.sub(lambda m: british[m.group(1)], value)
+

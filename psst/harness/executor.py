@@ -336,6 +336,18 @@ class Executor:
         if not featured:
             return
         with db.connect("worker") as conn:
+            # A featured story keeps two independent sources (decision 35); one resting on its record alone is a map
+            # story, whatever its surprise.
+            sources = {r["revision_id"]: r["n"] for r in conn.execute("""
+                SELECT c.revision_id, count(DISTINCT n.source_id) AS n FROM psst.claims c
+                JOIN psst.evidence e ON e.claim_id = c.id JOIN psst.snapshots n ON n.id = e.snapshot_id
+                WHERE c.revision_id = ANY(%s) GROUP BY 1""", ([d["revision"] for d in featured],))}
+            for d in featured:
+                if sources.get(d["revision"], 0) < 2:
+                    d["tier"] = "map"
+            featured = [d for d in featured if d["tier"] == "featured"]
+            if not featured:
+                return
             row = conn.execute("SELECT psst.setting('routing.tier_check') #>> '{}' AS m").fetchone()
         second = row["m"] if row else None
         if not second or second == self.model or second in self.members:

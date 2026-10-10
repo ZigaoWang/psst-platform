@@ -13,8 +13,9 @@ for character; a quote that isn't in its passage is thrown out.
 
 Pick first the facts a story would rest on: what happened there, who made it and why, what it was for, and any
 detail a passer-by would miss; then what the guide needs. A fact only Wikipedia states is left out, since every fact
-needs a record, scholarly, or other non-reference source. If the passages don't hold three such facts, answer
-`{"skip": "<the reason, specific>"}`. Otherwise answer `{"place": {...}, "facts": [...]}`, where `place` is the new
+needs a record, scholarly, or other non-reference source. The official record alone is enough: never skip a place
+because its record is its only source. Answer `{"skip": "<the reason, specific>"}` only when the passages don't
+hold two such facts. Otherwise answer `{"place": {...}, "facts": [...]}`, where `place` is the new
 place (`name`; `kind`, one of transit, crossing, street, building, worship, memorial, green, water, or culture;
 `size`, one of small, medium, or large; `ordinary`, true when a visitor would never look it up; and its `wikidata` or
 `osm`, given in `data.lead`) or `{"existing": <id>, "ordinary": ...}` for a place the platform already has.

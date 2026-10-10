@@ -187,7 +187,7 @@ EVIDENCE_SCHEMA: dict[str, Any] = {
                        "type": "object", "required": ["id", "text", "kind", "values", "evidence"],
                        "properties": {"id": {"type": "string"}} | CLAIM_PROPERTIES}}},
 }
-MIN_FACTS = 3
+MIN_FACTS = 2  # a map story can rest on two facts, such as when something was made and for whom
 
 
 def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any], decision: dict[str, Any],

@@ -330,7 +330,7 @@ def test_the_harness_researches_a_cell_place_by_place(database, city, monkeypatc
     written = []
 
     claims = place["stories"][0]["claims"]
-    facts = [{"id": f"f{n}"} | c for n, c in enumerate(claims + claims[:1], 1)]  # a story needs three facts
+    facts = [{"id": f"f{n}"} | c for n, c in enumerate(claims + claims[:1], 1)]
     from psst.harness import research as harness_research
     passages = [{"snapshot": e["snapshot"], "kind": "official_record", "url": "https://records.example.org/mill",
                  "text": e["quote"]} for c in claims for e in c["evidence"]]

@@ -75,3 +75,13 @@ rules:
     min_sources: 0
     min_strong_sources: 0
     non_reference_per_claim: false
+
+# Official records a place's Wikidata item points to (decision 28): the harness reads them for a lead before the
+# writer starts, so every story begins from the record, not only the encyclopedia. {} is the property's value.
+record_properties:
+  P1216:
+    url: "https://historicengland.org.uk/listing/the-list/list-entry/{}"
+    publisher: Historic England
+    title: National Heritage List for England entry {}
+    kind: official_record
+    language: en

@@ -10,8 +10,9 @@ from typing import Any
 import psycopg
 from psycopg.types.json import Jsonb
 
+from psst import rules
 from psst.cli import tasks as task_cli
-from psst.core import db
+from psst.core import db, http
 from psst.tasks import prompts, results
 
 from . import quotes, tools
@@ -72,19 +73,42 @@ def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], s
 
 
 def gather(executor: Executor, lead: dict[str, Any]) -> list[dict[str, Any]]:
-    """The lead's own page, read in code before the writer starts, so the writer begins from a snapshot."""
-    if not lead.get("url"):
-        return []
+    """What code can read for a lead before the writer starts: its own page and the official records its Wikidata
+    item points to (a heritage list entry), so the writer begins from snapshots of the record, not the
+    encyclopedia alone."""
+    requests = []
+    if lead.get("url"):
+        wiki = "wikipedia.org" in lead["url"]
+        requests.append({"url": lead["url"], "title": lead["name"],
+                         "publisher": "Wikipedia" if wiki else lead.get("origin", "unknown"),
+                         "kind": "reference" if wiki else "community",
+                         "language": "zh" if "zh." in lead["url"] else "en"})
+    requests += records(lead.get("wikidata"))
     ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=executor.token)
     try:
-        page = tools.call(ctx, "fetch_source", {"url": lead["url"], "title": lead["name"],
-                                                "publisher": "Wikipedia" if "wikipedia.org" in lead["url"] else
-                                                lead.get("origin", "unknown"),
-                                                "kind": "reference" if "wikipedia.org" in lead["url"] else "community",
-                                                "language": "zh" if "zh." in lead["url"] else "en"})
+        pages = [tools.call(ctx, "fetch_source", r) for r in requests]
     finally:
         ctx.conn.close()
-    return [] if page.get("error") else [page]
+    return [page for page in pages if not page.get("error")]
+
+
+def records(qid: str | None) -> list[dict[str, Any]]:
+    """The official records a Wikidata item names, as fetch requests (rules/sources.yaml, record_properties)."""
+    if not qid:
+        return []
+    spec = rules.load().sources.get("record_properties", {})
+    try:
+        entity = http.wikidata_entities([qid], props="claims").get(qid) or {}
+    except (OSError, ValueError):
+        return []
+    found = []
+    for prop, how in spec.items():
+        for claim in entity.get("claims", {}).get(prop, [])[:2]:
+            value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
+            if isinstance(value, str):
+                found.append({"url": how["url"].format(value), "title": how["title"].format(value),
+                              "publisher": how["publisher"], "kind": how["kind"], "language": how["language"]})
+    return found
 
 
 def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], decision: dict[str, Any],

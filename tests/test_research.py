@@ -379,3 +379,13 @@ def test_places_outside_the_platforms_cities_get_no_hexagon(database, city):
                  city.token).fill_hexagons()
     with database.connect("admin") as conn:
         assert conn.execute("SELECT h3_r9 FROM psst.places WHERE id = %s", (place,)).fetchone()["h3_r9"] is None
+
+
+def test_a_leads_official_record_is_gathered_from_its_wikidata_item(monkeypatch):
+    from psst.harness import research as harness_research
+    monkeypatch.setattr(harness_research.http, "wikidata_entities", lambda qids, props: {
+        "Q900010": {"claims": {"P1216": [{"mainsnak": {"datavalue": {"value": "1000001"}}}]}}})
+    found = harness_research.records("Q900010")
+    assert found == [{"url": "https://historicengland.org.uk/listing/the-list/list-entry/1000001",
+                      "title": "National Heritage List for England entry 1000001", "publisher": "Historic England",
+                      "kind": "official_record", "language": "en"}]

@@ -240,3 +240,13 @@ def test_featured_needs_a_second_model_to_agree(database, city, roles, monkeypat
         tier = conn.execute("SELECT tier FROM psst.items WHERE current_revision = %s", (story,)).fetchone()
         steps = [r["step"] for r in conn.execute("SELECT step FROM psst.harness_calls ORDER BY id")]
     assert tier["tier"] == "map" and steps == ["review", "tier_check"]
+
+
+def test_a_cancelled_calibration_can_be_queued_again(database, golden):
+    queue(database)
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.tasks SET state = 'cancelled' WHERE type = 'calibrate'")
+    queue(database)
+    with database.connect("admin") as conn:
+        queued = conn.execute("SELECT count(*) AS n FROM psst.tasks WHERE type = 'calibrate' AND state = 'queued'")
+        assert queued.fetchone()["n"] == 2

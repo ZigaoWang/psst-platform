@@ -30,6 +30,15 @@ can see or check on the spot? The size of the surprise sets the tier (below), no
   or register that happens to give this address), a list of dates or owners, a planning or legal detail, a
   statistic, a surprise already in the encyclopedia's first paragraph, or something true of every place of its kind.
 
+Something to see means the reader can see the thing the story is about, or a marker of it (a plaque, a stone, a
+surviving facade), from where they stand. Standing at the site of an event isn't enough, and a look line has to point
+at what is visible. Two examples the editor settled:
+
+- The first Gorsedd of the Bards met on Primrose Hill in 1792. A plaque at the top of the hill marks the spot, and
+  the look points at the plaque, so it is a map story. Without the plaque it would be bad: nothing to see.
+- South Kentish Town station's old name survives only on painted-over tiles nobody can see, but the station's tiled
+  facade on Kentish Town Road is in plain view. With the look pointing at the facade, it is a map story.
+
 A well-known name or place can be good when the story gives it a fresh, specific twist, and a modest one can be good
 as a map story.
 

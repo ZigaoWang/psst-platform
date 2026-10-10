@@ -68,8 +68,8 @@ def priorities(conn: Connection, city: dict[str, Any]) -> list[tuple[str, int]]:
     return sorted(scored, key=lambda s: -s[1])
 
 
-def queue(conn: Connection, token: str, slug: str, count: int) -> dict[str, Any]:
-    """Sweep leads for the next `count` cells and queue a research task for each."""
+def queue(conn: Connection, token: str, slug: str, count: int, only: list[str] | None = None) -> dict[str, Any]:
+    """Sweep leads for the next `count` cells (or for the open cells in `only`) and queue a research task for each."""
     city = conn.execute("""
         SELECT c.id, c.country_code, coalesce(c.wikidata_id, a.wikidata_id) AS wikidata_id,
                ST_Y(ST_Centroid(a.geom)) AS lat, ST_X(ST_Centroid(a.geom)) AS lon
@@ -82,7 +82,7 @@ def queue(conn: Connection, token: str, slug: str, count: int) -> dict[str, Any]
         middle = coords.wikidata([city["wikidata_id"]]).get(city["wikidata_id"]) or []
         if len(middle) == 1:
             city = {**city, "lat": middle[0][0], "lon": middle[0][1]}
-    chosen = priorities(conn, city)[:count]
+    chosen = [c for c in priorities(conn, city) if only is None or c[0] in only][:count]
     problems: list[str] = []
     entries = []
     fresh = {r["cell"] for r in conn.execute(

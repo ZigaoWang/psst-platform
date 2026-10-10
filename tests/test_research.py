@@ -576,3 +576,16 @@ def test_a_cell_whose_research_failed_is_opened_and_queued_again(database, city)
     with database.connect("admin") as conn:
         again = conn.execute("SELECT state, attempts FROM psst.tasks WHERE id = %s", (task["id"],)).fetchone()
     assert again["state"] == "queued" and again["attempts"] == 0
+
+
+def test_one_named_cell_can_be_queued(database, city, monkeypatch):
+    with database.connect("admin") as conn:
+        cell = conn.execute("SELECT cell FROM psst.research_cells WHERE state = 'open' ORDER BY cell DESC LIMIT 1"
+                            ).fetchone()["cell"]
+        conn.execute("UPDATE psst.research_cells SET swept_at = now()")
+    with database.connect("system") as conn:
+        conn.autocommit = False
+        assert research.queue(conn, city.token, "testville", 10, [cell])["queued"] == 1
+    with database.connect("admin") as conn:
+        assert conn.execute("SELECT state FROM psst.research_cells WHERE cell = %s", (cell,)).fetchone()["state"] \
+            == "queued"

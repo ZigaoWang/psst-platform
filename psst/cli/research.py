@@ -26,6 +26,7 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     queue = commands.add_parser("queue", help="sweep leads for the most wanted open cells and queue research")
     queue.add_argument("--city", required=True)
     queue.add_argument("--cells", type=int, default=10)
+    queue.add_argument("--cell", action="append", dest="only", help="queue this open cell (repeatable)")
     queue.set_defaults(run=queue_cells)
     sweep = commands.add_parser("sweep", help="sweep leads again for cells")
     sweep.add_argument("--cell", action="append", required=True, dest="cells")
@@ -50,7 +51,7 @@ def setup_city(args: argparse.Namespace) -> int:
 
 def queue_cells(args: argparse.Namespace) -> int:
     with db.open_connection(db.conninfo("system")) as conn, session(conn, "system", "research planning") as token:
-        outcome = research.queue(conn, token, args.city, args.cells)
+        outcome = research.queue(conn, token, args.city, args.cells, args.only)
     print(json.dumps(outcome, indent=2))
     return 0
 

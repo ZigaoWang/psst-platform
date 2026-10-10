@@ -99,20 +99,23 @@
 </section>
 
 <section>
-	<h2>Cost by step and model</h2>
+	<h2>Cost and time per step</h2>
+	<p class="muted">The last seven days, per step and model, and per place written ({data.costs[0]?.places ?? 0} places). Targets: under $0.015 and a few seconds per place.</p>
 	{#if data.costs.length}
 		<div class="table-wrap">
 			<table>
-				<thead><tr><th>Step</th><th>Model</th><th class="num">Calls</th><th class="num">Input</th><th class="num">Cached</th><th class="num">Output</th><th class="num">Cost</th><th class="num">Latency</th></tr></thead>
+				<thead><tr><th>Step</th><th>Model</th><th class="num">Calls</th><th class="num">Fix rounds</th><th class="num">Input</th><th class="num">Cached</th><th class="num">Output</th><th class="num">Reasoning</th><th class="num">Cost</th><th class="num">Per place</th><th class="num">Model s</th><th class="num">Tool s</th></tr></thead>
 				<tbody>
 					{#each data.costs as c (c.step + c.model)}
-						<tr><td>{c.step}</td><td class="mono">{c.model}</td><td class="num">{count(c.calls)}</td><td class="num">{count(c.input)}</td>
-							<td class="num">{count(c.cached)}</td><td class="num">{count(c.output)}</td><td class="num">{usd(c.cost)}</td><td class="num">{(c.latency / 1000).toFixed(1)} s</td></tr>
+						<tr><td>{c.step}</td><td class="mono">{c.model}</td><td class="num">{count(c.calls)}</td><td class="num">{count(c.fix_rounds)}</td>
+							<td class="num">{count(c.input)}</td><td class="num">{count(c.cached)}</td><td class="num">{count(c.output)}</td><td class="num">{count(c.reasoning)}</td>
+							<td class="num">{usd(c.cost)}</td><td class="num">{c.places ? usd(Number(c.cost) / c.places) : 'n/a'}</td>
+							<td class="num">{count(c.model_seconds)}</td><td class="num">{count(c.tool_seconds)}</td></tr>
 					{/each}
 				</tbody>
 			</table>
 		</div>
-	{:else}<Empty>No calls yet.</Empty>{/if}
+	{:else}<Empty>No calls in the last seven days.</Empty>{/if}
 </section>
 
 <section>

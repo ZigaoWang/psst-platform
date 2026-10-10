@@ -37,10 +37,15 @@ export const load: PageServerLoad = async () => {
 		           sum((quotes ->> 'invented')::int)::int AS invented,
 		           sum((quotes ->> 'unknown_snapshot')::int)::int AS unknown
 		    FROM psst.harness_calls WHERE quotes IS NOT NULL GROUP BY model ORDER BY model`,
-		sql`SELECT step, model, count(*)::int AS calls, sum(input_tokens)::bigint AS input,
-		           sum(cached_tokens)::bigint AS cached, sum(output_tokens)::bigint AS output,
-		           sum(cost_usd) AS cost, round(avg(latency_ms))::int AS latency
-		    FROM psst.harness_calls GROUP BY step, model ORDER BY step, cost DESC`,
+		// Per step and model over the last seven days, and per place written, so cost and time can't creep back.
+		sql`SELECT step, model, sum(calls)::int AS calls, sum(fix_rounds)::int AS fix_rounds,
+		           sum(input_tokens)::bigint AS input, sum(cached_tokens)::bigint AS cached,
+		           sum(output_tokens)::bigint AS output, sum(reasoning_tokens)::bigint AS reasoning,
+		           sum(cost_usd) AS cost, sum(model_seconds)::int AS model_seconds, sum(tool_seconds)::int AS tool_seconds,
+		           (SELECT count(DISTINCT place_id) FROM psst.harness_calls
+		            WHERE place_id IS NOT NULL AND created_at > now() - interval '7 days')::int AS places
+		    FROM psst.harness_step_costs WHERE day > now() - interval '7 days'
+		    GROUP BY step, model ORDER BY step, cost DESC`,
 		sql`SELECT h.id, h.task_id, h.step, h.model, h.cost_usd, h.error, h.created_at,
 		           (SELECT count(*)::int FROM psst.harness_tool_calls x WHERE x.call_id = h.id) AS tools
 		    FROM psst.harness_calls h ORDER BY h.id DESC LIMIT 25`

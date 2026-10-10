@@ -67,7 +67,8 @@ def claims_with_passages(conn: Connection, revision_id: str, only: list[str] | N
     about (a replica or the original, a closing year or a building year)."""
     claims: dict[str, dict[str, Any]] = {}
     for row in conn.execute("""
-            SELECT c.id, c.n, c.text, c.kind, c."values", c.role, e.quote, e.quote_start, e.quote_end, n.text AS page,
+            SELECT c.id, c.n, c.text, c.kind, c."values", c.role, e.snapshot_id, e.quote, e.quote_start, e.quote_end,
+                   n.text AS page,
                    s.title, s.publisher, s.kind AS source_kind, s.url
             FROM psst.claims c JOIN psst.evidence e ON e.claim_id = c.id
             JOIN psst.snapshots n ON n.id = e.snapshot_id JOIN psst.sources s ON s.id = n.source_id
@@ -83,6 +84,7 @@ def claims_with_passages(conn: Connection, revision_id: str, only: list[str] | N
         claim["passages"].append({
             "source": {"title": row["title"], "publisher": row["publisher"], "kind": row["source_kind"],
                        "url": row["url"]},
+            "snapshot": row["snapshot_id"],  # what a revision cites to keep the claim
             "quote": row["quote"],
             "before": row["page"][max(0, start - window):start],
             "after": row["page"][end:end + window],

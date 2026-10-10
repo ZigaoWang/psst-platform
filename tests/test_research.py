@@ -530,3 +530,13 @@ def test_gathering_follows_official_links_and_keeps_the_paragraphs_that_name_the
     pages = harness_research.gather(None, {"name": "Old Mill", "url": "https://en.wikipedia.org/wiki/Old_Mill"})
     assert asked[1] == ["https://historicengland.org.uk/listing/1000001"]  # the official link, not the blog
     assert "The Old Mill closed in 1890." in pages[0]["text"] and "More unrelated" not in pages[0]["text"]
+
+
+def test_a_record_lead_is_stored(database, city):
+    with database.connect("system") as conn:
+        conn.execute("SELECT psst.record_leads(%s, %s, %s)", (city.token, sample.CELL, json.dumps([
+            {"key": "Q900030", "origin": "record", "name": "Invented Kiosk", "wikidata": "Q900030",
+             "url": "https://records.example.org/kiosk", "what": "list entry 1000004"}])))
+    with database.connect("admin") as conn:
+        stored = conn.execute("SELECT origin FROM psst.leads WHERE name = 'Invented Kiosk'").fetchone()
+    assert stored["origin"] == "record"

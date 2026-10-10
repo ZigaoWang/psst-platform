@@ -11,6 +11,7 @@
 		['/places', 'Places'],
 		['/checks', 'Checks'],
 		['/quality', 'Quality'],
+		['/harness', 'Harness'],
 		['/tasks', 'Tasks'],
 		['/runs', 'Runs'],
 		['/publish', 'Publish'],

@@ -76,6 +76,7 @@ Write each story the way you'd tell it to a friend standing there, before you th
   looking at within a few steps; write them too, but never pad: wrong, speculative, or encyclopedia filler is neither.
   A featured long is 300 characters or more; a map story's long may be as short as 120. The reviewer sets the final
   tier.
+- `tags`: leave empty (`[]`); tags are added when the story is published, never invented here.
 - `form`: `story`; `street_name` for where a street's name comes from, tied to the sign; `plaque` for what a plaque
   or memorial doesn't tell you.
 - Voice: plain words, concrete nouns, active verbs. Confident, never breathless. Vary your phrasing across the cell.

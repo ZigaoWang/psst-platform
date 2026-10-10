@@ -8,7 +8,7 @@ The facts are notes, not prose: tell the story in fresh words, and never reuse a
 fact, since a fact may keep its source's phrasing. Each story must rest on facts from at least two different sources,
 at least one of them a record or scholarly source (each fact lists its sources), so name such facts among its ids.
 
-Write the way `golden_bar` and `reference_stories` show: the surprise in the first sentence, something the reader can
+Write the way the golden bar below shows: the surprise in the first sentence, something the reader can
 see from where they stand, specifics, and an end on the payoff, with no speculation, no tangents, no background
 before the surprise, and nothing said twice. Plain US English (a building has stories, not storeys; color, center,
 honor), no dashes, no exclamation marks, no hype.

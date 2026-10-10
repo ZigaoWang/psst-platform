@@ -98,7 +98,7 @@ class FetchService:
             row = conn.execute("""
                 SELECT n.id AS snapshot, s.id AS source, s.kind, s.url, n.read_url, n.via, n.title, n.text, l.links
                 FROM psst.snapshots n JOIN psst.sources s ON s.id = n.source_id
-                LEFT JOIN psst.snapshot_links l ON l.snapshot_id = n.id
+                JOIN psst.snapshot_links l ON l.snapshot_id = n.id  -- read before links were kept: read once more
                 WHERE s.url_key = %s AND n.fetched_at > now() - make_interval(days => %s) AND n.http_status < 400
                 ORDER BY n.fetched_at DESC LIMIT 1""", (key, CACHE_DAYS)).fetchone()
         if row is None:

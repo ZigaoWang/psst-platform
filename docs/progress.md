@@ -2,6 +2,11 @@
 
 Where the build stands. Updated before every milestone and whenever the plan changes, so work can resume from this file alone.
 
+## Questions for the editor
+
+1. Golden set tiers (asked 2026-10-10). Following "weak for a smaller surprise is map material", the cab shelter, South Kentish Town, Albert Bridge, and the Camden Catacombs grilles are now good map stories. But the first three still have the flaws your original reasons named ("mostly history", "painted-over tiles nobody can see", "the payoff doesn't land"), and the reviewer marks them weak for those flaws: the tiered calibration agreed on 17 of 26 (65 percent), and the gate is closed. Keep them good and map, or weak (fixable flaws) with map as the tier a fixed version would get?
+2. The monthly budget per city, before the harness runs unattended.
+
 ## Done
 
 - Content standard ([content.md](content.md)), design version 2 ([design.md](design.md)), [decisions.md](decisions.md), [operations.md](operations.md).

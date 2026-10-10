@@ -164,7 +164,6 @@ CLAIM_PROPERTIES: dict[str, Any] = cast(dict[str, Any], results.CLAIMS["items"])
 EVIDENCE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {"skip": {"type": "string", "minLength": 5},
-                   "story": {"type": "boolean"},  # false: the record holds no story angle, a guide-only place
                    "place": results.place_identity(),
                    "facts": {"type": "array", "items": {
                        "type": "object", "required": ["id", "text", "kind", "values", "evidence"],
@@ -208,10 +207,12 @@ def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any],
         # A fact resting only on a reference work, or saying more than its quotes, can't stand in a story: it is
         # dropped, not sent back.
         answer["facts"] = [f for f in answer.get("facts") or [] if not reference_only(ctx.conn, f) and not unquoted(f)]
-        found = verify(ctx.conn, answer["facts"], "story" if answer.get("story", True) else "guide")
+        found = verify(ctx.conn, answer["facts"], "guide")
         if found:
             raise task_cli.NotSubmitted(found)
-        kept.update(repairs=repairs)
+        # Whether the facts can carry a story is the source rules' call, made here in code; whether they hold one
+        # is the writer's.
+        kept.update(repairs=repairs, story_allowed=not verify(ctx.conn, answer["facts"], "story"))
         return answer
     try:
         answer = dict(executor.converse("evidence", system, user, task, version(prompt), accept, ctx, spend))
@@ -337,7 +338,7 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
     facts = {f["id"]: f for f in gathered["facts"]}
     one_source = single_source(facts)
     tier = "map" if one_source else decision.get("tier")  # featured keeps two independent sources (decision 35)
-    guide_only = gathered.get("story") is False  # the record holds no story angle: a guide-only place
+    guide_only = not gathered.get("story_allowed")  # the sources can't carry a story: a guide-only place
     # The writer sees each fact in plain words with its values, not the quoted source, so it tells the story in its
     # own words; the claims it rests on still carry the exact quotes.
     with db.connect("worker") as conn:
@@ -355,8 +356,8 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
                         place_id=decision.get("existing"))
 
     def accept(answer: dict[str, Any]) -> Any:
-        if guide_only:
-            answer["stories"] = []
+        if guide_only or not isinstance(answer.get("stories"), list):
+            answer["stories"] = [] if guide_only else answer.get("stories")
         for story in answer.get("stories") or []:
             if isinstance(story, dict) and isinstance(story.get("body"), dict):
                 # What triage planned stands when the writer leaves it out; tags are added at publishing.

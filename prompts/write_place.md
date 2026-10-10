@@ -15,9 +15,9 @@ before the surprise, and nothing said twice. Plain US English (a building has st
 honor), no dashes, no exclamation marks, no hype.
 
 For each story give its `body` and `facts`, the ids of the facts it rests on:
-- `headline` (10 to 60 characters, no question mark), `short` (40 to 220 characters, the surprise in one or two
-  sentences), `long` (the whole story; 300 to 1,000 characters for a featured story, at least 120 for a map story),
-  `look` (where to stand and what to see; it must name the thing the story is about or its marker).
+- `headline` (no question mark), `short` (the surprise in one or two sentences), `long` (the whole story; at least
+  300 characters for a featured story), `look` (where to stand and what to see; it must name the thing the story is
+  about or its marker). Every field stays within the lengths below.
 - `category` (name, hidden, history, design, engineering, people, pop, or quirk), `veracity` (fact; legend for a story
   people tell that is unproven, written as one; disputed when sources disagree), `tier` (featured for a "wait,
   really?" story, map for a smaller surprise), `form` (story, street_name, or plaque), and `tags` left empty.

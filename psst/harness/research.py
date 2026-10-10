@@ -255,6 +255,16 @@ def unquoted(fact: dict[str, Any]) -> bool:
     return any(n not in stated and not any(n in s for s in stated) for n in VALUE_NUMBER.findall(fact.get("text", "")))
 
 
+def lengths() -> str:
+    """The rulebook's length limits for what the writer writes, so the prompt never states them apart from it."""
+    spec = rules.load()
+    lines = []
+    for kind, fields in (("story", ("headline", "short", "long", "look")), ("guide", ("identifier", "about"))):
+        properties = spec.type(kind)["schema"]["properties"]
+        lines += [f"- {kind} {f}: {properties[f]['minLength']} to {properties[f]['maxLength']}" for f in fields]
+    return "\n".join(lines)
+
+
 def single_source(facts: dict[str, dict[str, Any]]) -> bool:
     """Whether the facts rest on one source: several snapshots of the same page are one source."""
     snapshots = sorted({e["snapshot"] for f in facts.values() for e in f["evidence"]})
@@ -322,7 +332,8 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
     the place through the same checks as any submission."""
     prompt = prompts.load("write_place").text
     # Slim on purpose (decision 34): the golden bar shows the voice; the full golden set and rules stay out.
-    system = prompt + "\n\n## The golden bar\n\n" + str(document["data"].get("golden_bar") or "")
+    system = (prompt + "\n\n## Lengths, in characters\n\n" + lengths() + "\n\n## The golden bar\n\n"
+              + str(document["data"].get("golden_bar") or ""))
     facts = {f["id"]: f for f in gathered["facts"]}
     one_source = single_source(facts)
     tier = "map" if one_source else decision.get("tier")  # featured keeps two independent sources (decision 35)

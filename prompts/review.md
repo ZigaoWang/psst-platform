@@ -29,16 +29,28 @@ the point called disputed, need settling too.
 
 A well-known name or place can be good when the story gives it a fresh, specific twist.
 
-- `good`: one physical thing, a real surprise (ideally in the first sentence), something a reader can see or check on
-  the spot, and specific names, numbers, or details. A reader standing there would show it to a friend.
-- `weak`: the core is not there yet: the surprise is mild or familiar (a closed-station or Titanic-style hook any
-  place could have), it is buried under background, the story stops right after the hook with nothing more, its
+- `good`: one physical thing, true, specific, sourced, tied to something a reader can see or check on the spot, and
+  told cleanly with its surprise first. The size of the surprise sets the tier (below), not the mark.
+- `weak`: the core is not there yet: the surprise is buried under background, the story stops right after the hook with nothing more, its
   conclusion is an unanswered question, it contradicts itself (two accounts stated as if both were true), it is thin
   on the place itself, or the long adds nothing after the hook (it only describes what the short already said, with
   no how, why, who, or what happened next). Your reason names the one thing a revision must fix.
 - `bad`: not a story: a single record line, a list of dates or owners, a planning or legal detail with nothing to
   stand in front of, a statistic, a surprise already in the encyclopedia's first paragraph, or something true of
   every place of its kind.
+
+## Tier
+
+Every good story gets a tier in `tier`; guides, and anything not marked good, get null.
+
+- `featured`: the "wait, really?" bar. A reader standing there would stop a friend to tell them. It leads the feed.
+- `map`: as true, specific, sourced, and visible, with a smaller surprise: a closed station's old name, a cab
+  shelter's rules, grilles in the road that once lit a tunnel. It fills the map, so a reader finds something within a
+  few steps anywhere. A mild or familiar surprise makes a map story, not a weak one. Wrong, speculative, rambling, or
+  encyclopedia filler is never a map story: mark it weak or bad as above.
+
+Street names (`form: street_name`, tied to the sign) and plaques (`form: plaque`, what the plaque doesn't tell you)
+are marked the same way and are usually map stories.
 
 Nothing publishes with these, whatever the mark: a good item that has one gets the cut in `fix`, and an item whose
 fix is more than a cut is weak:

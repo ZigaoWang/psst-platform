@@ -86,7 +86,8 @@ def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], s
         ctx.conn.close()
 
 
-PASSAGE_CHARS = 2500   # of each page, the paragraphs that name the place, before any model sees it
+PASSAGE_CHARS = 2500   # of each long page, the paragraphs that name the place, before any model sees it
+RECORD_CHARS = 5000    # a record page, or any short page, kept whole up to this
 FOLLOWED_LINKS = 2     # links from the lead's page to official, archive, or scholarly hosts read as well
 
 
@@ -110,8 +111,11 @@ def gather(executor: Executor, lead: dict[str, Any]) -> list[dict[str, Any]]:
                                   "kind": urls.host_kind(u), "language": "en"}
                                  for u in list(dict.fromkeys(followed))[:FOLLOWED_LINKS]])
     terms = " ".join([lead["name"], lead.get("what") or ""])
+    # A record page is short and all about the place, so it is kept whole; a long page is cut to the paragraphs that
+    # name the place, since its description may never repeat the name.
     return [{"snapshot": page["snapshot"], "kind": page["kind"], "url": page["url"],
-             "text": reading.passages(page["text"], terms, PASSAGE_CHARS)} for page in pages]
+             "text": page["text"][:RECORD_CHARS] if page["kind"] in strong or len(page["text"]) <= RECORD_CHARS
+             else reading.passages(page["text"], terms, PASSAGE_CHARS)} for page in pages]
 
 
 def read_all(executor: Executor, requests: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -422,7 +426,7 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
                 return {"lead": d["lead"], "status": "skipped",
                         "reason": f"the evidence isn't there: {gathered['skip']}"[:300]}
             placed = write(prose_writer(writer), task, document, d, lead, gathered, Spend())
-        except (GaveUp, ValueError, TypeError, KeyError, psycopg.Error) as reason:
+        except (GaveUp, ValueError, TypeError, KeyError, OSError, psycopg.Error) as reason:
             # One place that fails, for any reason, is given back; the rest of the cell goes on.
             return {"lead": d["lead"], "status": "skipped" if lead.get("well_known") else "later",
                     "reason": f"couldn't be written to the bar: {reason}"[:300]}

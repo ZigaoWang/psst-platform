@@ -209,6 +209,8 @@ class Executor:
                 continue
             messages.append({"role": "assistant", "content": reply.text})
             answer = parse_json(reply.text)
+            if answer is None and step in PROSE_IS_SKIP and reply.text.strip() and not reply.cut_off:
+                answer = {"skip": reply.text.strip()[:300]}  # a model declining in words is declining
             try:
                 if reply.cut_off:
                     raise task_cli.NotSubmitted(["your answer was cut off at the length limit; answer again more "
@@ -366,6 +368,7 @@ class Executor:
             conn.execute("SELECT psst.return_task(%s, %s, %s)", (self.token, document["task"], reason[:1000]))
 
 
+PROSE_IS_SKIP = {"evidence"}  # steps where an answer in words instead of JSON means the place has no story
 VOTING = {"review": ("decisions", "revision"), "calibrate": ("marks", "golden")}
 
 

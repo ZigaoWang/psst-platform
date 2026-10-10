@@ -520,7 +520,7 @@ def test_gathering_follows_official_links_and_keeps_the_paragraphs_that_name_the
         asked.append([r["url"] for r in requests])
         if requests and "wikipedia" in requests[0]["url"]:
             return [{"snapshot": "sn_1", "kind": "reference", "url": requests[0]["url"],
-                     "text": "Unrelated opening.\nThe Old Mill closed in 1890.\nMore unrelated text.",
+                     "text": "Unrelated opening.\nThe Old Mill closed in 1890.\n" + "More unrelated text.\n" * 400,
                      "links": [{"text": "list entry", "url": "https://historicengland.org.uk/listing/1000001"},
                                {"text": "a blog", "url": "https://blog.example.org/mill"}]}]
         return [{"snapshot": "sn_2", "kind": "official_record", "url": r["url"], "text": "Old Mill, listed 1972.",

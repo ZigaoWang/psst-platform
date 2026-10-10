@@ -7,8 +7,14 @@ SOURCE = ("The Old Pump House on Mill Lane was built in 1871 by the engineer Ada
 
 
 def test_a_retyped_quote_becomes_the_exact_passage():
-    retyped = "built in 1871 by engineer Ada Thorne for the Testville Water Company"
-    assert quotes.nearest(SOURCE, retyped) == "built in 1871 by the engineer Ada Thorne for the Testville Water Company"
+    retyped = "the Old Pump House on Mill Lane was built in 1871 by engineer Ada Thorne for the Testville Water Company"
+    exact, similarity = quotes.nearest(SOURCE, retyped)
+    assert exact == "The Old Pump House on Mill Lane was built in 1871 by the engineer Ada Thorne for the Testville " \
+                    "Water Company" and similarity >= 0.95
+
+
+def test_a_quote_two_words_off_in_ten_is_invented_not_repaired():
+    assert quotes.nearest(SOURCE, "built in 1880 by the architect Ada Thorne for the Testville Water Company") is None
 
 
 def test_an_invented_quote_is_left_alone():

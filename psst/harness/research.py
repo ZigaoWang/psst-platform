@@ -9,6 +9,7 @@ from typing import Any
 
 import jsonschema
 import psycopg
+from psycopg.types.json import Jsonb
 
 from psst.cli import tasks as task_cli
 from psst.core import db
@@ -104,11 +105,18 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
         gathered = json.loads(user)["data"]["gathered"]
         ctx.read.update(page["snapshot"] for page in gathered)
 
+        repaired: list[dict[str, Any]] = []
+
         def accept(answer: dict[str, Any]) -> Any:
-            quotes.repair(ctx.conn, answer, ctx.read)
+            stats, repairs = quotes.repair(ctx.conn, answer, ctx.read)
+            ctx.conn.execute("SELECT psst.record_quote_repairs(%s, %s, NULL, %s, %s, %s, '[]')",
+                             (executor.token, task["id"], executor.model, spend.trace[-1], Jsonb(stats)))
+            repaired[:] = repairs
             return task_cli.submit_one_place(document, answer)
         placed = dict(executor.converse("write", system, user, task, version(PREAMBLE + WRITE_INTRO + prompt),
                                         accept, ctx, spend))
+        ctx.conn.execute("SELECT psst.record_quote_repairs(%s, %s, %s, %s, NULL, NULL, %s)",
+                         (executor.token, task["id"], placed["place"], executor.model, Jsonb(repaired)))
         ctx.conn.execute("SELECT psst.tie_harness_calls(%s, %s, %s)", (executor.token, spend.trace, placed["place"]))
         return placed
     finally:

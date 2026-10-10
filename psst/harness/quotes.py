@@ -1,8 +1,9 @@
 """Holding a cheap model to exact quotes (decision 28). Models often retype a passage with a word or two changed, or
 cite a snapshot under a mistyped id. Before an answer is checked, each quote is matched against the snapshot it cites,
-or, when that id doesn't exist, against the snapshots read for this item: a passage that matches at least nine words
-in ten becomes the snapshot's exact text. Anything further off is left for the checks to refuse. The checks, the
-review, and the audit then judge the claim against the real passage."""
+or, when that id doesn't exist, against the snapshots read for this item. A passage whose words match the quote's at a
+similarity of 0.95 or more (at most about one word in twenty different) becomes the snapshot's exact text; anything
+further off is an invented quote, left for the checks to refuse. Every repair is logged on its place and shown to the
+reviewer and auditor beside the claim, who judge it against the real passage (decision 30)."""
 
 from __future__ import annotations
 
@@ -17,11 +18,11 @@ from psst.core.text import find_quote
 Connection = psycopg.Connection[dict[str, Any]]
 
 WORD = re.compile(r"\w+(?:'\w+)?")
-MIN_RATIO = 0.9
+MIN_RATIO = 0.95
 
 
-def nearest(text: str, quote: str) -> str | None:
-    """The span of `text` whose words best match the quote's, if it matches at least MIN_RATIO."""
+def nearest(text: str, quote: str) -> tuple[str, float] | None:
+    """The span of `text` whose words best match the quote's, with the similarity, if it reaches MIN_RATIO."""
     if find_quote(text, quote):
         return None  # already exact
     wanted = [w.casefold() for w in WORD.findall(quote)]
@@ -39,12 +40,13 @@ def nearest(text: str, quote: str) -> str | None:
             if ratio > best:
                 best, best_span = ratio, (spans[i].start(), spans[i + size - 1].end())
     if best >= MIN_RATIO and best_span:
-        return text[best_span[0]:best_span[1]]
+        return text[best_span[0]:best_span[1]], round(best, 3)
     return None
 
 
-def repair(conn: Connection, answer: dict[str, Any], read: set[str]) -> int:
-    """Fix near quotes and mistyped snapshot ids in place in every claim of the answer; returns how many changed."""
+def repair(conn: Connection, answer: dict[str, Any], read: set[str]) -> tuple[dict[str, int], list[dict[str, Any]]]:
+    """Fix near quotes and mistyped snapshot ids in place in every claim of the answer. Returns the counts (quotes,
+    exact, repaired, invented, unknown_snapshot) and each repair."""
     texts: dict[str, str | None] = {}
 
     def text(snapshot: str) -> str | None:
@@ -53,27 +55,36 @@ def repair(conn: Connection, answer: dict[str, Any], read: set[str]) -> int:
             texts[snapshot] = row["text"] if row else None
         return texts[snapshot]
 
-    changed = 0
+    stats = {"quotes": 0, "exact": 0, "repaired": 0, "invented": 0, "unknown_snapshot": 0}
+    repairs: list[dict[str, Any]] = []
     for evidence in _evidence(answer):
         quote, cited = evidence.get("quote"), evidence.get("snapshot")
         if not isinstance(quote, str) or not isinstance(cited, str):
             continue
-        candidates = [cited] if text(cited) is not None else sorted(read)
-        for snapshot in candidates:
+        stats["quotes"] += 1
+        known = text(cited) is not None
+        stats["unknown_snapshot"] += not known
+        outcome = "invented"
+        for snapshot in [cited] if known else sorted(read):
             source = text(snapshot)
             if source is None:
                 continue
             if find_quote(source, quote):
+                outcome = "exact" if snapshot == cited else "repaired"
                 if snapshot != cited:
+                    repairs.append({"snapshot": snapshot, "written": f"[{cited}] {quote}", "exact": quote,
+                                    "similarity": 1.0})
                     evidence["snapshot"] = snapshot
-                    changed += 1
                 break
-            exact = nearest(source, quote)
-            if exact:
+            match = nearest(source, quote)
+            if match:
+                exact, similarity = match
+                repairs.append({"snapshot": snapshot, "written": quote, "exact": exact, "similarity": similarity})
                 evidence["snapshot"], evidence["quote"] = snapshot, exact
-                changed += 1
+                outcome = "repaired"
                 break
-    return changed
+        stats[outcome] += 1
+    return stats, repairs
 
 
 def _evidence(value: Any) -> list[dict[str, Any]]:

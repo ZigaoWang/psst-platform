@@ -212,7 +212,8 @@ class Executor:
                 continue
             messages.append({"role": "assistant", "content": reply.text})
             answer = parse_json(reply.text)
-            if answer is None and step in PROSE_IS_SKIP and reply.text.strip() and not reply.cut_off:
+            if answer is None and step in PROSE_IS_SKIP and reply.text.strip() and not reply.cut_off \
+                    and not TOOL_MARKUP.search(reply.text):  # words that imitate a tool call are no answer
                 answer = {"skip": reply.text.strip()[:300]}  # a model declining in words is declining
             try:
                 if reply.cut_off:
@@ -383,6 +384,7 @@ class Executor:
             conn.execute("SELECT psst.return_task(%s, %s, %s)", (self.token, document["task"], reason[:1000]))
 
 
+TOOL_MARKUP = re.compile(r"<(?:invoke|parameter|function_calls|tool_call)\b")
 PROSE_IS_SKIP = {"evidence"}  # steps where an answer in words instead of JSON means the place has no story
 VOTING = {"review": ("decisions", "revision"), "calibrate": ("marks", "golden")}
 

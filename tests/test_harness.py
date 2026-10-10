@@ -347,3 +347,8 @@ def test_the_report_counts_places_against_the_previous_app_and_sorts_skips(datab
     assert skip_kind("not a place to stand in front of: an area of London") == "triage: not one physical thing"
     assert skip_kind("couldn't be written to the bar: still not right after the fixes allowed: x is too long") \
         == "writing: length"
+
+
+def test_words_imitating_a_tool_call_are_not_taken_as_a_skip():
+    assert harness.TOOL_MARKUP.search('I will submit it. <invoke name="bash"> <parameter name="command">')
+    assert not harness.TOOL_MARKUP.search("The passages give only the listing, with nothing to tell.")

@@ -356,3 +356,26 @@ def test_a_place_with_malformed_leads_is_refused_not_crashed(database, city, mon
     place = result_for(database, document)["places"][0]
     with pytest.raises(task_cli.NotSubmitted, match="leads"):
         task_cli.submit_one_place(document, {"place": place, "leads": [{"lead": "ld_x"}]})
+
+
+def test_a_failing_chore_does_not_stop_the_system_worker(database, city, monkeypatch):
+    system = SystemWorker(lambda: psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row),
+                          city.token)
+
+    def broken():
+        raise psycopg.errors.ForeignKeyViolation("an invented failure")
+    broken.__name__ = "fill_hexagons"
+    monkeypatch.setattr(system, "fill_hexagons", broken)
+    system.work(once=True)  # returns instead of raising
+    assert system._hexagons_filled > 0
+
+
+def test_places_outside_the_platforms_cities_get_no_hexagon(database, city):
+    with database.connect("admin") as conn:
+        place = sample.place(conn, city.run)
+        conn.execute("UPDATE psst.places SET city_id = (SELECT id FROM psst.areas WHERE id NOT IN "
+                     "(SELECT id FROM psst.cities) LIMIT 1) WHERE id = %s", (place,))
+    SystemWorker(lambda: psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row),
+                 city.token).fill_hexagons()
+    with database.connect("admin") as conn:
+        assert conn.execute("SELECT h3_r9 FROM psst.places WHERE id = %s", (place,)).fetchone()["h3_r9"] is None

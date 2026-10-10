@@ -95,9 +95,10 @@ class SystemWorker:
         """Give each place its density hexagon, and outline every hexagon of the dense research cells, so the density
         map shows the gaps as well as what is there (decision 27)."""
         with self.connect() as conn:
-            missing = conn.execute("""SELECT id, city_id, ST_Y(geom) AS lat, ST_X(geom) AS lon FROM psst.places
-                                      WHERE state = 'active' AND h3_r9 IS NULL AND geom IS NOT NULL
-                                        AND city_id IS NOT NULL LIMIT 2000""").fetchall()
+            missing = conn.execute("""SELECT p.id, p.city_id, ST_Y(p.geom) AS lat, ST_X(p.geom) AS lon
+                                      FROM psst.places p JOIN psst.cities c ON c.id = p.city_id
+                                      WHERE p.state = 'active' AND p.h3_r9 IS NULL AND p.geom IS NOT NULL
+                                      LIMIT 2000""").fetchall()  # only the platform's own cities are measured
             places = [{"place": r["id"], "cell": cells.cell_for(r["lat"], r["lon"], cells.DENSITY),
                        "city": r["city_id"]} for r in missing]
             dense = conn.execute("""
@@ -133,16 +134,20 @@ class SystemWorker:
     def work(self, once: bool = False, idle_seconds: float = 5.0) -> None:
         """Works until stopped. Whoever started the run ends it, which gives back the task in hand at once instead of
         leaving it leased until the lease runs out."""
+        chores = [("_audits_planned", AUDIT_PLAN_SECONDS, self.plan_audits),
+                  ("_reviews_planned", REVIEW_PLAN_SECONDS, self.plan_reviews),
+                  ("_hexagons_filled", HEXAGON_SECONDS, self.fill_hexagons),
+                  ("_gate_refreshed", GATE_SECONDS, self.refresh_gate)]
         while True:
             busy = self.step()
-            if time.monotonic() - self._audits_planned > AUDIT_PLAN_SECONDS:
-                self.plan_audits()
-            if time.monotonic() - self._reviews_planned > REVIEW_PLAN_SECONDS:
-                self.plan_reviews()
-            if time.monotonic() - self._hexagons_filled > HEXAGON_SECONDS:
-                self.fill_hexagons()
-            if time.monotonic() - self._gate_refreshed > GATE_SECONDS:
-                self.refresh_gate()
+            for stamp, every, chore in chores:
+                if time.monotonic() - getattr(self, stamp) > every:
+                    try:
+                        chore()
+                    except (psycopg.Error, ValueError, LookupError, OSError):
+                        # A periodic chore that fails is logged and tried again later; it never stops the checks.
+                        log.exception("%s failed; trying again later", chore.__name__)
+                        setattr(self, stamp, time.monotonic())
             if once and not busy:
                 return
             if not busy:

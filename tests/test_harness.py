@@ -352,12 +352,3 @@ def test_the_report_counts_places_against_the_previous_app_and_sorts_skips(datab
 def test_words_imitating_a_tool_call_are_not_taken_as_a_skip():
     assert harness.TOOL_MARKUP.search('I will submit it. <invoke name="bash"> <parameter name="command">')
     assert not harness.TOOL_MARKUP.search("The passages give only the listing, with nothing to tell.")
-
-
-def test_a_draft_passed_as_text_is_read_or_answered_with_an_error(database):
-    from psst.harness import tools
-    with database.connect("worker") as conn:
-        ctx = tools.Context(conn=conn, token="invented")
-        found = tools.call(ctx, "check_draft", {"type": "guide", "draft": json.dumps({"body": {}, "claims": []})})
-        assert "problems" in found
-        assert "error" in tools.call(ctx, "check_draft", {"type": "guide", "draft": "[1, 2]"})

@@ -28,9 +28,8 @@ Connection = psycopg.Connection[dict[str, Any]]
 SHARED = ("golden_bar", "marked_examples", "reference_stories", "rules")
 
 PREAMBLE = """You work inside an automated pipeline, not a terminal. Where the instructions below mention commands,
-use the tools instead: fetch_source reads and saves a page (`psst fetch`), search_snapshot finds a passage in a saved
-page, lookup_wikidata and find_osm identify a place (`psst place find`), nearby_places shows what the platform already
-has nearby, and check_draft runs the tool checks on a draft. Quote only from snapshots you fetched or were given.
+use the tools instead: fetch_source reads and saves a page (`psst fetch`), and search_snapshot finds a passage in a
+saved page. Quote only from snapshots you fetched or were given.
 Never guess a web address: read the pages you were given and follow the links they list, such as an article's
 references to heritage listings, archives, and histories.
 When you are done, reply with only the JSON result, in the shape `result_schema` gives, and nothing else. It is

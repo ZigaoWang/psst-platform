@@ -15,8 +15,8 @@ content.
 
 ## 1. Find the places
 
-- **Go through every lead.** Each one ends as `added` (it became a place you wrote for; `place` is its index in your
-  `places`), `known` (already a place: `existing` is its id), `skipped`, or `later` (not reached this pass; never for
+- **Go through every lead.** Each one ends as `added` (it became a place you wrote for; listed with the place when
+  you submit it, or in the final result with `place`, its index there), `known` (already a place: `existing` is its id), `skipped`, or `later` (not reached this pass; never for
   a lead marked `well_known`). A skipped or later lead needs a short reason, the same reason may repeat. These
   reasons are measured: be specific ("only a blog repeats the tunnel story", "nothing beyond its encyclopedia
   opening").
@@ -91,9 +91,18 @@ claims. A `fact` story needs a primary or scholarly passage for every claim, or 
 Wikipedia alone; otherwise it is a `legend`. Label each source's kind honestly: an enthusiasts' site or a society
 website is `community`, not `scholarly`.
 
-## 6. Submit
+## 6. Submit each place as soon as it is done
 
-The result has `places` (each new place with `stories` and a `guide`; an existing place with `stories`), `leads`, and
-`notes` (what you covered, what's left, what you dropped and why in a sentence or two). `psst task submit` runs the
-tool checks on every story and guide and lists anything to fix. In a dense cell, a strong session covers 10 to 25
-places; a quiet cell may have three. Never rush a story to finish a cell: leave leads `later` instead.
+Submit every place the moment its stories and guide are finished, before you start the next one, so nothing is lost
+if the session stops. Write `{"place": <the place, as in places below>, "leads": [<the lead ids it covers>]}` to a
+file and run `uv run psst task place <task file> <place file>`. It runs the tool checks, catches a place that
+already exists (another researcher may have added it since your task file was written; then submit it as `existing`
+with an angle its stories don't tell, or drop it), and renews your lease. Every place submitted is kept even if the
+session stops; the next researcher continues the cell from where you were.
+
+When the cell is done, submit the final result with `psst task submit`: `places` holds any place not yet submitted
+(usually none; each new place with `stories` and a `guide`, an existing place with `stories`), `leads` accounts for
+every lead not already covered by a place you submitted (an `added` lead names a place submitted earlier by its id in
+`existing`), and `notes` says what you covered, what's left, and what you dropped and why in a sentence or two. In a
+dense cell, a strong session covers 10 to 25 places; a quiet cell may have three. Never rush a story to finish a
+cell: leave leads `later` instead.

@@ -487,6 +487,9 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
             if gathered.get("skip"):
                 return {"lead": d["lead"], "status": "skipped",
                         "reason": f"the evidence isn't there: {gathered['skip']}"[:300]}
+            if d.get("existing"):  # a place the platform has keeps its identity, whatever the evidence step named
+                gathered["place"] = {"existing": d["existing"],
+                                     "ordinary": bool((gathered.get("place") or {}).get("ordinary"))}
             placed = write(prose_writer(writer), task, document, d, lead, gathered, Spend())
         except (GaveUp, ValueError, TypeError, KeyError, OSError, psycopg.Error) as reason:
             # One place that fails, for any reason, is given back; the rest of the cell goes on.

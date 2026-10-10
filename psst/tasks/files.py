@@ -313,7 +313,7 @@ def research_brief(conn: Connection, cell: str) -> dict[str, Any]:
     leads = [dict(r) | {"well_known": (r["fame"] or 0) >= spec["well_known_sitelinks"]} for r in conn.execute("""
         SELECT id AS lead, name, origin, wikidata_id AS wikidata, osm_ref AS osm, url, what, fame, status
         FROM psst.leads WHERE cell = %s AND status IN ('open', 'later')
-        ORDER BY fame DESC NULLS LAST, name LIMIT %s""", (cell, spec["max_leads_per_pass"]))]
+        ORDER BY status = 'later', fame DESC NULLS LAST, name LIMIT %s""", (cell, spec["max_leads_per_pass"]))]
     waiting = conn.execute("SELECT count(*) AS n FROM psst.leads WHERE cell = %s AND status IN ('open', 'later')",
                            (cell,)).fetchone()
     places = [dict(r) for r in conn.execute("""

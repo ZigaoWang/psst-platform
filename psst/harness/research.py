@@ -516,6 +516,10 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
             if gathered.get("skip"):
                 return {"lead": d["lead"], "status": "skipped",
                         "reason": f"the evidence isn't there: {gathered['skip']}"[:300]}
+            known = gathered.get("place") or {}
+            for key in ("wikidata", "osm"):  # the lead's own identifiers, when the evidence step left them out
+                if "existing" not in known and lead.get(key) and not known.get(key):
+                    known[key] = lead[key]
             if d["existing"]:  # a place the platform has keeps its identity, whatever the evidence step named
                 gathered["place"] = {"existing": d["existing"],
                                      "ordinary": bool((gathered.get("place") or {}).get("ordinary"))}

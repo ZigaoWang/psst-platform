@@ -9,8 +9,7 @@ editor would.
 
 For each item in `data.items` you get its type, the place, the prose (`body`), every claim beside the passages it
 rests on (with the text around each passage), the place's other stories, and the first paragraph of its encyclopedia
-article (`encyclopedia_lead`). If you need more of a source than the passage shows, read it with
-`uv run psst fetch <url> --title "..." --publisher "..." --kind <kind> --language <lang>`.
+article (`encyclopedia_lead`). Judge from these: they are everything the item rests on.
 
 ## Marks
 
@@ -20,8 +19,9 @@ can see or check on the spot? The size of the surprise sets the tier (below), no
 - `good`: the core is there. A story whose telling or sourcing needs fixing is still good, with the fix named in
   `fix`: a cut (background before the surprise, a tangent, a repeated phrase, a speculative or unanswered ending, a
   detail no claim states), a label (`disputed` when good sources disagree, `legend` when it is unproven), or a source
-  (a second independent source to add, or Wikipedia to replace with the record it rests on). Nothing publishes until
-  the fix is made.
+  (Wikipedia to replace with the record it rests on, or a second independent source for a featured story). A map
+  story may rest on its official record alone, such as a heritage list entry; never ask it for a second source.
+  Nothing publishes until the fix is made.
 - `weak`: the core is there but the story has to be rewritten around it, which a cut, a label, or a source can't do
   (it tells a different story from the one its evidence supports, or it has no telling at all beyond a heading). Rare;
   say what the rewrite must do.
@@ -55,6 +55,16 @@ Every good story gets a tier in `tier`; guides, and anything not marked good, ge
   shelter's rules, grilles in the road that once lit a tunnel. It fills the map, so a reader finds something within a
   few steps anywhere. A mild or familiar surprise makes a map story, not a weak one. Wrong, speculative, rambling, or
   encyclopedia filler is never a map story: mark it weak or bad as above.
+
+## Guides
+
+A guide is marked on its own job, not on surprise: the identifier names what stands there now, with its year and
+maker as its claims give them, and the About says in two or three plain sentences of its own what the place is, why
+it was made, and what it is today, with every detail claimed. A place may have a guide and no story, when its record
+holds nothing a passer-by would stop for; a listed pillar box, kiosk, or terrace with an accurate guide is good. A
+guide is bad only when it is wrong, or says nothing beyond the place's name and kind; weak when its About has to be
+rewritten (it is the listing's description reworded, or it never says what the place is or was for). A guide that
+repeats the listing's grade or dates, or says something no claim states, is good with that cut named in `fix`.
 
 Street names (`form: street_name`, tied to the sign) and plaques (`form: plaque`, what the plaque doesn't tell you)
 are marked the same way and are usually map stories.

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 import psycopg
@@ -62,10 +64,19 @@ def token() -> str:
     return config.require("PSST_RUN_TOKEN")
 
 
-def start(conn: psycopg.Connection[dict[str, Any]], kind: str, notes: str) -> str:
-    """Start a run of `kind` for a command that works on its own (system, publisher) and return its token."""
+@contextmanager
+def session(conn: psycopg.Connection[dict[str, Any]], kind: str, notes: str) -> Iterator[str]:
+    """A run of `kind` for a command that works on its own (system, publisher), ended however the command ends.
+    Yields the run's token."""
     row = conn.execute("SELECT * FROM psst.start_run(%s, %s, NULL, %s)",
                        (kind, os.environ.get("USER") or kind, notes)).fetchone()
     conn.commit()
     assert row
-    return str(row["token"])
+    try:
+        yield str(row["token"])
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.execute("SELECT psst.end_run(%s)", (row["token"],))
+        conn.commit()

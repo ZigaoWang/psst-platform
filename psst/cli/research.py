@@ -10,7 +10,7 @@ import psycopg
 from psst.core import db
 from psst.places import reference, research
 
-from .runs import start
+from .runs import session
 
 
 def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -39,8 +39,8 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
 
 
 def setup_city(args: argparse.Namespace) -> int:
-    with db.open_connection(db.conninfo("system")) as conn:
-        planned = research.setup_city(conn, start(conn, "system", "city setup"), args.area, args.slug,
+    with db.open_connection(db.conninfo("system")) as conn, session(conn, "system", "city setup") as token:
+        planned = research.setup_city(conn, token, args.area, args.slug,
                                       [lang for lang in args.languages.split(",") if lang], args.order,
                                       args.wikidata)
         conn.commit()
@@ -49,8 +49,7 @@ def setup_city(args: argparse.Namespace) -> int:
 
 
 def queue_cells(args: argparse.Namespace) -> int:
-    with db.open_connection(db.conninfo("system")) as conn:
-        token = start(conn, "system", "research planning")
+    with db.open_connection(db.conninfo("system")) as conn, session(conn, "system", "research planning") as token:
         outcome = research.queue(conn, token, args.city, args.cells)
     print(json.dumps(outcome, indent=2))
     return 0
@@ -64,6 +63,6 @@ def import_reference(args: argparse.Namespace) -> int:
 
 
 def sweep_cells(args: argparse.Namespace) -> int:
-    with db.open_connection(db.conninfo("system")) as conn:
-        print(json.dumps(research.sweep_cells(conn, start(conn, "system", "lead sweep"), args.cells), indent=2))
+    with db.open_connection(db.conninfo("system")) as conn, session(conn, "system", "lead sweep") as token:
+        print(json.dumps(research.sweep_cells(conn, token, args.cells), indent=2))
     return 0

@@ -12,7 +12,7 @@ from psst.core import config, db
 from psst.publish.channels import Channels
 from psst.publish.run import PublishError, publish, rollback
 
-from .runs import start
+from .runs import session
 
 WORK = config.ROOT / "work" / "publish"
 
@@ -37,8 +37,7 @@ def channels() -> Channels:
 
 
 def run_publish(args: argparse.Namespace) -> int:
-    with db.open_connection(db.conninfo("publisher")) as conn:
-        token = start(conn, "publisher", "publishing")
+    with db.open_connection(db.conninfo("publisher")) as conn, session(conn, "publisher", "publishing") as token:
         try:
             outcome = publish(conn, token, channels(), config.require("PSST_PUBLIC_URL"), WORK,
                               only_staging=args.only_staging, allow_shrink=args.allow_shrink)
@@ -54,8 +53,8 @@ def run_publish(args: argparse.Namespace) -> int:
 
 
 def run_rollback(args: argparse.Namespace) -> int:
-    with db.open_connection(db.conninfo("publisher")) as conn:
-        before, after = rollback(conn, start(conn, "publisher", "publishing"), channels(), args.to)
+    with db.open_connection(db.conninfo("publisher")) as conn, session(conn, "publisher", "publishing") as token:
+        before, after = rollback(conn, token, channels(), args.to)
     print(f"production moved from {before} back to {after}")
     return 0
 
@@ -67,8 +66,7 @@ def run_prune(args: argparse.Namespace) -> int:
 
 def run_requests(args: argparse.Namespace) -> int:
     """Leases the waiting publish or rollback request, if any, carries it out, and records the outcome."""
-    with db.open_connection(db.conninfo("publisher")) as conn:
-        token = start(conn, "publisher", "publishing")
+    with db.open_connection(db.conninfo("publisher")) as conn, session(conn, "publisher", "publishing") as token:
         task = conn.execute("SELECT * FROM psst.lease_task(%s, %s)", (token, ["publish", "rollback"])).fetchone()
         conn.commit()
         if task is None:

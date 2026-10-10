@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import signal
 
 from psst.checks import rechecks
 from psst.core import db
@@ -12,7 +13,7 @@ from psst.services import intake as reader_intake
 from psst.services.fetch_service import FetchService, serve
 from psst.services.system_worker import SystemWorker
 
-from .runs import start
+from .runs import session
 
 
 def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -32,32 +33,38 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     audits.set_defaults(run=run_plan_audits)
 
 
-def _worker() -> SystemWorker:
-    info = db.conninfo("system")
-    with db.open_connection(info) as conn:
-        token = start(conn, "system", "system worker")
-    return SystemWorker(lambda: db.open_connection(info), token)
+def _stop_on_sigterm() -> None:
+    """A stop from a deploy or restart unwinds like an interrupt, so the run ends."""
+    def stop(signum: int, frame: object) -> None:
+        raise SystemExit(0)
+    signal.signal(signal.SIGTERM, stop)
 
 
 def run_work(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
-    _worker().work(once=args.once)
+    _stop_on_sigterm()
+    info = db.conninfo("system")
+    with db.open_connection(info) as conn, session(conn, "system", "system worker") as token:
+        SystemWorker(lambda: db.open_connection(info), token).work(once=args.once)
     return 0
 
 
 def run_plan_audits(args: argparse.Namespace) -> int:
-    print(f"{_worker().plan_audits(force=args.force)} audit batches planned")
+    info = db.conninfo("system")
+    with db.open_connection(info) as conn, session(conn, "system", "audit planning") as token:
+        planned = SystemWorker(lambda: db.open_connection(info), token).plan_audits(force=args.force)
+    print(f"{planned} audit batches planned")
     return 0
 
 
 def run_fetch(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    _stop_on_sigterm()
     info = db.conninfo("system")
-    with db.open_connection(info) as conn:
-        token = start(conn, "system", "fetch service")
-    server = serve(FetchService(lambda: db.open_connection(info), token))
-    logging.getLogger("psst.fetch").info("listening on %s:%s", *server.server_address[:2])
-    server.serve_forever()
+    with db.open_connection(info) as conn, session(conn, "system", "fetch service") as token:
+        server = serve(FetchService(lambda: db.open_connection(info), token))
+        logging.getLogger("psst.fetch").info("listening on %s:%s", *server.server_address[:2])
+        server.serve_forever()
     return 0
 
 
@@ -71,6 +78,6 @@ def run_intake(args: argparse.Namespace) -> int:
 
 
 def run_recheck(args: argparse.Namespace) -> int:
-    with db.open_connection(db.conninfo("system")) as conn:
-        print(json.dumps(rechecks.recheck(conn, start(conn, "system", "rulebook recheck"))))
+    with db.open_connection(db.conninfo("system")) as conn, session(conn, "system", "rulebook recheck") as token:
+        print(json.dumps(rechecks.recheck(conn, token)))
     return 0

@@ -129,21 +129,27 @@ def test_the_queue_command_counts_a_citys_tasks(database, city, monkeypatch, cap
     assert shown["no_open_run_for"] == [f"research_cell ({SONNET})"]  # no Sonnet run is open to take it
 
 
-def test_a_stopped_system_worker_gives_back_its_task(database, city):
+def test_a_stopped_system_worker_gives_back_its_task_and_ends_its_run(database, city):
     import pytest
+
+    from psst.cli.runs import session
     research(database, city, guide=False)
-    system = SystemWorker(lambda: psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row),
-                          Worker(database, kind="system").token)
+
+    def connect():
+        return psycopg.connect(database.url("system"), row_factory=psycopg.rows.dict_row)
 
     def stopped(conn, task):
         raise SystemExit(0)  # what SIGTERM raises in the middle of a task
 
-    system.handlers["tool_check"] = stopped
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit), connect() as conn, session(conn, "system", "system worker") as token:
+        system = SystemWorker(connect, token)
+        system.handlers["tool_check"] = stopped
         system.work()
     with database.connect("admin") as conn:
         task = conn.execute("SELECT state FROM psst.tasks WHERE type = 'tool_check'").fetchone()
-    assert task["state"] == "queued"
+        open_runs = conn.execute("SELECT count(*) AS n FROM psst.runs WHERE notes = 'system worker' "
+                                 "AND ended_at IS NULL").fetchone()
+    assert task["state"] == "queued" and open_runs["n"] == 0
 
 
 def test_a_long_page_keeps_every_quoted_passage():

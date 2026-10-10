@@ -475,28 +475,16 @@ def test_a_verified_fact_the_writer_forgot_to_name_is_attached():
     assert [c["text"] for c in built["stories"][0]["claims"]] == ["The mill closed in 1890.", "It was rebuilt in 1902."]
 
 
-def test_a_fact_in_its_sources_words_is_sent_back(database, city):
-    from psst.harness import research as harness_research
-    with database.connect("admin") as conn:
-        snapshot = _snapshot(conn, MILL, "https://records.example.org/mill", "official_record")
-    copied = {"id": "f1", "text": "its wheel pit survives under the iron pavement grate by the door, where the "
-                                  "millstream still runs", "kind": "attribute", "values": [],
-              "evidence": [{"snapshot": snapshot, "quote": "its wheel pit survives under the iron pavement grate"}]}
-    with database.connect("worker") as conn:
-        found = harness_research.verify(conn, [copied])
-    assert any("fact f1" in p and "own words" in p for p in found)
-
-
-def test_a_fact_resting_only_on_a_reference_work_is_sent_back(database, city):
+def test_a_fact_resting_only_on_a_reference_work_is_dropped(database, city):
     from psst.harness import research as harness_research
     with database.connect("admin") as conn:
         wiki = _snapshot(conn, "The Old Mill on River Lane closed in 1890 after a flood.",
                          "https://en.wikipedia.org/wiki/Old_Mill_River_Lane", "reference")
-    fact = {"id": "f1", "text": "Milling ended there in 1890.", "kind": "date", "values": [],
-            "evidence": [{"snapshot": wiki, "quote": "The Old Mill on River Lane closed in 1890"}]}
+        record = _snapshot(conn, MILL, "https://records.example.org/mill", "official_record")
     with database.connect("worker") as conn:
-        found = harness_research.verify(conn, [fact])
-    assert any("fact f1: rests only on reference works" in p for p in found)
+        assert harness_research.reference_only(conn, {"evidence": [{"snapshot": wiki, "quote": "closed in 1890"}]})
+        assert not harness_research.reference_only(conn, {"evidence": [{"snapshot": wiki, "quote": "closed"},
+                                                                       {"snapshot": record, "quote": "closed"}]})
 
 
 def test_items_with_an_official_record_become_leads(monkeypatch):

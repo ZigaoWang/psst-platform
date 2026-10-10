@@ -14,12 +14,10 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from psst import rules
-from psst.checks.tools import Claim, Evidence, Snapshot, own_words
 from psst.cli import tasks as task_cli
 from psst.core import db, http
 from psst.evidence import fetch as reading
 from psst.evidence import urls
-from psst.rules.report import Report
 from psst.tasks import prompts, results
 
 from . import quotes, tools
@@ -202,7 +200,9 @@ def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any],
                          (executor.token, task["id"], executor.model, spend.trace[-1], Jsonb(stats)))
         for fact in answer.get("facts") or []:
             fact["values"] = values_in(fact)  # the exact numbers and names its quotes state, never the model's own
-        found = verify(ctx.conn, answer.get("facts") or [])
+        # A fact resting only on a reference work can't stand in a story: it is dropped, not sent back.
+        answer["facts"] = [f for f in answer.get("facts") or [] if not reference_only(ctx.conn, f)]
+        found = verify(ctx.conn, answer["facts"])
         if found:
             raise task_cli.NotSubmitted(found)
         kept.update(repairs=repairs)
@@ -224,6 +224,15 @@ def values_in(fact: dict[str, Any]) -> list[dict[str, str]]:
             if value not in found and value not in COMMON:
                 found.append(value)
     return [{"value": v} for v in found[:12]]
+
+
+def reference_only(conn: Any, fact: dict[str, Any]) -> bool:
+    snapshots = [e.get("snapshot") for e in fact.get("evidence", [])]
+    rows = conn.execute("""SELECT s.url, s.kind FROM psst.snapshots n JOIN psst.sources s ON s.id = n.source_id
+                           WHERE n.id = ANY(%s)""", (snapshots,)).fetchall()
+    kinds = rules.load().sources["kinds"]
+    return bool(rows) and all(kinds.get(urls.host_kind(r["url"]) or r["kind"], {}).get("role") == "reference"
+                              for r in rows)
 
 
 def verify(conn: Any, facts: list[dict[str, Any]]) -> list[str]:
@@ -249,23 +258,10 @@ def verify(conn: Any, facts: list[dict[str, Any]]) -> list[str]:
                 kind = urls.host_kind(snap["url"]) or snap["kind"]
                 sources[snap["source_id"]] = kind
                 roles.add(rulebook.sources["kinds"].get(kind, {}).get("role"))
-        if roles == {"reference"}:
-            found.append(f"fact {fact.get('id')}: rests only on reference works; quote the record they draw on, or "
-                         "drop the fact")
         for v in fact.get("values", []):
             if quoted and not any(contains(q, v.get("source_form") or v["value"]) for q in quoted):
                 found.append(f"fact {fact.get('id')}: '{v['value']}' isn't in its quoted passages; quote the words "
                              "that state it")
-    # A fact is a note in the evidence step's own words; one that keeps a run of its source's words would carry that
-    # copying into the story.
-    report = Report()
-    snapshots = {sid: Snapshot(sid, r["source_id"], r["url"], r["kind"], r["text"]) for sid, r in texts.items()}
-    claims = [Claim(n, f.get("text", ""), f.get("kind", "attribute"), [],
-                    [Evidence(e.get("snapshot", ""), e.get("quote", "")) for e in f.get("evidence", [])])
-              for n, f in enumerate(facts, 1)]
-    own_words(report, {f"fact {f.get('id')}": f.get("text", "") for f in facts}, claims, snapshots, rulebook)
-    found += [r.replace("write it in your own words or quote it", "put the fact in your own words")
-              for r in report.refusals]
     need = rulebook.sources["rules"]["story"]
     strong = [k for k in sources.values()
               if rulebook.sources["kinds"].get(k, {}).get("role") in rulebook.sources["strong_roles"]]
@@ -310,6 +306,8 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
                 story["body"].setdefault("tier", decision.get("tier") or "map")
                 story["body"].setdefault("form", decision.get("form") or "story")
                 story["body"].setdefault("tags", [])
+                story["body"].setdefault("veracity", "fact")
+                story["body"].setdefault("category", "history")
         place = assemble(gathered["place"], answer, facts)
         found = unsupported(place, facts, [lead["name"], *document["data"]["neighborhoods"]])
         if found:

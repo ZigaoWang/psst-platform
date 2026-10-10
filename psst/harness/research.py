@@ -504,12 +504,13 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
 
     def place(turn: int, d: dict[str, Any]) -> dict[str, Any]:
         lead, writer = leads[d["lead"]], writers[turn % len(writers)]
+        d["existing"] = d.get("existing") or lead.get("existing")  # the place a lead already became, if any
         try:
             gathered = evidence(writer, task, document, d, lead, Spend())
             if gathered.get("skip"):
                 return {"lead": d["lead"], "status": "skipped",
                         "reason": f"the evidence isn't there: {gathered['skip']}"[:300]}
-            if d.get("existing"):  # a place the platform has keeps its identity, whatever the evidence step named
+            if d["existing"]:  # a place the platform has keeps its identity, whatever the evidence step named
                 gathered["place"] = {"existing": d["existing"],
                                      "ordinary": bool((gathered.get("place") or {}).get("ordinary"))}
             placed = write(prose_writer(writer), task, document, d, lead, gathered, Spend())

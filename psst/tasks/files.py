@@ -311,7 +311,8 @@ def research_brief(conn: Connection, cell: str) -> dict[str, Any]:
     south, west, north, east = cells.bounds(cell)
     around = [cell] + [c for c in h3.grid_disk(cell, 1) if c != cell]
     leads = [dict(r) | {"well_known": (r["fame"] or 0) >= spec["well_known_sitelinks"]} for r in conn.execute("""
-        SELECT id AS lead, name, origin, wikidata_id AS wikidata, osm_ref AS osm, url, what, fame, status
+        SELECT id AS lead, name, origin, wikidata_id AS wikidata, osm_ref AS osm, url, what, fame, status,
+               place_id AS existing
         FROM psst.leads WHERE cell = %s AND status IN ('open', 'later')
         ORDER BY status = 'later', origin <> 'legacy', fame DESC NULLS LAST, name LIMIT %s""",
         (cell, spec["max_leads_per_pass"]))]  # places the previous app had come first, then the best known

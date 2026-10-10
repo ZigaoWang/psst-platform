@@ -239,13 +239,22 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
     prompt = prompts.load("write_place").text
     system = PREAMBLE + "\n\n" + prompt + "\n\n## Shared data\n\n" + shared_data(document)
     facts = {f["id"]: f for f in gathered["facts"]}
+    # The writer sees each fact in plain words with its values, not the quoted source, so it tells the story in its
+    # own words; the claims it rests on still carry the exact quotes.
+    shown = [{k: f[k] for k in ("id", "text", "kind", "values") if k in f} for f in facts.values()]
     user = json.dumps({"data": {"place": gathered["place"], "lead": lead["name"], "angle": decision.get("angle"),
                                 "tier": decision.get("tier"), "form": decision.get("form"),
-                                "facts": list(facts.values())}}, ensure_ascii=False, default=str)
+                                "facts": shown}}, ensure_ascii=False, default=str)
     ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=executor.token,
                         place_id=decision.get("existing"))
 
     def accept(answer: dict[str, Any]) -> Any:
+        for story in answer.get("stories") or []:
+            if isinstance(story, dict) and isinstance(story.get("body"), dict):
+                # What triage planned stands when the writer leaves it out; tags are added at publishing.
+                story["body"].setdefault("tier", decision.get("tier") or "map")
+                story["body"].setdefault("form", decision.get("form") or "story")
+                story["body"].setdefault("tags", [])
         place = assemble(gathered["place"], answer, facts)
         found = unsupported(place, facts, [lead["name"], *document["data"]["neighborhoods"]])
         if found:

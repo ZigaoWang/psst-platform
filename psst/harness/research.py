@@ -394,6 +394,10 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
                 story["body"].setdefault("category", "history")
         if isinstance(answer.get("guide"), dict) and isinstance(answer["guide"].get("body"), dict):
             answer["guide"]["body"].setdefault("key_facts", [])  # left empty here, as the prompt asks
+        for kind, part in [*(("story", s) for s in answer.get("stories") or []), ("guide", answer.get("guide"))]:
+            if isinstance(part, dict) and isinstance(part.get("body"), dict):  # fields the rulebook has no place for
+                allowed = rules.load().type(kind)["schema"]["properties"]
+                part["body"] = {k: v for k, v in part["body"].items() if k in allowed}
         place = assemble(gathered["place"], answer, facts)
         us_spelling(place)
         found = unsupported(place, facts, [lead["name"], *document["data"]["neighborhoods"]])

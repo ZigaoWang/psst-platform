@@ -122,11 +122,13 @@ def run_trial(args: argparse.Namespace) -> int:
         shared = trial.shared_review_data(conn, task)
     rows: dict[str, Any] = {}
     for model in models:
-        with db.connect("worker") as conn, session(conn, "worker", "harness trial", model) as token:
+        with db.open_connection(db.conninfo("worker")) as conn, \
+                session(conn, "worker", "harness trial", model) as token:
             started = datetime.now(UTC)
             placed = trial.write(token, model, task, document | {"run_token": token})
             written = spent(conn, model, started)
-        with db.connect("worker") as conn, session(conn, "worker", "harness trial review", reviewer) as token:
+        with db.open_connection(db.conninfo("worker")) as conn, \
+                session(conn, "worker", "harness trial review", reviewer) as token:
             started = datetime.now(UTC)
             items = trial.review_items(placed)
             marks = trial.review(token, reviewer, task, items, shared) if items else []

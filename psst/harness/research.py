@@ -151,8 +151,25 @@ def gather(executor: Executor, lead: dict[str, Any]) -> list[dict[str, Any]]:
     # A record page is short and all about the place, so it is kept whole; a long page is cut to the paragraphs that
     # name the place, since its description may never repeat the name.
     return [{"snapshot": page["snapshot"], "kind": page["kind"], "url": page["url"],
-             "text": page["text"][:RECORD_CHARS] if page["kind"] in strong or len(page["text"]) <= RECORD_CHARS
+             "text": record_text(page["text"]) if page["kind"] == "official_record"
+             else page["text"][:RECORD_CHARS] if page["kind"] in strong or len(page["text"]) <= RECORD_CHARS
              else reading.passages(page["text"], terms, PASSAGE_CHARS)} for page in pages]
+
+
+# A heritage record page opens with its header (grade, entry number, dates, the scope of protection) and a map; what it
+# says about the place is under these headings, and ends where its legacy notes, sources, and legal text begin.
+RECORD_START = re.compile(r"\n(?:Summary|Reasons for Designation|History|Details)\n")
+RECORD_END = re.compile(r"\n(?:Legacy|Sources|Legal|Listing NGR:)")
+
+
+def record_text(text: str) -> str:
+    """What a record page says about the place, or the page from its start when it has none of the usual headings."""
+    start = RECORD_START.search(text)
+    if not start:
+        return text[:RECORD_CHARS]
+    body = text[start.start():]
+    end = RECORD_END.search(body)
+    return body[:end.start() if end else RECORD_CHARS][:RECORD_CHARS].strip()
 
 
 def read_all(executor: Executor, requests: list[dict[str, Any]]) -> list[dict[str, Any]]:

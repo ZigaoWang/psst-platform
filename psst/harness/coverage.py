@@ -80,8 +80,8 @@ def record_guide(executor: Executor, task: dict[str, Any], document: dict[str, A
     pages = research.read_all(executor, [r for lead in group for r in research.records(lead.get("wikidata"))[:1]])
     if not pages:
         return {"skipped": "its record couldn't be read"}
-    passages = [{"snapshot": p["snapshot"], "url": p["url"], "kind": p["kind"], "text": p["text"][:RECORD_TEXT]}
-                for p in pages]
+    passages = [{"snapshot": p["snapshot"], "url": p["url"], "kind": p["kind"],
+                 "text": research.record_text(p["text"])[:RECORD_TEXT]} for p in pages]
     prompt = prompts.load("record_guide").text
     system = prompt + "\n\n## Lengths, in characters\n\n" + research.lengths()
     user = json.dumps({"data": {"leads": [{"lead": lead["lead"], "name": lead["name"]} for lead in group],
@@ -94,6 +94,9 @@ def record_guide(executor: Executor, task: dict[str, Any], document: dict[str, A
     outcome: dict[str, Any] = {}
 
     def accept(answer: dict[str, Any]) -> dict[str, Any]:
+        if answer.get("skip"):
+            outcome.update(skipped=f"the record isn't enough for a guide: {answer['skip']}"[:300])
+            return outcome
         found = results.problems(RECORD_GUIDE_SCHEMA, answer)
         if found:
             raise task_cli.NotSubmitted(found)
@@ -104,7 +107,8 @@ def record_guide(executor: Executor, task: dict[str, Any], document: dict[str, A
         for fact in answer["facts"]:
             fact["values"] = research.values_in(fact)
         facts = {f["id"]: f for f in answer["facts"]
-                 if not research.reference_only(ctx.conn, f) and not research.unquoted(f, anchor["name"])}
+                 if not research.reference_only(ctx.conn, f)
+                 and not research.unquoted(f, " ".join([*(lead["name"] for lead in group), answer["place"]["name"]]))}
         problems = research.verify(ctx.conn, list(facts.values()), "guide")
         if problems:
             raise task_cli.NotSubmitted(problems)

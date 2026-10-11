@@ -24,4 +24,5 @@ event, something unusual about how it was built or used), false when it only des
 built. `specific`: for houses, the lead ids of single houses whose own record says something specific about that house;
 leave them out of the guide and its facts, since each gets its own place. Empty for a single listed thing.
 
-Answer only `{"angle": ..., "specific": [...], "place": {...}, "facts": [...], "guide": {"body": {...}, "facts": [...]}}`.
+Answer only `{"angle": ..., "specific": [...], "place": {...}, "facts": [...], "guide": {"body": {...}, "facts": [...]}}`,
+or `{"skip": "<the reason, specific>"}` when the records don't hold two facts about the place itself.

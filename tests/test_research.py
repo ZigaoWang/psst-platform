@@ -725,3 +725,12 @@ def test_a_coverage_cell_writes_listed_houses_of_one_street_as_one_guide(databas
     assert [a["status"] for a in added] == ["added", "added"] and added[0]["place_id"] == added[1]["place_id"]
     assert [i["type"] for i in items] == ["guide"]
     assert sum("from its official records" in c for c in calls) == 1
+
+
+def test_a_record_page_is_read_from_its_description_not_its_header():
+    from psst.harness import research as harness_research
+    page = ("Overview\nGrade:\nII\nList Entry Number:\n1000001\n" + "Map and scope of protection.\n" * 200 +
+            "Details\nShopping parade with offices over. 1906-10. By RJ Worley.\nListing NGR: TQ3044681612\n"
+            "Legacy\nThe contents of this record were generated from a legacy system.")
+    text = harness_research.record_text(page)
+    assert text.startswith("Details") and "By RJ Worley" in text and "Legacy" not in text and "Grade" not in text

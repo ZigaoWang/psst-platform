@@ -86,9 +86,8 @@ def claims_with_passages(conn: Connection, revision_id: str, only: list[str] | N
                        "url": row["url"]},
             "snapshot": row["snapshot_id"],  # what a revision cites to keep the claim
             "quote": row["quote"],
-            "before": row["page"][max(0, start - window):start],
-            "after": row["page"][end:end + window],
-        })
+        } | ({"before": row["page"][max(0, start - window):start], "after": row["page"][end:end + window]}
+             if window else {}))
     return list(claims.values())
 
 
@@ -262,7 +261,9 @@ def review_item(conn: Connection, lookups: Lookups, revision_id: str) -> dict[st
     item = conn.execute("SELECT id, place_id FROM psst.items WHERE current_revision = %s", (revision_id,)).fetchone()
     assert item
     place = place_summary(conn, item["place_id"])
-    claims = claims_with_passages(conn, revision_id)
+    # The reviewer judges the prose against what its claims quote: each quote alone, not the page around it, which
+    # was most of what a review cost.
+    claims = claims_with_passages(conn, revision_id, window=0)
     return {"revision": revision_id, "type": revision["type"], "place": place, "body": revision["body"],
             "claims": claims, "quote_repairs": quote_repairs(conn, item["place_id"], claims),
             "other_stories": other_items(conn, item["place_id"], item["id"]),

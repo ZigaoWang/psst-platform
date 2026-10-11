@@ -109,6 +109,8 @@ def record_guide(executor: Executor, task: dict[str, Any], document: dict[str, A
         if problems:
             raise task_cli.NotSubmitted(problems)
         guide = answer["guide"]
+        if isinstance(guide.get("facts"), list):  # a fact dropped above leaves the guide; the checks hold its prose
+            guide["facts"] = [i for i in guide["facts"] if i in facts]
         if isinstance(guide.get("body"), dict):
             allowed = rules.load().type("guide")["schema"]["properties"]
             guide["body"] = {k: v for k, v in guide["body"].items() if k in allowed}

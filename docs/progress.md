@@ -4,7 +4,7 @@ Where the build stands. Updated before every milestone and whenever the plan cha
 
 ## Questions for the editor
 
-None open. Sources for map stories: answered (decision 35). Budget: total 18 USD; London up to 8, Shanghai up to 6 until the proof cells are reviewed.
+1. London budget (asked 2026-10-11): London has spent 7.94 of its 8 USD. About 229 revisions (listing cuts in code among them) and their reviews wait, about 1 USD with review and revise run eight at a time. Raise London to 9 USD to finish them, with no new research? Total spend is about 9.9 of 18 USD.
 
 ## Done
 

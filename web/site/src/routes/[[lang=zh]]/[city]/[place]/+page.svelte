@@ -11,6 +11,9 @@
 	import { onMount } from 'svelte';
 	import type { PageProps } from './$types';
 
+	// Where a photo comes from, as its credit names it.
+	const SOURCES: Record<string, string> = { commons: 'Wikimedia Commons' };
+
 	let { data }: PageProps = $props();
 	const language = $derived(data.language);
 	const place = $derived(data.place);
@@ -77,7 +80,7 @@
 				{#if photo.kind === 'historic' && photo.year}{photo.year} · {/if}
 				{#if photo.credit.authorUrl}<a href={photo.credit.authorUrl} rel="external noopener">{photo.credit.author}</a>{:else}{photo.credit.author}{/if},
 				{#if photo.credit.licenseUrl}<a href={photo.credit.licenseUrl} rel="external noopener">{photo.credit.license}</a>{:else}{photo.credit.license}{/if}
-				· <a href={photo.credit.sourceUrl} rel="external noopener">{photo.credit.source ?? 'Wikimedia Commons'}</a>
+				· <a href={photo.credit.sourceUrl} rel="external noopener">{SOURCES[photo.credit.source ?? 'commons'] ?? photo.credit.source}</a>
 			</figcaption>
 		{:else}
 			<PlaceThumb kind={place.kind} size={44} />

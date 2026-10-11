@@ -84,7 +84,9 @@ const zh: Record<string, string> = {
 	'places in view': '个地方在视野内',
 	'Street': '街道',
 	'Area': '街区',
-	'Skip to search': '跳到搜索'
+	'Skip to search': '跳到搜索',
+	'Show more map': '显示更多地图',
+	'Show more of this place': '展开这个地方'
 };
 
 const en: Record<string, string> = {

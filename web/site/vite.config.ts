@@ -24,8 +24,11 @@ export default defineConfig({
 					'default-src': ['self'],
 					'script-src': ['self'],
 					'style-src': ['self', 'unsafe-inline'],
-					'img-src': ['self', 'data:'],
-					'connect-src': ['self'],
+					// The map: its style, tiles, fonts, and sprites come from OpenFreeMap, and MapLibre draws in a worker.
+					'img-src': ['self', 'data:', 'blob:', 'https://tiles.openfreemap.org'],
+					'connect-src': ['self', 'https://tiles.openfreemap.org'],
+					'worker-src': ['self', 'blob:'],
+					'child-src': ['blob:'],
 					'base-uri': ['self'],
 					'form-action': ['self'],
 					'frame-ancestors': ['none']

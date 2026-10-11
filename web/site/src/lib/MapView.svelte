@@ -4,6 +4,8 @@
 	// preview; clicking opens the place. MapLibre and its tiles load only in the browser.
 	import { onMount } from 'svelte';
 	import 'maplibre-gl/dist/maplibre-gl.css';
+	// MapLibre draws tiles in a worker; the build bundles it as a file of its own on this site.
+	import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 	import type { FeatureCollection, Point } from 'geojson';
 	import type { FeedPlace } from './feed.ts';
 
@@ -127,13 +129,15 @@
 		(async () => {
 			const maplibre = await import('maplibre-gl');
 			if (cancelled) return;
+			maplibre.setWorkerUrl(workerUrl);
 			const m = new maplibre.Map({
-				container, style: dark() ? STYLES.dark : STYLES.light, attributionControl: { compact: true },
+				container, style: dark() ? STYLES.dark : STYLES.light, attributionControl: false,
 				bounds: [[bounds.west, bounds.south], [bounds.east, bounds.north]], fitBoundsOptions: { padding: 20 },
 				dragRotate: false, pitchWithRotate: false, maxPitch: 0
 			});
 			m.touchZoomRotate.disableRotation();
-			m.addControl(new maplibre.NavigationControl({ showCompass: false }), 'bottom-right');
+			m.addControl(new maplibre.NavigationControl({ showCompass: false }), 'top-right');
+			m.addControl(new maplibre.AttributionControl({ compact: true }), 'bottom-left');
 			m.on('style.load', () => {
 				addLayers(m);
 				ready = true;
@@ -202,7 +206,7 @@
 	});
 </script>
 
-<div class="map" bind:this={container} role="application" aria-label="Map of places"></div>
+<div class="map" class:sheet={panelOpen} bind:this={container} role="application" aria-label="Map of places"></div>
 
 <style>
 	.map {
@@ -217,6 +221,22 @@
 		background: var(--focus);
 		border: 3px solid #fff;
 		box-shadow: 0 0 0 6px rgb(36 88 214 / 0.25);
+	}
+	/* Zoom buttons sit under the toolbar; on a phone, pinching zooms and the credit rises above an open sheet. */
+	.map :global(.maplibregl-ctrl-top-right) {
+		top: 4.5rem;
+		transition: right 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+	}
+	.map.sheet :global(.maplibregl-ctrl-top-right) {
+		right: min(28rem, 100%);
+	}
+	@media (max-width: 47.99rem) {
+		.map :global(.maplibregl-ctrl-top-right) {
+			display: none;
+		}
+		.map.sheet :global(.maplibregl-ctrl-bottom-left) {
+			bottom: 58vh;
+		}
 	}
 	.map :global(.maplibregl-ctrl-group) {
 		border-radius: var(--r2);

@@ -28,6 +28,7 @@
 	let locating = $state<'idle' | 'busy' | 'failed'>('idle');
 	let loadFailed = $state(false);
 	let listOpen = $state(false);
+	let tall = $state(false);
 
 	const shown = $derived(filtered(shared.places, categories));
 	const hits = $derived<Hit[]>(search(shared.places, query));
@@ -182,7 +183,9 @@
 		</a>
 	{/if}
 
-	<aside class="panel" class:open={panelOpen} aria-label={t(language, placeOpen ? 'Place' : 'Places here')}>
+	<aside class="panel" class:open={panelOpen} class:tall aria-label={t(language, placeOpen ? 'Place' : 'Places here')}>
+		<button type="button" class="handle" aria-expanded={tall} onclick={() => (tall = !tall)}
+			aria-label={t(language, tall ? 'Show more map' : 'Show more of this place')}></button>
 		{#if panelOpen}
 			<button type="button" class="close" onclick={close} aria-label={t(language, 'Close')}>×</button>
 		{/if}
@@ -407,6 +410,9 @@
 	.panel-body {
 		padding: var(--s5) var(--s5) var(--s7);
 	}
+	.handle {
+		display: none;
+	}
 	.close {
 		position: sticky;
 		top: var(--s3);
@@ -439,8 +445,34 @@
 		.panel.open {
 			transform: none;
 		}
+		.panel.tall {
+			height: 92vh;
+		}
+		.panel {
+			transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), height 220ms ease-out;
+		}
+		.handle {
+			display: block;
+			position: sticky;
+			top: 0;
+			width: 100%;
+			height: 1.5rem;
+			border: 0;
+			background: var(--bg);
+			cursor: pointer;
+			z-index: 1;
+		}
+		.handle::after {
+			content: '';
+			display: block;
+			width: 2.5rem;
+			height: 0.3rem;
+			margin: 0 auto;
+			border-radius: 999px;
+			background: var(--line-strong);
+		}
 		.panel-body {
-			padding: var(--s4) var(--s4) var(--s7);
+			padding: var(--s2) var(--s4) var(--s7);
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {

@@ -198,9 +198,11 @@ def run_work(args: argparse.Namespace) -> int:
     until a budget is reached (or, with --once, until nothing is waiting). One run per model, for the whole service.
     After each research pass the city's next cell is queued, and the window's two stops are checked (decision 36)."""
     import time
+    from concurrent.futures import ThreadPoolExecutor
     from contextlib import ExitStack
 
-    from psst.harness.executor import BudgetReached, Executor
+    from psst.harness.executor import Executor
+    from psst.harness.research import parallel_places
     from psst.places import research
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     with db.open_connection(db.conninfo("worker")) as conn, db.open_connection(db.conninfo("system")) as system, \
@@ -230,26 +232,28 @@ def run_work(args: argparse.Namespace) -> int:
                 executor = Executor(tokens[model], model)
                 # A calibration belongs to no city; everything else is worked city by city.
                 for city in [None] if route["type"] in CITYLESS else cities:
-                    task = conn.execute("SELECT * FROM psst.lease_task(%s, %s, %s)",
-                                        (tokens[model], [route["type"]], city and city["id"])).fetchone()
-                    conn.commit()
-                    if task is None:
+                    # Judging steps run several tasks at once, as research writes several places at once; a research
+                    # pass is one task, followed by queuing the next cell.
+                    most = parallel_places() if route["type"] in PARALLEL else 1
+                    leased = []
+                    for _ in range(most):
+                        task = conn.execute("SELECT * FROM psst.lease_task(%s, %s, %s)",
+                                            (tokens[model], [route["type"]], city and city["id"])).fetchone()
+                        conn.commit()
+                        if task is None:
+                            break
+                        leased.append(dict(task))
+                    if not leased:
                         continue
                     busy = True
-                    try:
-                        done = executor.run(dict(task))
-                        log.info("%s", json.dumps(done, default=str)[:400])
-                    except BudgetReached as reason:
-                        executor.give_back({"task": task["id"]}, f"the harness stopped: {reason}")
-                        log.info("stopping: %s", reason)
+                    with ThreadPoolExecutor(max_workers=len(leased)) as pool:
+                        outcomes = list(pool.map(work_one, [executor] * len(leased), leased))
+                    stopped = next((reason for _, reason in outcomes if reason), None)
+                    if stopped:
+                        log.info("stopping: %s", stopped)
                         return 0
-                    except (psycopg.Error, OSError, ValueError, KeyError, TypeError) as error:
-                        # One task that fails is given back with the reason; the service goes on with the rest.
-                        conn.rollback()
-                        executor.give_back({"task": task["id"]}, f"the harness failed on it: {error}")
-                        log.warning("gave back %s: %s", task["id"], str(error)[:300])
-                        continue
-                    if route["type"] != "research_cell" or city is None:
+                    done = outcomes[0][0]
+                    if route["type"] != "research_cell" or city is None or done is None:
                         continue
                     # The city's next cell, often the same dense cell again, is queued for the next pass.
                     log.info("queued: %s", json.dumps(research.queue(system, planner, city["slug"], 1)))
@@ -261,6 +265,26 @@ def run_work(args: argparse.Namespace) -> int:
                 if args.once:
                     return 0
                 time.sleep(IDLE_SECONDS)
+
+
+PARALLEL = {"audit", "review", "revise"}  # judging steps, worked harness.parallel_places tasks at a time
+
+
+def work_one(executor: Any, task: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    """Do one leased task: its outcome, or the reason the run must stop. A task that fails for any other reason is
+    given back with the reason, and the service goes on with the rest."""
+    from psst.harness.executor import BudgetReached
+    try:
+        done = executor.run(task)
+        log.info("%s", json.dumps(done, default=str)[:400])
+        return done, None
+    except BudgetReached as reason:
+        executor.give_back({"task": task["id"]}, f"the harness stopped: {reason}")
+        return None, str(reason)
+    except (psycopg.Error, OSError, ValueError, KeyError, TypeError) as error:
+        executor.give_back({"task": task["id"]}, f"the harness failed on it: {error}")
+        log.warning("gave back %s: %s", task["id"], str(error)[:300])
+        return None, None
 
 
 def window_stop(conn: Any, outcome: Any, limits: dict[str, Any]) -> str | None:

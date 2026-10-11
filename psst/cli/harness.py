@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 from psycopg.types.json import Jsonb
@@ -40,6 +41,11 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     negatives = commands.add_parser("negatives", help="rebuild the golden set's constructed negatives")
     negatives.add_argument("--per-defect", type=int, default=6)
     negatives.set_defaults(run=run_negatives)
+    trial = commands.add_parser("trial", help="several writers write the same leads, stored nowhere, then reviewed")
+    trial.add_argument("--models", required=True, help="comma-separated, such as openrouter:z-ai/glm-5.3,...")
+    trial.add_argument("--cell", required=True, help="the research cell whose waiting leads they write")
+    trial.add_argument("--leads", type=int, default=20, help="how many of its leads (default 20)")
+    trial.set_defaults(run=run_trial)
     status = commands.add_parser("status", help="spend against the budget, and the credit left")
     status.set_defaults(run=show_status)
     report = commands.add_parser("report", help="what the harness did since a time: cells, places, cost, skips")
@@ -88,6 +94,62 @@ def run_calibration(args: argparse.Namespace) -> int:
                                bar["version"] if bar else None)).fetchone()
     print(f"{queued['n'] if queued else 0} calibration folds queued for {args.model}")
     return run_tasks(argparse.Namespace(model=args.model, task_type="calibrate", city=None, limit=2))
+
+
+def run_trial(args: argparse.Namespace) -> int:
+    """Each model writes the cell's first leads through the research path with every check, nothing stored; the
+    routed reviewer marks it all; cost per accepted place and three samples per model."""
+    from psst.cli import tasks as task_cli
+    from psst.harness import trial
+    from psst.tasks import files
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    models = [m.strip() for m in args.models.split(",") if m.strip()]
+    for model in models:
+        providers.check(model)
+    with db.connect("worker") as conn:
+        task = conn.execute("""SELECT * FROM psst.tasks WHERE type = 'research_cell' AND state = 'queued'
+                               AND input ->> 'cell' = %s ORDER BY created_at DESC LIMIT 1""", (args.cell,)).fetchone()
+        if task is None:
+            print(f"no research of {args.cell} is waiting")
+            return 1
+        task = dict(task)
+        document = json.loads(json.dumps(files.build(conn, task, files.Lookups(
+            task_cli._lead, task_cli._key_facts, task_cli._photo_candidates, task_cli._photo_file)), default=str))
+        document["data"]["leads"] = document["data"]["leads"][:args.leads]
+        routed = conn.execute("SELECT psst.task_model('review', '{}') AS m").fetchone()
+        assert routed
+        reviewer = routed["m"]
+        shared = trial.shared_review_data(conn, task)
+    rows: dict[str, Any] = {}
+    for model in models:
+        with db.connect("worker") as conn, session(conn, "worker", "harness trial", model) as token:
+            started = datetime.now(UTC)
+            placed = trial.write(token, model, task, document | {"run_token": token})
+            written = spent(conn, model, started)
+        with db.connect("worker") as conn, session(conn, "worker", "harness trial review", reviewer) as token:
+            started = datetime.now(UTC)
+            items = trial.review_items(placed)
+            marks = trial.review(token, reviewer, task, items, shared) if items else []
+            reviewed = spent(conn, reviewer, started)
+        result = trial.outcome(placed, items, marks)
+        accepted = result["accepted"]
+        rows[model] = result | {
+            "writing": written, "review": reviewed | {"per_item": round(reviewed["usd"] / len(items), 5)
+                                                      if items else None},
+            "usd_per_accepted_place": round((written["usd"] + reviewed["usd"]) / accepted, 4) if accepted else None,
+            "samples": trial.samples(placed, result["accepted_places"]), "marks_given": marks}
+        log.info("%s: %s", model, json.dumps({k: v for k, v in rows[model].items()
+                                               if k not in ("samples", "marks_given")}, default=str))
+    print(trial.report(rows))
+    return 0
+
+
+def spent(conn: Any, model: str, since: Any) -> dict[str, Any]:
+    row = conn.execute("""SELECT count(*) AS calls, coalesce(sum(cost_usd), 0) AS usd,
+                                 coalesce(sum(input_tokens), 0) AS input FROM psst.harness_calls
+                          WHERE model = %s AND created_at >= %s""", (model, since)).fetchone()
+    assert row
+    return {"calls": row["calls"], "usd": round(float(row["usd"]), 4), "input_tokens": int(row["input"])}
 
 
 def show_status(args: argparse.Namespace) -> int:

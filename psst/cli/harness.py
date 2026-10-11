@@ -101,6 +101,7 @@ def run_trial(args: argparse.Namespace) -> int:
     routed reviewer marks it all; cost per accepted place and three samples per model."""
     from psst.cli import tasks as task_cli
     from psst.harness import trial
+    from psst.harness.executor import GaveUp
     from psst.tasks import files
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     models = [m.strip() for m in args.models.split(",") if m.strip()]
@@ -125,7 +126,11 @@ def run_trial(args: argparse.Namespace) -> int:
         with db.open_connection(db.conninfo("worker")) as conn, \
                 session(conn, "worker", "harness trial", model) as token:
             started = datetime.now(UTC)
-            placed, unwritten = trial.write(token, model, task, document | {"run_token": token})
+            try:
+                placed, unwritten = trial.write(token, model, task, document | {"run_token": token})
+            except GaveUp as reason:  # one model that can't work through the path doesn't end the trial
+                rows[model] = {"gave_up": str(reason)[:500], "writing": spent(conn, model, started)}
+                continue
             written = spent(conn, model, started)
         with db.open_connection(db.conninfo("worker")) as conn, \
                 session(conn, "worker", "harness trial review", reviewer) as token:

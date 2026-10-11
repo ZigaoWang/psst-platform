@@ -277,7 +277,7 @@ def values_in(fact: dict[str, Any]) -> list[dict[str, str]]:
         for value in VALUE_NUMBER.findall(plain) + NAME.findall(plain):
             if value not in COMMON:
                 found.setdefault(value, None)
-    return [{"value": v} | ({"source_form": form} if form else {}) for v, form in list(found.items())[:16]]
+    return [{"value": v} | ({"source_form": form} if form else {}) for v, form in found.items()]
 
 
 CENTURY = re.compile(r"\bC(\d{1,2})\b")  # a heritage record's shorthand for a century

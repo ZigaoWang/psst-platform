@@ -69,7 +69,8 @@ def story_body() -> dict[str, Any]:
 
 def claims(snapshot_id: str) -> list[dict[str, Any]]:
     return [
-        {"text": "The pump house was built in 1871.", "kind": "date", "values": [{"value": "1871"}],
+        {"text": "The pump house was built in 1871.", "kind": "date",
+         "values": [{"value": "1871"}, {"value": "Mill Lane"}],
          "evidence": [{"snapshot": snapshot_id, "quote": "on Mill Lane was built in 1871"}]},
         {"text": "It became a library in 1952.", "kind": "event", "values": [{"value": "1952"}],
          "evidence": [{"snapshot": snapshot_id, "quote": "until 1952, when it was turned into a library"}]},

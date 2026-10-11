@@ -161,15 +161,16 @@ def _trace(report: Report, prose: dict[str, str], claims: list[Claim],
         for number in numbers(text):
             if not any(number in k for k in known):
                 report.refuse(where, f"'{number}' isn't among the claims' values; add the claim it belongs to")
-    # A name must be in a quoted passage or be one of the place's own names and areas: anywhere else on a cited
-    # page (an aggregator's location line, a sidebar) is not evidence for it.
-    passages = [passage for found in quotes.values() for _, passage in found]
-    cited = {POSSESSIVE.sub("", w) for w in words(" ".join(passages) + " " + " ".join(context.names))}
+    # A name must be among the claims' values, the names taken from their verified quotes, or be one of the place's
+    # own names and areas, the same rule as for numbers: anywhere else on a cited page (an aggregator's location
+    # line, a sidebar) is not evidence for it.
+    stated = " ".join(v["value"] for c in claims for v in c.values)
+    cited = {POSSESSIVE.sub("", w) for w in words(stated + " " + " ".join(context.names))}
     for where, text in prose.items():
         missing = sorted({n for n in proper_names(text) if not set(words(n)) <= cited})
         if missing:
-            report.refuse(where, f"{', '.join(repr(n) for n in missing)} isn't in any quoted passage; "
-                                 "quote where it comes from or leave it out")
+            report.refuse(where, f"{', '.join(repr(n) for n in missing)} isn't among the claims' names; add the claim "
+                                 "whose quote names it, or leave it out")
     for claim in claims:
         passages = [p for _, p in quotes.get(claim.n, [])]
         for value in claim.values:
@@ -184,25 +185,15 @@ SENTENCE_START = re.compile(r"(?:^|[.!?:;]\s+|[\"“(]\s*)$")
 
 
 POSSESSIVE = re.compile(r"['’]s$")
-# Capitalized words that are no name: what opens a sentence or a look line before a name ("From Fleet Street"), and
-# titles, which go with the name a passage gives ("King George I" where the record says George I).
-NOT_NAMES = {"The", "A", "An", "It", "Its", "In", "On", "At", "From", "Inside", "Outside", "Opposite", "Across",
-             "Behind", "Beside", "Look", "Stand", "Walk", "Step", "Find", "No", "This", "That", "These", "Those",
-             "Here", "There", "Today", "Now", "When", "Where", "After", "Before", "By", "For", "With", "Over", "Under",
-             "Above", "Below", "King", "Queen", "Prince", "Princess", "Sir", "Dame", "Lady", "Lord", "Saint", "St"}
 
 
 def proper_names(text: str) -> list[str]:
-    """Each capitalized word, except one that only starts a sentence (a sentence's first word counts when the next
-    word is capitalized too, as in a name)."""
-    found = list(CAPITAL_WORD.finditer(text))
+    """Each capitalized word that doesn't start a sentence, without a possessive ending (Highbury's names Highbury).
+    A name that starts a sentence is still caught by its later words."""
     names = []
-    for index, match in enumerate(found):
-        following = found[index + 1] if index + 1 < len(found) else None
-        starts = SENTENCE_START.search(text[:match.start()]) is not None
-        joined = following is not None and text[match.end():following.start()] == " "
-        name = POSSESSIVE.sub("", match.group(0))  # Highbury's names Highbury
-        if len(name) > 1 and name not in NOT_NAMES and (not starts or joined):
+    for match in CAPITAL_WORD.finditer(text):
+        name = POSSESSIVE.sub("", match.group(0))
+        if len(name) > 1 and SENTENCE_START.search(text[:match.start()]) is None:
             names.append(name)
     return names
 

@@ -65,7 +65,8 @@ def result_for(database, document, wikidata="Q900010"):
         record = _snapshot(conn, MILL, "https://records.example.org/mill", "official_record")
         paper = _snapshot(conn, "Walkers on River Lane can still hear the millstream below the grate.",
                           "https://news.example.com/mill", "press")
-    claims = [{"text": "The mill closed in 1890.", "kind": "date", "values": [{"value": "1890"}],
+    claims = [{"text": "The mill closed in 1890.", "kind": "date",
+               "values": [{"value": "1890"}, {"value": "Old Mill"}, {"value": "River Lane"}],
                "evidence": [{"snapshot": record, "quote": "The Old Mill on River Lane closed in 1890"}]},
               {"text": "Its wheel pit survives under the pavement grate by the door.", "kind": "attribute",
                "values": [], "evidence": [{"snapshot": record, "quote": "its wheel pit survives under the iron "

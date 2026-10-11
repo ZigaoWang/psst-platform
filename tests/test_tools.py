@@ -51,7 +51,7 @@ def claims():
               [Evidence(RECORD.id, "Built in 1871 to the design of the engineer Ada Thorne", 1)]),
         Claim(2, "It was built for the Testville Water Company.", "name", [{"value": "Testville Water Company"}],
               [Evidence(RECORD.id, "for the Testville Water Company", 2)]),
-        Claim(3, "It became a public library in 1952.", "event", [{"value": "1952"}],
+        Claim(3, "It became a public library in 1952.", "event", [{"value": "1952"}, {"value": "Mill Lane"}],
               [Evidence(RECORD.id, "Converted to a public library in 1952", 3),
                Evidence(PAPER.id, "the Mill Lane library", 4)]),
         Claim(4, "The chimney is 31 meters tall with an iron band at each floor.", "attribute", [{"value": "31"}],
@@ -227,7 +227,7 @@ def test_the_check_never_changes_its_inputs():
 def test_a_name_no_cited_source_mentions_is_refused():
     result = check("story", story(long=LONG.replace("Ada Thorne designed", "Ada Thorne and Hugo Brandt designed")),
                    claims(), SNAPSHOTS)
-    assert "'Brandt', 'Hugo' isn't in any quoted passage" in refusals(result)
+    assert "'Brandt', 'Hugo' isn't among the claims' names" in refusals(result)
 
 
 def test_a_source_sentence_told_in_other_words_is_refused():
@@ -294,9 +294,9 @@ def test_a_name_only_elsewhere_on_a_cited_page_is_refused():
     body = story(look="Stand at the Holborn junction and look up at the memorial in the centre of the road.")
     found = [Claim(1, "The memorial was unveiled in 1880.", "date", [{"value": "1880"}],
                    [Evidence(page.id, "Memorial in centre of road. Unveiled in 1880", 1)])]
-    assert "look: 'Holborn' isn't in any quoted passage" in refusals(check("story", body, found, {page.id: page}))
+    assert "look: 'Holborn' isn't among the claims' names" in refusals(check("story", body, found, {page.id: page}))
 
 
-def test_openers_titles_and_possessives_are_not_unquoted_names():
-    assert proper_names("From Fleet Street, look up at King George. Inside St Botolph's the font stands.") == \
-        ["Fleet", "Street", "George", "Botolph"]
+def test_a_name_is_read_without_its_possessive_and_never_from_a_sentence_start():
+    assert proper_names("From Fleet Street, look up. Inside St Botolph's the font stands.") == \
+        ["Fleet", "Street", "St", "Botolph"]

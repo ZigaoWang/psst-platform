@@ -62,7 +62,8 @@ Every good story gets a tier in `tier`; guides, and anything not marked good, ge
 
 A guide is marked on its own job, not on surprise: the identifier names what stands there now, with its year and
 maker as its claims give them, and the About says in two or three plain sentences of its own what the place is, why
-it was made, and what it is today, with every detail claimed. A place may have a guide and no story, when its record
+it was made, and what it is today, with every detail claimed, and names one thing a passer-by can see there (a date
+stone, an inscription, a sign, an odd detail). A guide that names nothing to see is weak. A place may have a guide and no story, when its record
 holds nothing a passer-by would stop for; a listed pillar box, kiosk, or terrace with an accurate guide is good. A
 guide is bad only when it is wrong, or says nothing beyond the place's name and kind; weak when its About has to be
 rewritten (it is the listing's description reworded, or it never says what the place is or was for). A guide that

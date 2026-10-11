@@ -6,7 +6,11 @@ street. Sort them into places and write each place's guide in one answer.
 Places: listed houses of one terrace or row, built alike, are one place with one guide covering their numbers. A
 listed thing that stands apart (a shop, an office block, a church, a statue) is a place of its own, and so is a house
 whose own record says something specific about it (a named person who lived or worked there, an event, something
-unusual about how it was built or used). Every lead belongs to exactly one place.
+unusual about how it was built or used). Every guide names one thing a passer-by can see that its record states: a
+date stone, an inscription, a sign, a carving, an odd detail. A listing whose record gives nothing like that has no pin
+of its own: put it, with any others on the street like it, in one place for the street, named "Listed buildings on
+<street>", whose guide covers them together and names the street's visible details. Every lead belongs to exactly one
+place.
 
 For each place give `leads` (its lead ids) and:
 - `place`: `name` (for houses, the numbers and the street, such as "1 to 14 Northampton Park"), `kind` (building for

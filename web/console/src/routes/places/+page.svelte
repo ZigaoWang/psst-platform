@@ -20,13 +20,14 @@
 			{#each data.cities as c (c.slug)}<option value={c.slug} selected={c.slug === data.city}>{c.name}</option>{/each}
 		</select>
 	</label>
+	<label>Research cell <input name="cell" value={data.cell} placeholder="87194ad32ffffff" /></label>
 	<button type="submit">Search</button>
 </form>
 
 {#if data.places.length}
 	<div class="table-wrap">
 		<table>
-			<thead><tr><th>Place</th><th>Kind</th><th>Neighborhood</th><th>State</th><th class="num">Published</th><th class="num">In work</th></tr></thead>
+			<thead><tr><th>Place</th><th>Kind</th><th>Neighborhood</th><th>State</th><th class="num">Published</th><th class="num">In work</th><th>Items</th></tr></thead>
 			<tbody>
 				{#each data.places as place (place.id)}
 					<tr>
@@ -39,6 +40,7 @@
 						<td><Badge state={place.state === 'active' ? 'published' : place.state === 'pending' ? 'checking' : 'retired'} label={place.state} /></td>
 						<td class="num">{count(place.published)}</td>
 						<td class="num">{count(place.in_work)}</td>
+						<td>{place.items ?? ''}</td>
 					</tr>
 				{/each}
 			</tbody>

@@ -11,7 +11,8 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
 	},
 	"dependencies": {
-		"@psst/ui": "*"
+		"@psst/ui": "*",
+		"maplibre-gl": "6.11.2"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-static": "^4.0.0",

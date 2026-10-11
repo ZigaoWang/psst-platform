@@ -6,6 +6,8 @@
 
 	let { data, children }: LayoutProps = $props();
 	const language = $derived(data.language);
+	// A city and its places are the full-screen map; other pages keep the reading layout.
+	const mapPage = $derived(/\[city\](\/\[place\])?$/.test(page.route.id ?? ''));
 	// The same page in the other language.
 	const other = $derived.by(() => {
 		const path = page.url.pathname;
@@ -14,6 +16,10 @@
 	});
 </script>
 
+{#if mapPage}
+	<a class="skip" href="#find">{t(language, 'Skip to search')}</a>
+	{@render children()}
+{:else}
 <a class="skip" href="#main">{t(language, 'Skip to content')}</a>
 <header>
 	<a class="brand" href={language === 'en' ? '/' : '/zh'}>Psst</a>
@@ -30,6 +36,7 @@
 	<p>{t(language, 'Surprising, sourced stories about places you can stand in front of.')}</p>
 	<p class="small">{t(language, 'Map data © OpenStreetMap contributors.')} {t(language, 'Content version')} {data.version}.</p>
 </footer>
+{/if}
 
 <style>
 	.skip {

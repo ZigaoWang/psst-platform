@@ -69,7 +69,22 @@ const zh: Record<string, string> = {
 	'memorial': '纪念物',
 	'green': '公园和绿地',
 	'water': '水边',
-	'culture': '文化'
+	'culture': '文化',
+	'Search places and streets': '搜索地方和街道',
+	'Filter': '筛选',
+	'Near me': '附近',
+	'Finding you': '正在定位',
+	'All': '全部',
+	'Your location isn’t available.': '无法获取你的位置。',
+	'The map couldn’t load its places. Try again later.': '地图没能载入地方，请稍后再试。',
+	'Place': '地方',
+	'Close': '关闭',
+	'List': '列表',
+	'Places here': '这里的地方',
+	'places in view': '个地方在视野内',
+	'Street': '街道',
+	'Area': '街区',
+	'Skip to search': '跳到搜索'
 };
 
 const en: Record<string, string> = {

@@ -65,6 +65,7 @@ export interface Story {
 	id: string;
 	category: string;
 	veracity: 'fact' | 'legend' | 'disputed';
+	featured?: boolean;
 	headline: string;
 	short: string;
 	long: string;

@@ -1,18 +1,16 @@
 <script lang="ts">
 	import { field, name, t } from '#lib/i18n.ts';
 	import { link } from '#lib/links.ts';
+	import { useMap } from '#lib/mapstate.svelte.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const language = $derived(data.language);
-	const cityName = $derived(language === 'zh-Hans' ? (data.city.names['zh-Hans'] ?? data.city.name) : data.city.name);
-	let query = $state('');
-	const shown = $derived.by(() => {
-		const q = query.trim().toLowerCase();
-		if (!q) return data.places;
-		return data.places.filter((p) => [p.name, p.localName?.name, ...Object.values(p.names), p.lead?.headline,
-			p.neighborhood?.name].some((text) => text?.toLowerCase().includes(q)));
-	});
+	const cityName = $derived(name(language, data.city));
+	const map = useMap();
+	const order = { featured: 0, story: 1, guide: 2 };
+	// With the map running, the list follows what is in view; without it, every place is listed.
+	const inView = $derived(map ? [...map.inView].sort((a, b) => order[a.tier] - order[b.tier]).slice(0, 80) : []);
 </script>
 
 <svelte:head>
@@ -21,109 +19,57 @@
 </svelte:head>
 
 <h1>{cityName}</h1>
-
-{#if data.trails.length}
-	<h2>{t(language, 'Trails')}</h2>
-	<ul class="trails">
-		{#each data.trails as trail (trail.slug)}
-			<li><a href={link(language, `/${data.city.slug}/trails/${trail.slug}`)}>{field(language, trail, 'title')}</a>
-				<span class="muted">{trail.stops} {t(language, 'Stops').toLowerCase()}</span></li>
-		{/each}
-	</ul>
-{/if}
-
-<h2>{t(language, 'Places')}</h2>
-<label class="search">
-	<span class="visually-hidden">{t(language, 'Search this city')}</span>
-	<input type="search" bind:value={query} placeholder={t(language, 'Search this city')} />
-</label>
-
-{#if shown.length}
+{#if map && map.places.length}
+	<p class="muted">{map.inView.length} {t(language, 'places in view')}</p>
 	<ul class="places">
-		{#each shown as place (place.id)}
+		{#each inView as place (place.id)}
 			<li>
-				<a href={link(language, `/${data.city.slug}/${place.slug}`)} class="card">
-					{#if place.thumb}<img src={`/images/${place.thumb.file}`} alt="" loading="lazy" />{/if}
-					<span class="kind" style:--kind={`var(--kind-${place.kind}, var(--text-muted))`}>{t(language, place.kind)}</span>
-					<span class="place-name">{name(language, place)}</span>
-					{#if place.lead}
-						<span class="headline">{field(language, place.lead, 'headline')}</span>
-						<span class="short">{field(language, place.lead, 'short')}</span>
-					{/if}
-					{#if place.neighborhood}<span class="muted small">{place.neighborhood.name}</span>{/if}
+				<a href={link(language, `/${data.city.slug}/${place.slug}`)}>
+					<span class="dot" style:--kind={`var(--kind-${place.kind})`} class:story={place.tier !== 'guide'}></span>
+					<span><strong>{place.headline ?? place.name}</strong>{#if place.headline}<br /><span class="muted">{place.name}</span>{/if}</span>
 				</a>
 			</li>
 		{/each}
 	</ul>
-{:else}
-	<p class="muted">{t(language, 'No places match.')}</p>
 {/if}
 
+<noscript>
+	{#if data.trails.length}
+		<h2>{t(language, 'Trails')}</h2>
+		<ul>{#each data.trails as trail (trail.slug)}<li><a href={link(language, `/${data.city.slug}/trails/${trail.slug}`)}>{field(language, trail, 'title')}</a></li>{/each}</ul>
+	{/if}
+	<h2>{t(language, 'Places')}</h2>
+	<ul>{#each data.places as place (place.slug)}<li><a href={link(language, `/${data.city.slug}/${place.slug}`)}>{name(language, place)}</a></li>{/each}</ul>
+</noscript>
+
 <style>
-	.trails {
-		padding-left: var(--s4);
-	}
-	.search input {
-		width: 100%;
-		max-width: 28rem;
-		padding: var(--s2) var(--s3);
-		border: 1px solid var(--line-strong);
-		border-radius: var(--r2);
-		background: var(--surface);
-		color: var(--text);
-		font: inherit;
-		margin-bottom: var(--s4);
+	h1 {
+		margin-top: 0;
 	}
 	.places {
 		list-style: none;
+		margin: 0;
 		padding: 0;
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-		gap: var(--s3);
 	}
-	.card {
+	.places a {
 		display: flex;
-		flex-direction: column;
-		gap: var(--s1);
-		height: 100%;
-		padding: var(--s4);
-		border: 1px solid var(--line);
-		border-radius: var(--r3);
-		background: var(--surface);
+		gap: var(--s3);
+		align-items: flex-start;
+		padding: var(--s2) 0;
+		border-bottom: 1px solid var(--line);
 		color: var(--text);
 		text-decoration: none;
-		box-shadow: var(--shadow);
 	}
-	.card:hover {
-		border-color: var(--line-strong);
+	.dot {
+		flex: none;
+		width: 0.6rem;
+		height: 0.6rem;
+		margin-top: 0.35rem;
+		border-radius: 50%;
+		background: var(--kind);
 	}
-	.card img {
-		width: calc(100% + 2 * var(--s4));
-		margin: calc(-1 * var(--s4)) calc(-1 * var(--s4)) var(--s2);
-		aspect-ratio: 16 / 9;
-		object-fit: cover;
-		border-radius: var(--r3) var(--r3) 0 0;
-	}
-	.kind {
-		align-self: flex-start;
-		font-size: var(--text-xs);
-		font-weight: 700;
-		color: var(--kind);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-	}
-	.place-name {
-		font-weight: 700;
-		font-size: var(--text-lg);
-	}
-	.headline {
-		font-weight: 600;
-	}
-	.short {
-		color: var(--text-muted);
-		font-size: var(--text-sm);
-	}
-	.small {
-		font-size: var(--text-sm);
+	.dot.story {
+		width: 0.85rem;
+		height: 0.85rem;
 	}
 </style>

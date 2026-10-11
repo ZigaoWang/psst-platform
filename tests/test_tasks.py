@@ -285,3 +285,15 @@ def test_a_finished_cell_waiting_without_a_review_gets_one(database, city):
     with database.connect("admin") as conn:
         review_task = conn.execute("SELECT input FROM psst.tasks WHERE type = 'review' AND state = 'queued'").fetchone()
     assert sorted(review_task["input"]["revisions"]) == sorted([story, guide])
+
+
+def test_an_item_leaving_accepted_cancels_its_waiting_audits(database, city):
+    from tests import sample
+    with database.connect("admin") as conn:
+        revision = sample.create_story(conn, city["admin"], city["place"], city["record"])
+        item = conn.execute("SELECT item_id FROM psst.revisions WHERE id = %s", (revision,)).fetchone()["item_id"]
+        conn.execute("SELECT psst.transition(%s, 'accepted', %s, NULL, 'reviewed')", (item, city["admin"]))
+        task = conn.execute("SELECT psst.enqueue(%s, 'audit', 'audit:test', '{}', NULL, NULL, %s, %s) AS id",
+                            (city["admin"], item, revision)).fetchone()["id"]
+        conn.execute("SELECT psst.transition(%s, 'checking', %s, NULL, 'rechecked')", (item, city["admin"]))
+        assert conn.execute("SELECT state FROM psst.tasks WHERE id = %s", (task,)).fetchone()["state"] == "cancelled"

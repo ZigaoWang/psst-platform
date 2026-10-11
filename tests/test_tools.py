@@ -295,3 +295,8 @@ def test_a_name_only_elsewhere_on_a_cited_page_is_refused():
     found = [Claim(1, "The memorial was unveiled in 1880.", "date", [{"value": "1880"}],
                    [Evidence(page.id, "Memorial in centre of road. Unveiled in 1880", 1)])]
     assert "look: 'Holborn' isn't in any quoted passage" in refusals(check("story", body, found, {page.id: page}))
+
+
+def test_openers_titles_and_possessives_are_not_unquoted_names():
+    assert proper_names("From Fleet Street, look up at King George. Inside St Botolph's the font stands.") == \
+        ["Fleet", "Street", "George", "Botolph"]

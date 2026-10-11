@@ -164,7 +164,7 @@ def _trace(report: Report, prose: dict[str, str], claims: list[Claim],
     # A name must be in a quoted passage or be one of the place's own names and areas: anywhere else on a cited
     # page (an aggregator's location line, a sidebar) is not evidence for it.
     passages = [passage for found in quotes.values() for _, passage in found]
-    cited = set(words(" ".join(passages) + " " + " ".join(context.names)))
+    cited = {POSSESSIVE.sub("", w) for w in words(" ".join(passages) + " " + " ".join(context.names))}
     for where, text in prose.items():
         missing = sorted({n for n in proper_names(text) if not set(words(n)) <= cited})
         if missing:
@@ -184,6 +184,12 @@ SENTENCE_START = re.compile(r"(?:^|[.!?:;]\s+|[\"“(]\s*)$")
 
 
 POSSESSIVE = re.compile(r"['’]s$")
+# Capitalized words that are no name: what opens a sentence or a look line before a name ("From Fleet Street"), and
+# titles, which go with the name a passage gives ("King George I" where the record says George I).
+NOT_NAMES = {"The", "A", "An", "It", "Its", "In", "On", "At", "From", "Inside", "Outside", "Opposite", "Across",
+             "Behind", "Beside", "Look", "Stand", "Walk", "Step", "Find", "No", "This", "That", "These", "Those",
+             "Here", "There", "Today", "Now", "When", "Where", "After", "Before", "By", "For", "With", "Over", "Under",
+             "Above", "Below", "King", "Queen", "Prince", "Princess", "Sir", "Dame", "Lady", "Lord", "Saint", "St"}
 
 
 def proper_names(text: str) -> list[str]:
@@ -195,8 +201,9 @@ def proper_names(text: str) -> list[str]:
         following = found[index + 1] if index + 1 < len(found) else None
         starts = SENTENCE_START.search(text[:match.start()]) is not None
         joined = following is not None and text[match.end():following.start()] == " "
-        if len(match.group(0)) > 1 and (not starts or joined):
-            names.append(POSSESSIVE.sub("", match.group(0)))  # Highbury's names Highbury
+        name = POSSESSIVE.sub("", match.group(0))  # Highbury's names Highbury
+        if len(name) > 1 and name not in NOT_NAMES and (not starts or joined):
+            names.append(name)
     return names
 
 

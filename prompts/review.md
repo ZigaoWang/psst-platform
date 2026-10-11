@@ -19,6 +19,9 @@ the finest, that it opened the way for others, that people loved it). A detail i
 and says it as strongly; the source page saying it somewhere a claim doesn't quote is not enough. Check every word
 in `flags` the same way: most are fair paraphrase, some are details nobody claimed.
 
+An item revised after an earlier review comes with `asked_before`, what that revision was asked to fix. Set
+`repeated` true when the prose still has any of it, false otherwise, and false for an item with nothing asked before.
+
 List each detail no claim states in `unclaimed`, in the prose's own words ("a slate roof", "behind area railings",
 "opened the way for women in surgery"); leave it empty only when every detail is claimed. An item with anything in
 `unclaimed` is never good without a fix: its `fix` names each cut.

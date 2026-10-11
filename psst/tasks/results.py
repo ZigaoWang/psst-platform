@@ -168,11 +168,12 @@ def place_identity() -> dict[str, Any]:
 def review() -> dict[str, Any]:
     """One mark per item, good, weak, or bad, with the reason, and for a good item the cut it needs, if any."""
     decision = {"type": "object", "additionalProperties": False,
-                "required": ["revision", "mark", "tier", "reason", "fix", "unclaimed"],
+                "required": ["revision", "mark", "tier", "reason", "fix", "unclaimed", "repeated"],
                 "properties": {"revision": {"type": "string", "pattern": "^rv_"},
                                "mark": {"enum": ["good", "weak", "bad"]}, "tier": TIER, "reason": NOTE,
                                "fix": {"anyOf": [NOTE, {"type": "null"}]},
                                "unclaimed": UNCLAIMED,
+                               "repeated": {"type": "boolean"},  # it still has what its revision was asked to fix
                                "no_angle": {"type": "boolean"}}}  # a story that only describes its place
     return {"type": "object", "additionalProperties": False, "required": ["decisions", "notes"],
             "properties": {"decisions": {"type": "array", "items": decision}, "notes": NOTE}}

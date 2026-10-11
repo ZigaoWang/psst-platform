@@ -238,9 +238,9 @@ def test_featured_needs_a_second_model_to_agree(database, city, roles, monkeypat
             return providers.Reply(text=json.dumps({"tier": "map", "reason": "a smaller surprise"}), cost_usd=0.0001)
         return providers.Reply(text=json.dumps({"decisions": [
             {"revision": story, "mark": "good", "tier": "featured", "reason": "a real surprise", "fix": None,
-             "unclaimed": []},
+             "unclaimed": [], "repeated": False},
             {"revision": guide, "mark": "good", "tier": None, "reason": "plain and claimed", "fix": None,
-             "unclaimed": []}],
+             "unclaimed": [], "repeated": False}],
             "notes": "a clean batch"}), cost_usd=0.001)
     monkeypatch.setattr(providers, "chat", chat)
     harness.Executor(worker.token, MODEL).run(task)
@@ -315,9 +315,9 @@ def test_a_story_on_one_source_is_never_featured(database, city, roles, monkeypa
         assert model != "openrouter:test/second"  # no second reading is paid for
         return providers.Reply(text=json.dumps({"decisions": [
             {"revision": story, "mark": "good", "tier": "featured", "reason": "a real surprise", "fix": None,
-             "unclaimed": []},
+             "unclaimed": [], "repeated": False},
             {"revision": guide, "mark": "good", "tier": None, "reason": "plain and claimed", "fix": None,
-             "unclaimed": []}],
+             "unclaimed": [], "repeated": False}],
             "notes": "a clean batch"}), cost_usd=0.001)
     monkeypatch.setattr(providers, "chat", chat)
     harness.Executor(worker.token, MODEL).run(task)
@@ -391,10 +391,10 @@ def test_a_story_without_an_angle_is_dropped_and_its_place_keeps_the_guide(datab
     def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
         return providers.Reply(text=json.dumps({"decisions": [
             {"revision": story, "mark": "weak", "tier": None, "reason": "only describes the front", "fix": None,
-             "unclaimed": [],
+             "unclaimed": [], "repeated": False,
              "no_angle": True},
             {"revision": guide, "mark": "good", "tier": None, "reason": "plain and claimed", "fix": None,
-             "unclaimed": []}],
+             "unclaimed": [], "repeated": False}],
             "notes": "one story without an angle"}), cost_usd=0.001)
     monkeypatch.setattr(providers, "chat", chat)
     harness.Executor(worker.token, MODEL).run(task)

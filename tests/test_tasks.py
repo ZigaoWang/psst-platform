@@ -68,7 +68,8 @@ def test_a_review_decides_every_item_of_the_submission(database, city):
                                 "notes": "partial", "rulebook": sample.RULEBOOK})
 
 
-def test_a_weak_story_gets_one_revision_and_a_second_weak_mark_retires_it(database, city):
+def revised_once(database, city, long_extra=""):
+    """A story marked weak, then revised by a model; returns the revision under review."""
     story, _ = research(database, city)
     tool_checks(database)
     review(database, lambda r: {"mark": "weak", "reason": "the telling stitches quotes together"}
@@ -77,11 +78,36 @@ def test_a_weak_story_gets_one_revision_and_a_second_weak_mark_retires_it(databa
     reviser = Worker(database, SONNET)
     task = reviser.lease("revise")
     assert task["input"]["problems"] == ["the telling stitches quotes together"]
-    second = reviser.submit(task, story_result(city))["revision"]
+    result = story_result(city)
+    result["body"]["long"] = result["body"]["long"][:-1] + long_extra + "."
+    second = reviser.submit(task, result)["revision"]
     tool_checks(database)
-    review(database, lambda r: {"mark": "weak", "reason": "still not surprising"})
+    return second
+
+
+def test_a_revision_that_fixed_what_was_named_gets_another_round(database, city):
+    second = revised_once(database, city)
+    review(database, lambda r: {"mark": "weak", "reason": "the look points at nothing", "repeated": False})
+    assert item_state(database, second) == "draft"
+    assert Worker(database, SONNET).lease("revise")["input"]["problems"] == ["the look points at nothing"]
+
+
+def test_a_revision_that_repeats_what_it_was_asked_to_fix_is_retired(database, city):
+    second = revised_once(database, city)
+    review(database, lambda r: {"mark": "weak", "reason": "still stitched from quotes", "repeated": True})
     assert item_state(database, second) == "retired"
     assert Worker(database, SONNET).lease("revise") is None
+
+
+def test_a_revision_that_adds_a_detail_no_claim_states_is_retired(database, city):
+    second = revised_once(database, city, long_extra=", under a slate roof")
+    review(database, lambda r: {"mark": "good", "reason": "fine", "fix": "cut the roof", "repeated": False,
+                                "unclaimed": ["under a slate roof"]})
+    assert item_state(database, second) == "retired"
+    with database.connect("admin") as conn:
+        reason = conn.execute("SELECT reason FROM psst.transitions WHERE to_state = 'retired' ORDER BY id DESC LIMIT 1"
+                              ).fetchone()["reason"]
+    assert "added what no claim states: under a slate roof" in reason
 
 
 def test_a_good_story_needing_a_cut_gets_one_revision_for_it(database, city):
@@ -372,3 +398,17 @@ def test_review_again_sends_accepted_work_back_without_the_review_it_passed(data
     with database.connect("admin") as conn:
         waiting = conn.execute("SELECT psst.evaluate(%s) ->> 'missing' AS m", (revision,)).fetchone()["m"]
     assert state == "checking" and waiting in ("review", "tool")
+
+
+def test_review_again_reopens_work_a_review_retired_that_a_revision_could_fix(database, city):
+    second = revised_once(database, city)
+    review(database, lambda r: {"mark": "weak", "reason": "still stitched from quotes", "repeated": True})
+    assert item_state(database, second) == "retired"
+    _, system_token = database.start_run("system")
+    with database.connect("admin") as conn:
+        item = conn.execute("SELECT item_id FROM psst.revisions WHERE id = %s", (second,)).fetchone()["item_id"]
+    with database.connect("system") as conn:
+        state = conn.execute("SELECT psst.review_again(%s, %s, 'a new review') AS s", (system_token, item)
+                             ).fetchone()["s"]
+    assert state == "checking"
+

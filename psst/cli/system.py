@@ -38,6 +38,8 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
                                 help="send a research cell's accepted stories and guides back to review")
     again.add_argument("--cell", required=True, help="the research cell, such as 87194ad32ffffff")
     again.add_argument("--reason", required=True, help="why they are reviewed again; recorded on each item")
+    again.add_argument("--state", choices=["accepted", "retired"], default="accepted",
+                       help="accepted work, or work a review retired that a revision could still fix")
     again.set_defaults(run=run_review_again)
     audits = commands.add_parser("plan-audits", help="group accepted work into audit batches")
     audits.add_argument("--force", action="store_true", help="also batch groups smaller than the minimum")
@@ -66,12 +68,14 @@ def run_review_again(args: argparse.Namespace) -> int:
     with db.open_connection(db.conninfo("system")) as conn, session(conn, "system", "review again") as token:
         items = [r["id"] for r in conn.execute("""
             SELECT i.id FROM psst.items i JOIN psst.places p ON p.id = i.place_id
-            WHERE p.h3_r7 = %s AND i.state = 'accepted' AND i.type IN ('story', 'guide')
-            ORDER BY i.id""", (args.cell,))]
+            WHERE p.h3_r7 = %s AND i.state = %s AND i.type IN ('story', 'guide')
+            ORDER BY i.id""", (args.cell, args.state))]
+        moved = 0
         for item in items:
-            conn.execute("SELECT psst.review_again(%s, %s, %s)", (token, item, args.reason))
+            row = conn.execute("SELECT psst.review_again(%s, %s, %s) AS s", (token, item, args.reason)).fetchone()
             conn.commit()
-    print(f"{len(items)} items of {args.cell} sent back to review")
+            moved += bool(row and row["s"] != args.state)
+    print(f"{moved} of {len(items)} {args.state} items of {args.cell} sent back to review")
     return 0
 
 

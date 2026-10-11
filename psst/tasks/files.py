@@ -216,6 +216,7 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
         data |= {"type": item_type, "body": revision["body"],
                  "claims": claims_with_passages(conn, task["revision_id"]),
                  "problems": task["input"].get("problems") or [],
+                 "unclaimed": task["input"].get("unclaimed") or [],
                  "check_notes": earlier_verdicts(conn, task["revision_id"]),
                  "other_stories": other_items(conn, task["place_id"], task["item_id"]),
                  "rules": rulebook.type(str(item_type)) if item_type != "translation" else rulebook.type("translation")}
@@ -269,9 +270,20 @@ def review_item(conn: Connection, lookups: Lookups, revision_id: str) -> dict[st
     claims = claims_with_passages(conn, revision_id, window=0)
     return {"revision": revision_id, "type": revision["type"], "place": place, "body": revision["body"],
             "claims": claims, "flags": flags(revision["type"], revision["body"], claims, place),
+            "asked_before": asked_before(conn, revision_id),
             "quote_repairs": quote_repairs(conn, item["place_id"], claims),
             "other_stories": other_items(conn, item["place_id"], item["id"]),
             "encyclopedia_lead": lookups.lead(place) if lookups.lead and place else None}
+
+
+def asked_before(conn: Connection, revision_id: str) -> list[str]:
+    """What a model's revision was asked to fix, from the review before it; empty for first writing and for cuts
+    made in code. The reviewer says whether the revision still has any of it."""
+    row = conn.execute("""
+        SELECT t.input -> 'problems' AS problems FROM psst.revisions r JOIN psst.tasks t ON t.id = r.created_by_task
+        WHERE r.id = %s AND t.type = 'revise' AND t.input ? 'from_review' AND NOT psst.made_in_code(r.id)""",
+                       (revision_id,)).fetchone()
+    return list(row["problems"] or []) if row else []
 
 
 def flags(item_type: str, body: dict[str, Any], claims: list[dict[str, Any]], place: dict[str, Any] | None

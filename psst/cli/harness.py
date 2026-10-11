@@ -190,14 +190,29 @@ def skip_kind(reason: str | None) -> str:
 # The order the service works in: what unblocks publishing first, research last (workers.md).
 WORK_ORDER = ["audit", "review", "calibrate", "revise", "research_cell"]
 IDLE_SECONDS = 60
+JUDGING_IDLE_SECONDS = 15  # judging looks for work more often, so marks follow writing closely
 CITYLESS = {"calibrate"}
 
 
 def run_work(args: argparse.Namespace) -> int:
     """Lease and do tasks with whichever harness model each type is routed to, city by city, skipping paused cities,
-    until a budget is reached (or, with --once, until nothing is waiting). One run per model, for the whole service.
-    After each research pass the city's next cell is queued, and the window's two stops are checked (decision 36)."""
-    import time
+    until a budget is reached (or, with --once, until nothing is waiting). Judging (review, revise, audit) runs in a
+    lane of its own beside research, so a problem shows in the marks while passes go on; either lane stopping stops
+    both. After each research pass the city's next cell is queued, and the window's two stops are checked
+    (decision 36)."""
+    import threading
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    stop = threading.Event()
+    judging = threading.Thread(target=work_lane, args=(PARALLEL, JUDGING_IDLE_SECONDS, stop, args.once), daemon=True)
+    judging.start()
+    work_lane(set(WORK_ORDER) - PARALLEL, IDLE_SECONDS, stop, args.once)
+    judging.join()
+    return 0
+
+
+def work_lane(lane: set[str], idle: int, stop: Any, once: bool) -> None:
+    """One lane of the service: the task types in `lane`, until `stop` is set or (with `once`) nothing is waiting.
+    Setting `stop` when this lane reaches a budget or a stop rule ends the other lane too."""
     from concurrent.futures import ThreadPoolExecutor
     from contextlib import ExitStack
 
@@ -205,18 +220,17 @@ def run_work(args: argparse.Namespace) -> int:
     from psst.harness.executor import Executor
     from psst.harness.research import parallel_places
     from psst.places import research
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     with db.open_connection(db.conninfo("worker")) as conn, db.open_connection(db.conninfo("system")) as system, \
             ExitStack() as runs:
         tokens: dict[str, str] = {}
         planner = runs.enter_context(session(system, "system", "research planning for the harness service"))
-        while True:
+        while not stop.is_set():
             busy = False
             limits = conn.execute("""SELECT psst.setting('harness.work_types') AS types,
                                             psst.setting('harness.max_usd_per_place') AS per_place,
                                             psst.setting('harness.max_failed_share') AS failed_share""").fetchone()
             assert limits
-            order = [t for t in WORK_ORDER if limits["types"] is None or t in limits["types"]]
+            order = [t for t in WORK_ORDER if t in lane and (limits["types"] is None or t in limits["types"])]
             routes = conn.execute("""
                 SELECT t.name AS type, psst.task_model(t.name, '{}') AS model FROM psst.task_types t
                 WHERE t.runner = 'worker' AND t.active AND t.name = ANY(%s)""", (order,)).fetchall()
@@ -226,7 +240,7 @@ def run_work(args: argparse.Namespace) -> int:
             conn.commit()
             for route in sorted(routes, key=lambda r: WORK_ORDER.index(r["type"])):
                 model = route["model"] or ""
-                if ":" not in model:
+                if ":" not in model or stop.is_set():
                     continue  # routed to a worker session, not the harness
                 if model not in tokens:
                     tokens[model] = runs.enter_context(session(conn, "worker", "harness service", model))
@@ -252,7 +266,8 @@ def run_work(args: argparse.Namespace) -> int:
                     stopped = next((reason for _, reason in outcomes if reason), None)
                     if stopped:
                         log.info("stopping: %s", stopped)
-                        return 0
+                        stop.set()
+                        return
                     done = outcomes[0][0]
                     if route["type"] != "research_cell" or city is None or done is None:
                         continue
@@ -266,15 +281,17 @@ def run_work(args: argparse.Namespace) -> int:
                             "SELECT 1 FROM psst.tasks WHERE type = 'research_cell' AND state IN ('queued', 'leased') "
                             "AND input ->> 'cell' = ANY(%s)", (full,)).fetchone():
                         log.info("stopping: the coverage cells are done")
-                        return 0
-                    stop = window_stop(conn, done.get("outcome"), limits)
-                    if stop:
-                        log.info("stopping: %s", stop)
-                        return 0
+                        stop.set()
+                        return
+                    stop_reason = window_stop(conn, done.get("outcome"), limits)
+                    if stop_reason:
+                        log.info("stopping: %s", stop_reason)
+                        stop.set()
+                        return
             if not busy:
-                if args.once:
-                    return 0
-                time.sleep(IDLE_SECONDS)
+                if once:
+                    return
+                stop.wait(idle)
 
 
 COVERAGE_PRIORITY = 1_000_000  # a cell worked to full coverage goes ahead of every other cell

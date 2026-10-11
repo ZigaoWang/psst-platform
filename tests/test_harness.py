@@ -352,3 +352,19 @@ def test_the_report_counts_places_against_the_previous_app_and_sorts_skips(datab
 def test_words_imitating_a_tool_call_are_not_taken_as_a_skip():
     assert harness.TOOL_MARKUP.search('I will submit it. <invoke name="bash"> <parameter name="command">')
     assert not harness.TOOL_MARKUP.search("The passages give only the listing, with nothing to tell.")
+
+
+def test_a_listing_cut_in_a_guide_is_made_in_code():
+    from psst.harness import cuts
+    claim = {"text": "Built in 1871.", "kind": "date", "values": [{"value": "1871"}],
+             "passages": [{"snapshot": "sn_record0000", "quote": "Built in 1871 to the design of Ada Thorne"}]}
+    about = ("A former pumping station on Mill Lane, designed by the engineer Ada Thorne in 1871. It supplied the "
+             "town's water until 1952, when it became a library. It was listed at Grade II in 1972.")
+    document = {"data": {"type": "guide", "problems": ["Cut the Grade II listing sentence from the About."],
+                         "body": {"identifier": "Former pumping station, 1871", "about": about, "key_facts": []},
+                         "claims": [claim]}}
+    cut = cuts.listing_cut(document)
+    assert cut and "Grade II" not in cut["body"]["about"] and cut["body"]["about"].endswith("became a library.")
+    assert cut["claims"][0]["evidence"] == [{"snapshot": "sn_record0000", "quote": claim["passages"][0]["quote"]}]
+    document["data"]["problems"] = ["Rewrite the About so it says what the station was for."]
+    assert cuts.listing_cut(document) is None

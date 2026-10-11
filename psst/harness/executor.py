@@ -20,7 +20,7 @@ from psst.cli import tasks as task_cli
 from psst.core import db
 from psst.tasks import files, prompts
 
-from . import providers, quotes, tools
+from . import cuts, providers, quotes, tools
 
 Connection = psycopg.Connection[dict[str, Any]]
 
@@ -282,6 +282,8 @@ class Executor:
             if step == "research_cell":
                 from .research import research_cell
                 outcome = research_cell(self, task, document, spend)
+            elif step == "revise" and (cut := cuts.listing_cut(document)) is not None:
+                outcome = task_cli.submit(document, cut)  # a cut code can make needs no model
             elif self.mode == "vote":
                 outcome = self.vote(task, document, spend)
             elif self.mode == "rotate":

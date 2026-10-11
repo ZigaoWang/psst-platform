@@ -253,6 +253,11 @@ def work_lane(lane: set[str], idle: int, stop: Any, once: bool) -> None:
                     # Judging steps run several tasks at once, as research writes several places at once; a research
                     # pass is one task, followed by queuing the next cell.
                     most = parallel_places() if route["type"] in PARALLEL else 1
+                    full = sorted(coverage_cells()) if route["type"] == "research_cell" else []
+                    if full and not conn.execute(
+                            "SELECT 1 FROM psst.tasks WHERE type = 'research_cell' AND state = 'queued' "
+                            "AND input ->> 'cell' = ANY(%s)", (full,)).fetchone():
+                        continue  # while cells are worked to full coverage, no other cell is researched
                     leased = []
                     for _ in range(most):
                         task = conn.execute("SELECT * FROM psst.lease_task(%s, %s, %s)",

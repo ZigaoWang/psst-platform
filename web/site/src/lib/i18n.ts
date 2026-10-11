@@ -86,7 +86,18 @@ const zh: Record<string, string> = {
 	'Area': '街区',
 	'Skip to search': '跳到搜索',
 	'Show more map': '显示更多地图',
-	'Show more of this place': '展开这个地方'
+	'Show more of this place': '展开这个地方',
+	'Browse': '浏览',
+	'Map tools': '地图工具',
+	'Move the map to see places here.': '移动地图来看这里的地方。',
+	'Story': '故事',
+	'Read the story': '阅读故事',
+	'Show less': '收起',
+	'Directions': '路线',
+	'Share': '分享',
+	'Copy link': '复制链接',
+	'Copied': '已复制',
+	'Actions': '操作'
 };
 
 const en: Record<string, string> = {

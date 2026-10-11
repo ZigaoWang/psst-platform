@@ -96,7 +96,7 @@ def check(item_type: str, body: dict[str, Any], claims: list[Claim], snapshots: 
 
     matches, quotes_by_claim = _match_quotes(report, claims, snapshots)
     if item_type != "photo":
-        _trace(report, prose, claims, quotes_by_claim, context)
+        _trace(report, prose, claims, quotes_by_claim, context, rulebook)
         own_words(report, prose, claims, snapshots, rulebook)
         _paraphrase(report, prose, claims, snapshots, rulebook)
         _repeats(report, prose)
@@ -155,7 +155,7 @@ def numbers(text: str) -> list[str]:
 
 
 def _trace(report: Report, prose: dict[str, str], claims: list[Claim],
-           quotes: dict[int, list[tuple[Snapshot, str]]], context: Context) -> None:
+           quotes: dict[int, list[tuple[Snapshot, str]]], context: Context, rulebook: Rulebook) -> None:
     known = [v["value"].replace(",", "") for c in claims for v in c.values] + context.names
     for where, text in prose.items():
         for number in numbers(text):
@@ -166,7 +166,7 @@ def _trace(report: Report, prose: dict[str, str], claims: list[Claim],
     quoted = " ".join(passage for found in quotes.values() for _, passage in found)
     cited = {POSSESSIVE.sub("", w) for w in words(quoted + " " + " ".join(context.names))}
     for where, text in prose.items():
-        missing = sorted({n for n in proper_names(text) if not set(words(n)) <= cited})
+        missing = sorted({n for n in prose_names(text, rulebook) if not set(words(n)) <= cited})
         if missing:
             report.refuse(where, f"{', '.join(repr(n) for n in missing)} isn't in the claims' quotes; add the claim "
                                  "whose quote names it, or leave it out")
@@ -184,6 +184,14 @@ SENTENCE_START = re.compile(r"(?:^|[.!?:;]\s+|[\"“(]\s*)$")
 
 
 POSSESSIVE = re.compile(r"['’]s$")
+
+
+def prose_names(text: str, rulebook: Rulebook) -> list[str]:
+    """The names in prose that a claim's quote must hold: its proper names, less the rulebook's common terms (the
+    country, the wars, the listing grades)."""
+    common = re.compile(r"\b(?:" + "|".join(re.escape(c) for c in sorted(rulebook.writing["common_terms"], key=len,
+                                                                         reverse=True)) + r")(?!\w)")
+    return proper_names(common.sub(" ", text))
 
 
 def proper_names(text: str) -> list[str]:

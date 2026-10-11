@@ -292,3 +292,7 @@ max_shared_words: 7
 # min_overlap_words such words.
 max_sentence_overlap: 0.7
 min_overlap_words: 6
+
+# Common terms in prose that are not names a claim must quote: the country, the wars, and the listing grades.
+common_terms: [UK, United Kingdom, Britain, British, England, English, London, First World War, Second World War,
+               Great War, World War I, World War II, Grade I, Grade II, Grade II*, Historic England]

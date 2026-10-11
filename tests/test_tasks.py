@@ -297,3 +297,31 @@ def test_an_item_leaving_accepted_cancels_its_waiting_audits(database, city):
                             (city["admin"], item, revision)).fetchone()["id"]
         conn.execute("SELECT psst.transition(%s, 'checking', %s, NULL, 'rechecked')", (item, city["admin"]))
         assert conn.execute("SELECT state FROM psst.tasks WHERE id = %s", (task,)).fetchone()["state"] == "cancelled"
+
+
+def test_a_rule_recheck_keeps_the_review_an_unchanged_revision_passed(database, city):
+    from tests import sample
+    reviewer, _ = database.start_run("worker", "openrouter:test/reviewer")
+    _, system_token = database.start_run("system")
+    with database.connect("admin") as conn:
+        revision = sample.create_story(conn, city["admin"], city["place"], city["record"])
+        item = conn.execute("SELECT item_id FROM psst.revisions WHERE id = %s", (revision,)).fetchone()["item_id"]
+        conn.execute("""INSERT INTO psst.checks (revision_id, kind, verdict, note, details, run_id)
+                        VALUES (%s, 'review', 'pass', 'good', '{"mark": "good"}', %s)""", (revision, reviewer))
+        conn.execute("SELECT psst.transition(%s, 'accepted', %s, NULL, 'reviewed')", (item, city["admin"]))
+    with database.connect("system") as conn:
+        conn.execute("SELECT psst.recheck_for_rules(%s, %s, 'newer')", (system_token, item))
+    with database.connect("admin") as conn:
+        reviews = conn.execute("SELECT count(*) AS n FROM psst.checks WHERE revision_id = %s AND kind = 'review' "
+                               "AND verdict = 'pass'", (revision,)).fetchone()["n"]
+    assert reviews == 2
+
+
+def test_a_system_run_changes_a_setting_with_its_reason(database):
+    _, token = database.start_run("system")
+    with database.connect("system") as conn:
+        conn.execute("SELECT psst.change_setting(%s, 'harness.parallel_places', '6', 'a smaller server')", (token,))
+    with database.connect("admin") as conn:
+        row = conn.execute("SELECT new_value, reason FROM psst.setting_changes WHERE key = 'harness.parallel_places' "
+                           "ORDER BY id DESC LIMIT 1").fetchone()
+    assert row["new_value"] == 6 and row["reason"] == "a smaller server"

@@ -219,3 +219,8 @@ Alternatives: a pin for every listing (a map of identical pins saying nothing a 
 
 The output required every place to carry at least one story, so the guide-only places of decisions 38 and 40, most of a dense cell, could never publish. A place now publishes with its audited guide, and with its stories when it has any; format 2 allows an empty `facts` list. No app reads the platform's output yet; the app redesign reads it knowing a place may have no story.
 Alternatives: keeping guide-only places off the map (the density the coverage work exists for); a separate list of guides (two kinds of place where readers see one).
+
+## 43. Review reads the item and its quotes, once per revision; settings changes carry their reason
+
+Review cost as much as all the writing: 228 calls of about 69,000 tokens, 1,642 item reviews for 1,058 items, about 2.9 reviews and 27,000 tokens per accepted place. Most of each review was the page text around every quote, and half the items were reviewed twice, often after a recheck that left their prose as it was. The reviewer now gets the item, its claims, and each claim's quote only; a recheck after a rule change keeps the review an unchanged revision passed, so only a new revision, or an item an audit sends back, is reviewed again. Routing, budgets, and windows set from the server go through the same recorded change as the console's (`psst system set KEY VALUE --reason`), so every model change has a date and a reason in the console.
+Alternatives: a cheaper reviewer (it is already the cheapest that passes the gate); sampling reviews (every item publishes only after review).

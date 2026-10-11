@@ -6,6 +6,8 @@ import argparse
 import json
 import logging
 
+from psycopg.types.json import Jsonb
+
 from psst.checks import rechecks
 from psst.core import db
 from psst.services import intake as reader_intake
@@ -27,6 +29,11 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     intake.set_defaults(run=run_intake)
     recheck = commands.add_parser("recheck-rules", help="check again everything last checked under an older rulebook")
     recheck.set_defaults(run=run_recheck)
+    setting = commands.add_parser("set", help="change a setting, with the reason recorded beside it")
+    setting.add_argument("key", help="such as routing.research_writer")
+    setting.add_argument("value", help="the new value as JSON, such as '\"openrouter:deepseek/deepseek-v4.1-flash\"'")
+    setting.add_argument("--reason", required=True, help="why it changes; shown in the console and the reports")
+    setting.set_defaults(run=run_set)
     audits = commands.add_parser("plan-audits", help="group accepted work into audit batches")
     audits.add_argument("--force", action="store_true", help="also batch groups smaller than the minimum")
     audits.set_defaults(run=run_plan_audits)
@@ -37,6 +44,16 @@ def run_work(args: argparse.Namespace) -> int:
     info = db.conninfo("system")
     with db.open_connection(info) as conn, session(conn, "system", "system worker") as token:
         SystemWorker(lambda: db.open_connection(info), token).work(once=args.once)
+    return 0
+
+
+def run_set(args: argparse.Namespace) -> int:
+    value = json.loads(args.value)
+    with db.open_connection(db.conninfo("system")) as conn, session(conn, "system", "setting change") as token:
+        old = conn.execute("SELECT psst.setting(%s) AS v", (args.key,)).fetchone()
+        conn.execute("SELECT psst.change_setting(%s, %s, %s, %s)", (token, args.key, Jsonb(value), args.reason))
+        conn.commit()
+    print(f"{args.key}: {json.dumps(old['v'] if old else None)} -> {json.dumps(value)}")
     return 0
 
 

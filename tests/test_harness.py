@@ -279,7 +279,7 @@ def test_a_model_that_always_reasons_is_asked_for_the_least_it_allows(monkeypatc
     def post(url, body, headers, timeout):
         sent.append(body["reasoning"])
         if body["reasoning"] == {"enabled": False}:
-            raise providers.ProviderError('400 from x: {"error":{"message":"Reasoning is mandatory for this endpoint"}}')
+            raise providers.ProviderError('400 from x: {"error": {"message": "Reasoning is mandatory"}}')
         return {"choices": [{"message": {"content": "{}"}}], "usage": {"cost": 0.0}}, 5
     monkeypatch.setattr(providers, "_post", post)
     monkeypatch.setenv("OPENROUTER_API_KEY", "invented")

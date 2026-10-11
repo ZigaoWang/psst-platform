@@ -12,6 +12,7 @@ from typing import Any
 from psst import rules
 from psst.checks.tools import POSSESSIVE, prose_names
 from psst.core.text import words
+from psst.rules import writing
 
 ASKS_FOR_LISTING_CUT = re.compile(r"\bcut\b.*\b(listing|listed|grade|heritage status)\b", re.I | re.S)
 LISTING = re.compile(r"\b(grade i{1,2}\*?|listed|listing|historic england|national heritage list)\b", re.I)
@@ -84,7 +85,8 @@ def listing_cut(data: dict[str, Any]) -> str | None:
     sentences = SENTENCE.split(body.get("about", "").strip())
     kept = [s for s in sentences if not LISTING.search(s)]
     about = " ".join(kept)
-    if len(kept) == len(sentences) or len(kept) < 2 or len(about) < rules.load().type("guide")["schema"][
-            "properties"]["about"]["minLength"]:
+    spec = rules.load().type("guide")
+    if len(kept) == len(sentences) or len(about) < spec["schema"]["properties"]["about"]["minLength"] \
+            or writing.count_sentences(about) < spec["about_sentences"]["min"]:  # counted as the check counts
         return None
     return about

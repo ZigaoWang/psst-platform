@@ -284,7 +284,7 @@ def values_in(fact: dict[str, Any]) -> list[dict[str, str]]:
     """A fact's values, taken from the words of its quotes: every number and every capitalized name, as written
     there, so each value is in its passage by construction and the prose can use only these forms. A record's
     shorthand is read as the prose will say it, with the shorthand kept as the form in the source: C19 is the
-    19th century, and 1907-8 ends in 1908."""
+    19th century, 1907-8 ends in 1908, and a year gives its decade and century (1832: the 1830s, the 19th)."""
     found: dict[str, str | None] = {}
     for evidence in fact.get("evidence", []):
         quote = evidence.get("quote", "")
@@ -294,6 +294,10 @@ def values_in(fact: dict[str, Any]) -> list[dict[str, str]]:
             start, end = m.group(1), m.group(2)
             found.setdefault(start, None)
             found.setdefault(start[:4 - len(end)] + end, m.group(0))
+        for m in YEAR.finditer(quote):  # a year places its decade and century: c1830 is in the 1830s
+            year = m.group(0)
+            found.setdefault(year[:3] + "0s", year)
+            found.setdefault(ordinal(int(year[:2]) + 1), year)
         plain = CENTURY.sub(" ", YEAR_RANGE.sub(lambda m: m.group(1) + " ", quote))  # no fragments of shorthand
         for value in VALUE_NUMBER.findall(plain) + NAME.findall(plain):
             if value not in COMMON:
@@ -301,6 +305,7 @@ def values_in(fact: dict[str, Any]) -> list[dict[str, str]]:
     return [{"value": v} | ({"source_form": form} if form else {}) for v, form in found.items()]
 
 
+YEAR = re.compile(r"(?<!\d)1[0-9]{3}(?!\w)")
 CENTURY = re.compile(r"\bC(\d{1,2})\b")  # a heritage record's shorthand for a century
 YEAR_RANGE = re.compile(r"\b(1\d{3}|20\d{2})\s*-\s*(\d{1,2})\b(?!\d)")  # 1907-8, 1840-45
 

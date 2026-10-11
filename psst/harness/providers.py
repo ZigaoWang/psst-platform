@@ -117,7 +117,14 @@ def _openai(provider: str, name: str, messages: list[dict[str, Any]], tools: lis
         body["usage"] = {"include": True}
         if reasoning:
             body["reasoning"] = {"enabled": False} if reasoning == "off" else {"effort": reasoning}
-    raw, latency = _post(f"{base}/chat/completions", body, {"Authorization": f"Bearer {_key(variable)}"}, timeout)
+    headers = {"Authorization": f"Bearer {_key(variable)}"}
+    try:
+        raw, latency = _post(f"{base}/chat/completions", body, headers, timeout)
+    except ProviderError as error:
+        # A model that always reasons refuses to be asked not to: ask it for the least it allows instead.
+        if body.get("reasoning") != {"enabled": False} or "reasoning is mandatory" not in str(error).lower():
+            raise
+        raw, latency = _post(f"{base}/chat/completions", body | {"reasoning": {"effort": "low"}}, headers, timeout)
     if "error" in raw:
         raise ProviderError(f"{provider}: {raw['error']}")
     choice = raw["choices"][0]

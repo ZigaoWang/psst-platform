@@ -273,6 +273,20 @@ def test_openrouter_requests_ask_for_the_fastest_private_provider_and_the_reason
     assert sent["reasoning"] == {"effort": "low"}
 
 
+def test_a_model_that_always_reasons_is_asked_for_the_least_it_allows(monkeypatch):
+    sent = []
+
+    def post(url, body, headers, timeout):
+        sent.append(body["reasoning"])
+        if body["reasoning"] == {"enabled": False}:
+            raise providers.ProviderError('400 from x: {"error":{"message":"Reasoning is mandatory for this endpoint"}}')
+        return {"choices": [{"message": {"content": "{}"}}], "usage": {"cost": 0.0}}, 5
+    monkeypatch.setattr(providers, "_post", post)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "invented")
+    providers.chat("openrouter:test/model", [{"role": "user", "content": "x"}], reasoning="off")
+    assert sent == [{"enabled": False}, {"effort": "low"}]
+
+
 def test_an_answer_cut_off_at_the_length_limit_is_asked_again_briefly(database, golden, monkeypatch):
     queue(database)
     worker, task = lease(database)

@@ -201,6 +201,7 @@ def run_work(args: argparse.Namespace) -> int:
     from concurrent.futures import ThreadPoolExecutor
     from contextlib import ExitStack
 
+    from psst.harness.coverage import coverage_cells
     from psst.harness.executor import Executor
     from psst.harness.research import parallel_places
     from psst.places import research
@@ -255,8 +256,17 @@ def run_work(args: argparse.Namespace) -> int:
                     done = outcomes[0][0]
                     if route["type"] != "research_cell" or city is None or done is None:
                         continue
-                    # The city's next cell, often the same dense cell again, is queued for the next pass.
-                    log.info("queued: %s", json.dumps(research.queue(system, planner, city["slug"], 1)))
+                    # The city's next cell, often the same dense cell again, is queued for the next pass; while cells
+                    # are worked to full coverage, only they are, ahead of everything else, until they are done.
+                    full = sorted(coverage_cells())
+                    queued = research.queue(system, planner, city["slug"], len(full) or 1, full or None,
+                                            COVERAGE_PRIORITY if full else None)
+                    log.info("queued: %s", json.dumps(queued))
+                    if full and not queued["queued"] and not conn.execute(
+                            "SELECT 1 FROM psst.tasks WHERE type = 'research_cell' AND state IN ('queued', 'leased') "
+                            "AND input ->> 'cell' = ANY(%s)", (full,)).fetchone():
+                        log.info("stopping: the coverage cells are done")
+                        return 0
                     stop = window_stop(conn, done.get("outcome"), limits)
                     if stop:
                         log.info("stopping: %s", stop)
@@ -267,6 +277,7 @@ def run_work(args: argparse.Namespace) -> int:
                 time.sleep(IDLE_SECONDS)
 
 
+COVERAGE_PRIORITY = 1_000_000  # a cell worked to full coverage goes ahead of every other cell
 PARALLEL = {"audit", "review", "revise"}  # judging steps, worked harness.parallel_places tasks at a time
 
 

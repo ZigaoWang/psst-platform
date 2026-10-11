@@ -68,7 +68,8 @@ def priorities(conn: Connection, city: dict[str, Any]) -> list[tuple[str, int]]:
     return sorted(scored, key=lambda s: -s[1])
 
 
-def queue(conn: Connection, token: str, slug: str, count: int, only: list[str] | None = None) -> dict[str, Any]:
+def queue(conn: Connection, token: str, slug: str, count: int, only: list[str] | None = None,
+          priority: int | None = None) -> dict[str, Any]:
     """Sweep leads for the next `count` cells (or for the open cells in `only`) and queue a research task for each."""
     city = conn.execute("""
         SELECT c.id, c.country_code, coalesce(c.wikidata_id, a.wikidata_id) AS wikidata_id,
@@ -88,13 +89,13 @@ def queue(conn: Connection, token: str, slug: str, count: int, only: list[str] |
     fresh = {r["cell"] for r in conn.execute(
         "SELECT cell FROM psst.research_cells WHERE cell = ANY(%s) AND swept_at > now() - make_interval(days => %s)",
         ([c for c, _ in chosen], SWEEP_DAYS))}
-    for cell, priority in chosen:
+    for cell, score in chosen:
         if cell not in fresh:  # a cell swept in the last week keeps its leads; a dense one is worked many passes
             found, issues = leads.sweep(conn, cell, city["country_code"])
             problems += [f"{cell}: {issue}" for issue in issues]
             conn.execute("SELECT psst.record_leads(%s, %s, %s)", (token, cell, Jsonb(found)))
             conn.commit()
-        entries.append({"cell": cell, "priority": priority})
+        entries.append({"cell": cell, "priority": score if priority is None else priority})
     row = conn.execute("SELECT psst.queue_research(%s, %s) AS n", (token, Jsonb(entries))).fetchone()
     conn.commit()
     return {"queued": int(row["n"]) if row else 0, "problems": problems}

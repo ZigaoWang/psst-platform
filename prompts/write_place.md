@@ -8,10 +8,11 @@ The facts are notes, not prose: tell the story in fresh words, and never reuse a
 fact, since a fact may keep its source's phrasing. Each story names among its fact ids at least one from a record or
 scholarly source (each fact lists its sources). The listing itself (its grade, date, or entry number) is never story
 material, and nothing a fact doesn't state goes in: not a color, not that it is still in use, not a kind of thing more
-specific than its fact gives. Write one story whenever the facts hold something a passer-by would stop for: an event
-at the place, who made it and why, what it was for, or a detail most people walk past. Write no story (`"stories":
-[]`), only the guide, when the facts say only what the place is and how it is built, or when `data.guide_only` is
-true. When `data.tier` is map, the story is a map story: true, specific, and visible, with a smaller surprise.
+specific than its fact gives. A story needs an angle: something that happened at the place, who made it and why, what
+it was for, or a detail that turns what a passer-by assumes. How it looks or how it is built (materials, turrets,
+windows, a list of features) is not an angle. With an angle, write one story; without one, write no story (`"stories":
+[]`), only the guide, as also when `data.guide_only` is true. When `data.tier` is map, the story is a map story: true,
+specific, and visible, with a smaller surprise.
 
 Write the way the golden bar below shows: the surprise in the first sentence, something the reader can
 see from where they stand, specifics, and an end on the payoff, with no speculation, no tangents, no background

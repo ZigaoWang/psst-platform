@@ -368,3 +368,28 @@ def test_a_listing_cut_in_a_guide_is_made_in_code():
     assert cut["claims"][0]["evidence"] == [{"snapshot": "sn_record0000", "quote": claim["passages"][0]["quote"]}]
     document["data"]["problems"] = ["Rewrite the About so it says what the station was for."]
     assert cuts.listing_cut(document) is None
+
+
+def test_a_story_without_an_angle_is_dropped_and_its_place_keeps_the_guide(database, city, roles, monkeypatch):
+    from tests.flow import research, tool_checks
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.settings SET value = %s WHERE key = 'routing.review'", (json.dumps(MODEL),))
+        conn.execute("""UPDATE psst.settings SET value = '{"testville": 1}' WHERE key = 'harness.city_budgets_usd'""")
+    story, guide = research(database, city)
+    tool_checks(database)
+    worker = Worker(database, MODEL)
+    with database.connect("worker") as conn:
+        task = dict(conn.execute("SELECT * FROM psst.lease_task(%s, ARRAY['review'])", (worker.token,)).fetchone())
+
+    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
+        return providers.Reply(text=json.dumps({"decisions": [
+            {"revision": story, "mark": "weak", "tier": None, "reason": "only describes the front", "fix": None,
+             "no_angle": True},
+            {"revision": guide, "mark": "good", "tier": None, "reason": "plain and claimed", "fix": None}],
+            "notes": "one story without an angle"}), cost_usd=0.001)
+    monkeypatch.setattr(providers, "chat", chat)
+    harness.Executor(worker.token, MODEL).run(task)
+    with database.connect("admin") as conn:
+        states = {r["type"]: r["state"] for r in conn.execute(
+            "SELECT type, state FROM psst.items WHERE current_revision = ANY(%s)", ([story, guide],))}
+    assert states == {"story": "retired", "guide": "accepted"}

@@ -194,3 +194,8 @@ Alternatives: a fixed list of cells for the night (no continuation, and a dense 
 
 Decision 32 had code refuse any year, number, or name in the writing step's prose that wasn't in the facts it named, before the tool checks ran the same kind of check against the claims' values and the cited pages. The first check was stricter than the rule it stood in front of: on one night it sent back 97 answers for names the cited pages do state, such as the Second World War, the City, or a street the record names, and fix rounds became the largest cost of writing. It is gone; the tool checks alone hold every number to the claims' values and every name to the cited pages, as they do for every submission.
 Alternatives: widening the first check to the cited pages (two checks for one job).
+
+## 38. A story needs an angle; a place without one keeps its guide alone
+
+The first night's stories included some that only described their place ("turrets and terra cotta"), which the reviewer passed as map stories. A story needs an angle: something that happened there, who made it and why, what it was for, or a detail that turns what a passer-by assumes; how a place looks or is built is not one. The writer writes no story without an angle, only the guide. The reviewer marks a story without one weak with `no_angle`, and such a story is dropped rather than revised, so its place keeps its guide alone. A review that asks only for a guide's listing details to be cut is done in code, without a model; the result goes through the same checks and review.
+Alternatives: revising a description-only story (the writer has no fact to build an angle from); marking it bad (it was written in good faith from true facts, and the place stays on the map as a guide).

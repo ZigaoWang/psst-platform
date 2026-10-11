@@ -81,7 +81,8 @@ def schema(task_type: str, item_type: str | None = None) -> dict[str, Any]:
         mark = {"type": "object", "additionalProperties": False, "required": ["golden", "mark", "tier", "reason"],
                 "properties": {"golden": {"type": "string", "pattern": "^gs_"},
                                "mark": {"enum": ["good", "weak", "bad"]}, "tier": TIER, "reason": NOTE,
-                               "fix": {"anyOf": [NOTE, {"type": "null"}]}}}
+                               "fix": {"anyOf": [NOTE, {"type": "null"}]},
+                               "no_angle": {"type": "boolean"}}}  # a story that only describes its place
         return {"type": "object", "additionalProperties": False, "required": ["marks", "notes"],
                 "properties": {"marks": {"type": "array", "items": mark}, "notes": NOTE}}
     if task_type == "find_photos":
@@ -165,7 +166,8 @@ def review() -> dict[str, Any]:
                 "required": ["revision", "mark", "tier", "reason", "fix"],
                 "properties": {"revision": {"type": "string", "pattern": "^rv_"},
                                "mark": {"enum": ["good", "weak", "bad"]}, "tier": TIER, "reason": NOTE,
-                               "fix": {"anyOf": [NOTE, {"type": "null"}]}}}
+                               "fix": {"anyOf": [NOTE, {"type": "null"}]},
+                               "no_angle": {"type": "boolean"}}}  # a story that only describes its place
     return {"type": "object", "additionalProperties": False, "required": ["decisions", "notes"],
             "properties": {"decisions": {"type": "array", "items": decision}, "notes": NOTE}}
 

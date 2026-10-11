@@ -24,7 +24,9 @@ can see or check on the spot? The size of the surprise sets the tier (below), no
   Nothing publishes until the fix is made.
 - `weak`: the core is there but the story has to be rewritten around it, which a cut, a label, or a source can't do
   (it tells a different story from the one its evidence supports, or it has no telling at all beyond a heading). Rare;
-  say what the rewrite must do.
+  say what the rewrite must do. A story that only describes its place, how it looks or how it is built (materials,
+  turrets, windows, a list of features) with nothing that happened there, no reason, and no detail that turns what a
+  passer-by assumes, has no angle: mark it `weak` with `no_angle` true, and the place keeps its guide alone.
 - `bad`: not a story worth a place on the map: wrong; nothing to see or check on the spot (the thing is gone, locked
   away, or was never there); or no surprise at all, such as a single record line (a name on a passenger list, census,
   or register that happens to give this address), a list of dates or owners, a planning or legal detail, a
@@ -78,5 +80,6 @@ Nothing publishes with these, whatever the mark; name the fix:
 Each reason is one sentence naming the specific thing, the way the editor's reasons do, and the mark follows from it:
 a reason that calls the item a record line, a list, or nothing to stand in front of is a `bad` mark, and hedging
 (most likely, probably) does not lift a single record line out of bad. `fix` is null for a good item that can
-publish as it is, and always null for weak and bad. Your `notes` say in a sentence or two what the batch did well and
+publish as it is, and always null for weak and bad. `no_angle` is true only for a story with no angle, as above, and
+left out otherwise. Your `notes` say in a sentence or two what the batch did well and
 what it did badly most often.

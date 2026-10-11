@@ -15,7 +15,11 @@ export default defineConfig({
 			prerender: {
 				entries: ['*', '/sitemap.xml', '/robots.txt'],
 				handleMissingId: 'fail',
-				handleHttpError: 'fail',
+				// Photos are served beside the site from the images folder, never built into it; anything else missing fails.
+				handleHttpError: ({ path, message }) => {
+					if (path.startsWith('/images/')) return;
+					throw new Error(message);
+				},
 				handleUnseenRoutes: 'ignore'
 			},
 			csp: {

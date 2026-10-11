@@ -161,15 +161,14 @@ def _trace(report: Report, prose: dict[str, str], claims: list[Claim],
         for number in numbers(text):
             if not any(number in k for k in known):
                 report.refuse(where, f"'{number}' isn't among the claims' values; add the claim it belongs to")
-    # A name must be among the claims' values, the names taken from their verified quotes, or be one of the place's
-    # own names and areas, the same rule as for numbers: anywhere else on a cited page (an aggregator's location
-    # line, a sidebar) is not evidence for it.
-    stated = " ".join(v["value"] for c in claims for v in c.values)
-    cited = {POSSESSIVE.sub("", w) for w in words(stated + " " + " ".join(context.names))}
+    # A name must be in the claims' verified quotes or be one of the place's own names and areas: anywhere else on a
+    # cited page (an aggregator's location line, a sidebar) is not evidence for it.
+    quoted = " ".join(passage for found in quotes.values() for _, passage in found)
+    cited = {POSSESSIVE.sub("", w) for w in words(quoted + " " + " ".join(context.names))}
     for where, text in prose.items():
         missing = sorted({n for n in proper_names(text) if not set(words(n)) <= cited})
         if missing:
-            report.refuse(where, f"{', '.join(repr(n) for n in missing)} isn't among the claims' names; add the claim "
+            report.refuse(where, f"{', '.join(repr(n) for n in missing)} isn't in the claims' quotes; add the claim "
                                  "whose quote names it, or leave it out")
     for claim in claims:
         passages = [p for _, p in quotes.get(claim.n, [])]

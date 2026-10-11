@@ -227,7 +227,7 @@ def test_the_check_never_changes_its_inputs():
 def test_a_name_no_cited_source_mentions_is_refused():
     result = check("story", story(long=LONG.replace("Ada Thorne designed", "Ada Thorne and Hugo Brandt designed")),
                    claims(), SNAPSHOTS)
-    assert "'Brandt', 'Hugo' isn't among the claims' names" in refusals(result)
+    assert "'Brandt', 'Hugo' isn't in the claims' quotes" in refusals(result)
 
 
 def test_a_source_sentence_told_in_other_words_is_refused():
@@ -294,7 +294,7 @@ def test_a_name_only_elsewhere_on_a_cited_page_is_refused():
     body = story(look="Stand at the Holborn junction and look up at the memorial in the centre of the road.")
     found = [Claim(1, "The memorial was unveiled in 1880.", "date", [{"value": "1880"}],
                    [Evidence(page.id, "Memorial in centre of road. Unveiled in 1880", 1)])]
-    assert "look: 'Holborn' isn't among the claims' names" in refusals(check("story", body, found, {page.id: page}))
+    assert "look: 'Holborn' isn't in the claims' quotes" in refusals(check("story", body, found, {page.id: page}))
 
 
 def test_a_name_is_read_without_its_possessive_and_never_from_a_sentence_start():

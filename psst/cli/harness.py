@@ -45,7 +45,7 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     trial.add_argument("--models", required=True, help="comma-separated, such as openrouter:z-ai/glm-5.3,...")
     trial.add_argument("--cell", required=True, help="the research cell whose waiting leads they write")
     trial.add_argument("--leads", type=int, default=20, help="how many of its leads (default 20)")
-    trial.add_argument("--origin", help="only leads of this origin, such as record (the listings written as guides)")
+    trial.add_argument("--origin", help="the cell's waiting leads of this origin, those put off too, such as record")
     trial.set_defaults(run=run_trial)
     status = commands.add_parser("status", help="spend against the budget, and the credit left")
     status.set_defaults(run=show_status)
@@ -117,8 +117,14 @@ def run_trial(args: argparse.Namespace) -> int:
         task = dict(task)
         document = json.loads(json.dumps(files.build(conn, task, files.Lookups(
             task_cli._lead, task_cli._key_facts, task_cli._photo_candidates, task_cli._photo_file)), default=str))
-        document["data"]["leads"] = [lead for lead in document["data"]["leads"]
-                                     if args.origin in (None, lead.get("origin"))][:args.leads]
+        if args.origin:  # waiting leads of one origin, those put off for later too, as the coverage path reads them
+            document["data"]["leads"] = [dict(r) for r in conn.execute("""
+                SELECT id AS lead, name, origin, wikidata_id AS wikidata, osm_ref AS osm, url, what, fame, status,
+                       place_id AS existing
+                FROM psst.leads WHERE cell = %s AND origin = %s AND status IN ('open', 'later')
+                ORDER BY id LIMIT %s""", (args.cell, args.origin, args.leads))]
+        else:
+            document["data"]["leads"] = document["data"]["leads"][:args.leads]
         routed = conn.execute("SELECT psst.task_model('review', '{}') AS m").fetchone()
         assert routed
         reviewer = routed["m"]

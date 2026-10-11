@@ -499,8 +499,9 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
     """Triage, then write the chosen places in parallel (harness.parallel_places at once), each submitted as soon as
     it passes, then account for every lead."""
     from . import coverage
-    if executor.max_leads:  # a trial pass over fewer leads
-        document = document | {"data": document["data"] | {"leads": document["data"]["leads"][:executor.max_leads]}}
+    if executor.max_leads:  # a trial pass over fewer leads, record leads first so the guide path is tried
+        trial = sorted(document["data"]["leads"], key=lambda lead: lead.get("origin") != "record")
+        document = document | {"data": document["data"] | {"leads": trial[:executor.max_leads]}}
     leads = {lead["lead"]: lead for lead in document["data"]["leads"]}
     # A rotation triages with its first model and hands each place to the next writer in turn.
     writers = [Executor(executor.token, m) for m in executor.members] if executor.mode == "rotate" else [executor]

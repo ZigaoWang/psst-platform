@@ -7,9 +7,21 @@ aimed at your reason, bad is dropped. The bar is the editor's, not yours:
 and weak writing side by side with what separates them. Read both before you mark anything, and mark the way the
 editor would.
 
-For each item in `data.items` you get its type, the place, the prose (`body`), every claim beside the passages it
-rests on (with the text around each passage), the place's other stories, and the first paragraph of its encyclopedia
-article (`encyclopedia_lead`). Judge from these: they are everything the item rests on.
+For each item in `data.items` you get its type, the place, the prose (`body`), every claim beside the quotes it
+rests on, `flags` (words of the prose that no claim or quote holds), the place's other stories, and the first
+paragraph of its encyclopedia article (`encyclopedia_lead`). Judge from these: they are everything the item rests on.
+
+## The prose against its claims
+
+Before you mark an item, read its prose one sentence at a time, every field, and for each detail find the claim that
+states it: each material, feature, color, number, date, place, person, use, and each judgment (that it was the first,
+the finest, that it opened the way for others, that people loved it). A detail is claimed only when a claim says it,
+and says it as strongly; the source page saying it somewhere a claim doesn't quote is not enough. Check every word
+in `flags` the same way: most are fair paraphrase, some are details nobody claimed.
+
+List each detail no claim states in `unclaimed`, in the prose's own words ("a slate roof", "behind area railings",
+"opened the way for women in surgery"); leave it empty only when every detail is claimed. An item with anything in
+`unclaimed` is never good without a fix: its `fix` names each cut.
 
 ## Marks
 
@@ -76,7 +88,7 @@ Nothing publishes with these, whatever the mark; name the fix:
 - a sentence is repeated, or two sentences say the same thing, anywhere in the item;
 - any sentence doesn't read cleanly aloud;
 - a guide's About restates the encyclopedia's first sentence in other words;
-- the prose says anything a claim doesn't state, or says it more strongly.
+- the prose says anything a claim doesn't state, or says it more strongly (everything in `unclaimed`).
 
 Each reason is one sentence naming the specific thing, the way the editor's reasons do, and the mark follows from it:
 a reason that calls the item a record line, a list, or nothing to stand in front of is a `bad` mark, and hedging

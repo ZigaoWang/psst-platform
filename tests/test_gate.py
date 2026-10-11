@@ -122,3 +122,34 @@ def test_a_reviewer_that_publishes_everything_does_not_open_the_gate(database, c
     calibrate(database, {g: ("good", t or "map") for g, (m, t) in golden.items()})
     status = refresh(database, city)
     assert status["open"] is False and float(status["agreement"]) == 1.0 and float(status["caught"]) == 0.0
+
+
+
+@pytest.mark.parametrize(("fix", "unclaimed", "counted"), [("cut the last sentence, a guess", [], False),
+                                                          ("cut the roof", ["under a slate roof"], True)])
+def test_an_added_detail_is_caught_only_when_the_reviewer_names_it(database, city, golden, fix, unclaimed, counted):
+    with database.connect("admin") as conn:
+        good = next(g for g, (m, _) in golden.items() if m == "good")
+        added = conn.execute("""
+            INSERT INTO psst.golden_stories (id, city_id, place, headline, short, long, sources, mark, tier, reason,
+                                             origin, marked_by, defect, constructed_from, marker)
+            SELECT psst.new_id('gs'), city_id, place, headline, short, long || ' Under a slate roof.', sources, 'weak',
+                   NULL, 'constructed: an added material', 'constructed', 'constructed', 'added_material', id, 'slate'
+            FROM psst.golden_stories WHERE id = %s RETURNING id""", (good,)).fetchone()["id"]
+    refresh(database, city)
+    while (task := (worker := Worker(database, SONNET)).lease("calibrate")) is not None:
+        with database.connect("admin") as conn:
+            fold = [r["id"] for r in conn.execute(
+                "SELECT id FROM psst.golden_stories WHERE psst.golden_fold(id) = %s", (task["input"]["fold"],))]
+        marks = [{"golden": g, "mark": "good", "tier": "map", "reason": "read it", "fix": fix, "unclaimed": unclaimed}
+                 if g == added else {"golden": g, "mark": golden[g][0], "reason": "read it", "unclaimed": [],
+                                     "tier": (golden[g][1] or "map") if golden[g][0] == "good" else None}
+                 for g in fold]
+        with database.connect("worker") as conn:
+            conn.execute("SELECT psst.submit_calibration(%s, %s, %s, %s)",
+                         (worker.token, task["id"], psycopg.types.json.Jsonb({"marks": marks, "notes": "n"}),
+                          task["input"]["prompt_version"]))
+    with database.connect("admin") as conn:
+        row = conn.execute("SELECT sum(neg_marked) AS marked, sum(neg_caught) AS caught "
+                           "FROM psst.calibrations").fetchone()
+    assert row["marked"] > 0 and (row["caught"] == row["marked"]) == counted

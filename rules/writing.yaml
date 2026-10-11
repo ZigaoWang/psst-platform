@@ -296,3 +296,11 @@ min_overlap_words: 6
 # Common terms in prose that are not names a claim must quote: the country, the wars, and the listing grades.
 common_terms: [UK, United Kingdom, Britain, British, England, English, London, First World War, Second World War,
                Great War, World War I, World War II, Grade I, Grade II, Grade II*, Historic England]
+# Words that carry no detail of their own: the review's word flags (prose words no claim or quote holds) skip them.
+plain_words: [about, above, across, after, again, against, along, also, although, among, another, around, away,
+              because, been, before, behind, below, beside, between, both, built, came, could, does, done, down,
+              during, each, either, ever, every, few, first, from, front, gave, have, here, into, just, last, later,
+              less, look, made, make, many, more, most, much, must, near, next, none, once, only, onto, other, over,
+              part, rather, same, side, since, some, stand, stands, still, such, than, that, their, them, then,
+              there, these, they, this, those, though, through, today, took, toward, under, until, upon, used, very,
+              were, what, when, where, which, while, whose, will, with, within, without, would, year, years, your]

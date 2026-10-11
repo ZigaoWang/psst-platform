@@ -446,7 +446,8 @@ def _checked(document: dict[str, Any], answer: dict[str, Any]) -> dict[str, Any]
 
 def combine(step: str, answers: list[dict[str, Any]]) -> dict[str, Any]:
     """Each item gets the mark most of the panel gave and, among them, the tier most gave; its reason and cut come
-    from the first member in that majority. A tie on the mark goes to the stricter mark."""
+    from the first member in that majority, and its unclaimed details are every member's. A tie on the mark goes to
+    the stricter mark."""
     listing, key = VOTING[step]
     strictness = {"bad": 0, "weak": 1, "good": 2}
     by_item: dict[str, list[dict[str, Any]]] = {}
@@ -461,7 +462,9 @@ def combine(step: str, answers: list[dict[str, Any]]) -> dict[str, Any]:
         tiers = [e.get("tier") for e in agreeing]
         tier = max(set(tiers), key=lambda x: (tiers.count(x), x == "featured"))
         chosen = next(e for e in agreeing if e.get("tier") == tier)
-        combined.append(chosen | {"mark": mark, "tier": tier})
+        unclaimed = list(dict.fromkeys(d for e in entries for d in e.get("unclaimed") or []))
+        combined.append(chosen | {"mark": mark, "tier": tier}
+                        | ({"unclaimed": unclaimed} if "unclaimed" in chosen else {}))
     notes = " / ".join(a.get("notes", "") for a in answers if a.get("notes"))[:600] or "Marked by a panel."
     return {listing: combined, "notes": notes}
 

@@ -55,7 +55,8 @@ def marks_for(database, golden, task):
     with database.connect("admin") as conn:
         fold = [r["id"] for r in conn.execute("SELECT id FROM psst.golden_stories WHERE psst.golden_fold(id) = %s",
                                               (task["input"]["fold"],))]
-    return {"marks": [{"golden": g, "mark": golden[g][0], "tier": golden[g][1], "reason": "read it"} for g in fold],
+    return {"marks": [{"golden": g, "mark": golden[g][0], "tier": golden[g][1], "reason": "read it",
+                       "unclaimed": []} for g in fold],
             "notes": "marked the fold"}
 
 
@@ -153,7 +154,8 @@ def test_the_service_works_what_is_routed_to_a_harness_model(database, golden, m
 
     def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
         items = json.loads(messages[1]["content"])["data"]["items"]
-        marks = [{"golden": i["id"], "mark": golden[i["id"]][0], "tier": golden[i["id"]][1], "reason": "read it"}
+        marks = [{"golden": i["id"], "mark": golden[i["id"]][0], "tier": golden[i["id"]][1], "reason": "read it",
+                  "unclaimed": []}
                  for i in items]
         return providers.Reply(text=json.dumps({"marks": marks, "notes": "marked the fold"}), cost_usd=0.001)
     monkeypatch.setattr(providers, "chat", chat)
@@ -167,7 +169,7 @@ def test_the_service_works_what_is_routed_to_a_harness_model(database, golden, m
 
 def test_a_panel_takes_the_majority_mark_and_tier():
     def answer(*marks):
-        return {"marks": [{"golden": f"gs_{n}", "mark": m, "tier": t, "reason": f"{m} {t}"}
+        return {"marks": [{"golden": f"gs_{n}", "mark": m, "tier": t, "reason": f"{m} {t}", "unclaimed": []}
                           for n, (m, t) in enumerate(marks)], "notes": "marked"}
     combined = harness.combine("calibrate", [answer(("good", "map"), ("weak", None), ("good", "featured")),
                                              answer(("good", "featured"), ("bad", None), ("weak", None)),
@@ -189,7 +191,7 @@ def test_a_panel_calibrates_as_one_model(database, golden, monkeypatch):
         items = json.loads(messages[1]["content"])["data"]["items"]
         wrong = model == "openrouter:test/c"  # one member always says weak; the other two outvote it
         marks = [{"golden": i["id"], "mark": "weak" if wrong else golden[i["id"]][0],
-                  "tier": None if wrong else golden[i["id"]][1], "reason": "read it"} for i in items]
+                  "tier": None if wrong else golden[i["id"]][1], "reason": "read it", "unclaimed": []} for i in items]
         return providers.Reply(text=json.dumps({"marks": marks, "notes": "marked the fold"}), cost_usd=0.001)
     monkeypatch.setattr(providers, "chat", chat)
     outcome = harness.Executor(worker.token, panel).run(task)
@@ -235,8 +237,10 @@ def test_featured_needs_a_second_model_to_agree(database, city, roles, monkeypat
         if model == "openrouter:test/second":
             return providers.Reply(text=json.dumps({"tier": "map", "reason": "a smaller surprise"}), cost_usd=0.0001)
         return providers.Reply(text=json.dumps({"decisions": [
-            {"revision": story, "mark": "good", "tier": "featured", "reason": "a real surprise", "fix": None},
-            {"revision": guide, "mark": "good", "tier": None, "reason": "plain and claimed", "fix": None}],
+            {"revision": story, "mark": "good", "tier": "featured", "reason": "a real surprise", "fix": None,
+             "unclaimed": []},
+            {"revision": guide, "mark": "good", "tier": None, "reason": "plain and claimed", "fix": None,
+             "unclaimed": []}],
             "notes": "a clean batch"}), cost_usd=0.001)
     monkeypatch.setattr(providers, "chat", chat)
     harness.Executor(worker.token, MODEL).run(task)
@@ -310,8 +314,10 @@ def test_a_story_on_one_source_is_never_featured(database, city, roles, monkeypa
     def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
         assert model != "openrouter:test/second"  # no second reading is paid for
         return providers.Reply(text=json.dumps({"decisions": [
-            {"revision": story, "mark": "good", "tier": "featured", "reason": "a real surprise", "fix": None},
-            {"revision": guide, "mark": "good", "tier": None, "reason": "plain and claimed", "fix": None}],
+            {"revision": story, "mark": "good", "tier": "featured", "reason": "a real surprise", "fix": None,
+             "unclaimed": []},
+            {"revision": guide, "mark": "good", "tier": None, "reason": "plain and claimed", "fix": None,
+             "unclaimed": []}],
             "notes": "a clean batch"}), cost_usd=0.001)
     monkeypatch.setattr(providers, "chat", chat)
     harness.Executor(worker.token, MODEL).run(task)
@@ -385,8 +391,10 @@ def test_a_story_without_an_angle_is_dropped_and_its_place_keeps_the_guide(datab
     def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
         return providers.Reply(text=json.dumps({"decisions": [
             {"revision": story, "mark": "weak", "tier": None, "reason": "only describes the front", "fix": None,
+             "unclaimed": [],
              "no_angle": True},
-            {"revision": guide, "mark": "good", "tier": None, "reason": "plain and claimed", "fix": None}],
+            {"revision": guide, "mark": "good", "tier": None, "reason": "plain and claimed", "fix": None,
+             "unclaimed": []}],
             "notes": "one story without an angle"}), cost_usd=0.001)
     monkeypatch.setattr(providers, "chat", chat)
     harness.Executor(worker.token, MODEL).run(task)

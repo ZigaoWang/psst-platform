@@ -12,7 +12,7 @@ GOOD = [{"id": f"gs_{n}", "place": f"Invented Hall {n}", "headline": f"A hall bu
 def test_every_defect_is_made_the_number_of_times_asked():
     rows = negatives.construct(GOOD, per_defect=6)
     made = [r for r in rows if "defect" in r]
-    assert len(made) == 42 and {r["defect"] for r in made} == set(negatives.DEFECTS)
+    assert len(made) == 6 * len(negatives.DEFECTS) and {r["defect"] for r in made} == set(negatives.DEFECTS)
     assert all(sum(r["defect"] == d for r in made) == 6 for d in negatives.DEFECTS)
 
 

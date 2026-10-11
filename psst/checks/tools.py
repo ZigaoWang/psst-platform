@@ -194,6 +194,21 @@ def prose_names(text: str, rulebook: Rulebook) -> list[str]:
     return proper_names(common.sub(" ", text))
 
 
+def unclaimed_words(prose: str, held: str, rulebook: Rulebook, most: int = 15) -> list[str]:
+    """Words of the prose that nothing it rests on holds (`held`: its claims, quotes, and the place's name): a flag
+    for the reviewer to answer, never a refusal, since a fair paraphrase can use a word of its own. A word counts as
+    held when a held word shares its first five letters (brickwork and brick, railings and railing)."""
+    def stem(word: str) -> str:
+        return word[:5]
+    plain = set(rulebook.writing["plain_words"])
+    stems = {stem(w) for w in words(held)}
+    found: list[str] = []
+    for word in words(prose):
+        if len(word) >= 4 and word.isalpha() and word not in plain and stem(word) not in stems and word not in found:
+            found.append(word)
+    return found[:most]
+
+
 def proper_names(text: str) -> list[str]:
     """Each capitalized word that doesn't start a sentence, without a possessive ending (Highbury's names Highbury).
     A name that starts a sentence is still caught by its later words."""

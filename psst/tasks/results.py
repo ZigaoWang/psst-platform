@@ -53,6 +53,9 @@ def writing(item_type: str) -> dict[str, Any]:
             "properties": {"body": body, "claims": CLAIMS, "reason": NOTE}}
 
 
+# The details the prose adds that no claim states, each in the prose's own words; empty when every detail is claimed.
+UNCLAIMED = {"type": "array", "maxItems": 20, "items": {"type": "string", "minLength": 2, "maxLength": 120}}
+
 def schema(task_type: str, item_type: str | None = None) -> dict[str, Any]:
     if task_type == "audit":
         return {"type": "object", "additionalProperties": False, "required": ["verdicts", "item"],
@@ -78,10 +81,12 @@ def schema(task_type: str, item_type: str | None = None) -> dict[str, Any]:
     if task_type == "review":
         return review()
     if task_type == "calibrate":
-        mark = {"type": "object", "additionalProperties": False, "required": ["golden", "mark", "tier", "reason"],
+        mark = {"type": "object", "additionalProperties": False,
+                "required": ["golden", "mark", "tier", "reason", "unclaimed"],
                 "properties": {"golden": {"type": "string", "pattern": "^gs_"},
                                "mark": {"enum": ["good", "weak", "bad"]}, "tier": TIER, "reason": NOTE,
                                "fix": {"anyOf": [NOTE, {"type": "null"}]},
+                               "unclaimed": UNCLAIMED,
                                "no_angle": {"type": "boolean"}}}  # a story that only describes its place
         return {"type": "object", "additionalProperties": False, "required": ["marks", "notes"],
                 "properties": {"marks": {"type": "array", "items": mark}, "notes": NOTE}}
@@ -163,10 +168,11 @@ def place_identity() -> dict[str, Any]:
 def review() -> dict[str, Any]:
     """One mark per item, good, weak, or bad, with the reason, and for a good item the cut it needs, if any."""
     decision = {"type": "object", "additionalProperties": False,
-                "required": ["revision", "mark", "tier", "reason", "fix"],
+                "required": ["revision", "mark", "tier", "reason", "fix", "unclaimed"],
                 "properties": {"revision": {"type": "string", "pattern": "^rv_"},
                                "mark": {"enum": ["good", "weak", "bad"]}, "tier": TIER, "reason": NOTE,
                                "fix": {"anyOf": [NOTE, {"type": "null"}]},
+                               "unclaimed": UNCLAIMED,
                                "no_angle": {"type": "boolean"}}}  # a story that only describes its place
     return {"type": "object", "additionalProperties": False, "required": ["decisions", "notes"],
             "properties": {"decisions": {"type": "array", "items": decision}, "notes": NOTE}}

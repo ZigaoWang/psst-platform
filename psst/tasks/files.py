@@ -14,6 +14,7 @@ from typing import Any
 import psycopg
 
 from psst import rules
+from psst.checks import tools
 from psst.core.text import find_quote
 
 from . import prompts, results
@@ -184,6 +185,8 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
                    psst.golden_fold(id) = %s AS blind
             FROM psst.golden_stories ORDER BY md5(id)""", (fold,))]
         data = {"items": [{k: g[k] for k in ("id", "place", "headline", "short", "long", "look", "sources", "claims")}
+                          | {"flags": tools.unclaimed_words(" ".join(g[f] or "" for f in ("headline", "short", "long")),
+                                                            " ".join([g["place"], *(g["claims"] or [])]), rulebook)}
                           for g in golden if g["blind"]],
                 "marked_examples": [{k: g[k] for k in ("place", "headline", "short", "long", "look", "sources",
                                                        "mark", "tier", "reason")} for g in golden if not g["blind"]],
@@ -192,7 +195,7 @@ def build(conn: Connection, task: dict[str, Any], lookups: Lookups | None = None
                 "calibration": "Mark each story good, weak, or bad as you would in a review, from its text and "
                                "its claims (what the sources confirm). A good story gets its tier, and its fix when "
                                "it needs one. Return {'marks': [{'golden': <id>, 'mark': ..., 'tier': ..., "
-                               "'fix': ..., 'reason': ...}], 'notes': ...}."}
+                               "'fix': ..., 'unclaimed': [...], 'reason': ...}], 'notes': ...}."}
     elif kind == "review":
         data = {"items": [review_item(conn, lookups, revision_id)
                           for revision_id in task["input"]["revisions"] if being_checked(conn, revision_id)],
@@ -265,9 +268,20 @@ def review_item(conn: Connection, lookups: Lookups, revision_id: str) -> dict[st
     # was most of what a review cost.
     claims = claims_with_passages(conn, revision_id, window=0)
     return {"revision": revision_id, "type": revision["type"], "place": place, "body": revision["body"],
-            "claims": claims, "quote_repairs": quote_repairs(conn, item["place_id"], claims),
+            "claims": claims, "flags": flags(revision["type"], revision["body"], claims, place),
+            "quote_repairs": quote_repairs(conn, item["place_id"], claims),
             "other_stories": other_items(conn, item["place_id"], item["id"]),
             "encyclopedia_lead": lookups.lead(place) if lookups.lead and place else None}
+
+
+def flags(item_type: str, body: dict[str, Any], claims: list[dict[str, Any]], place: dict[str, Any] | None
+          ) -> list[str]:
+    """Words of the prose that no claim, quote, or the place's name holds, for the reviewer to check one by one."""
+    spec = rules.load().type(item_type)
+    prose = " ".join(body[f] for f in spec["prose_fields"] if isinstance(body.get(f), str))
+    held = " ".join([str((place or {}).get("name") or "")] + [c["text"] for c in claims]
+                    + [p["quote"] for c in claims for p in c["passages"]])
+    return tools.unclaimed_words(prose, held, rules.load())
 
 
 def quote_repairs(conn: Connection, place_id: str | None, claims: list[dict[str, Any]]) -> list[dict[str, Any]]:

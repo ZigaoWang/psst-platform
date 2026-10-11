@@ -73,7 +73,35 @@ def _duplicated_sentence(s: dict[str, Any]) -> dict[str, Any] | None:
     return {"long": s["long"].rstrip() + " " + found[0], "reason": "a duplicated sentence"}
 
 
+# A detail no claim states, worked into a sentence of the story rather than added as a sentence of its own, the way
+# writers slip one in: a material, a feature, or a judgment. The marker is the word a reviewer has to name.
+ADDED: dict[str, list[tuple[str, str]]] = {
+    "material": [(", under a slate roof", "slate"), (", faced in yellow stock brick", "yellow"),
+                 (", its doors of carved oak", "oak"), (", with a copper dome", "copper")],
+    "feature": [(", behind cast iron railings with urn finials", "railings"), (", below a clock turret", "turret"),
+                (", beside a pair of stone lions", "lions"), (", under a fanlight of colored glass", "fanlight")],
+    "judgment": [(", and it opened the way for others like it", "opened the way"),
+                 (", which made it the finest of its kind in the city", "finest"),
+                 (", a choice that changed how the district was built", "changed how"),
+                 (", and it was loved by everyone who saw it", "loved")],
+}
+
+
+def _added(kind: str) -> Callable[[dict[str, Any]], dict[str, Any] | None]:
+    def breaks(s: dict[str, Any]) -> dict[str, Any] | None:
+        found = sentences(s["long"])
+        if len(found) < 2:
+            return None
+        target = found[1]  # inside the story, past the opening
+        clause, marker = ADDED[kind][len(s["long"]) % len(ADDED[kind])]
+        changed = target[:-1] + clause + target[-1]
+        return {"long": s["long"].replace(target, changed, 1), "marker": marker,
+                "reason": f"an added {kind} no claim states: {clause.strip(', ')}"}
+    return breaks
+
+
 DEFECTS: dict[str, Callable[[dict[str, Any]], dict[str, Any] | None]] = {
+    "added_material": _added("material"), "added_feature": _added("feature"), "added_judgment": _added("judgment"),
     "number_mismatch": _number_mismatch, "unsupported_claim": _unsupported_claim,
     "look_at_nothing": _look_at_nothing, "encyclopedia_opening": _encyclopedia_opening,
     "speculative_ending": _speculative_ending, "slop": _slop, "duplicated_sentence": _duplicated_sentence,

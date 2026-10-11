@@ -325,3 +325,30 @@ def test_a_system_run_changes_a_setting_with_its_reason(database):
         row = conn.execute("SELECT new_value, reason FROM psst.setting_changes WHERE key = 'harness.parallel_places' "
                            "ORDER BY id DESC LIMIT 1").fetchone()
     assert row["new_value"] == 6 and row["reason"] == "a smaller server"
+
+
+def test_a_good_mark_with_unclaimed_details_names_their_cut():
+    from psst.cli.tasks import review_problems
+    data = {"items": [{"revision": "rv_1", "place": None, "type": "guide"}]}
+    result = {"decisions": [{"revision": "rv_1", "mark": "good", "reason": "fine", "fix": None, "tier": None,
+                             "unclaimed": ["a slate roof"]}]}
+    assert any("a slate roof" in p and "name the cut" in p for p in review_problems(data, result))
+
+
+def test_the_review_flags_words_nothing_the_prose_rests_on_holds():
+    from psst import rules
+    from psst.checks.tools import unclaimed_words
+    flagged = unclaimed_words("Gault brickwork under a slate roof, behind area railings.",
+                              "Mid C19 terrace of gault brick with area railing", rules.load())
+    assert flagged == ["slate", "roof"]
+
+
+def test_constructed_added_details_carry_the_word_to_name():
+    from psst.harness import negatives
+    story = {"id": "gs_1", "place": "Hall", "headline": "h", "short": "s", "look": "l",
+             "long": "The hall opened in 1886. It became a studio in 1928. Bands recorded here."}
+    rows = [r for r in negatives.construct([story], 1) if r.get("defect", "").startswith("added_")]
+    assert len(rows) == 3
+    for row in rows:
+        assert row["marker"] in row["long"] and row["long"].count(".") == story["long"].count(".")
+

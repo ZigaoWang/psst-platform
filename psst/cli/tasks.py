@@ -204,6 +204,8 @@ def review_problems(data: dict[str, Any], result: dict[str, Any]) -> list[str]:
     found += [f"{r} is decided twice" for r in set(decided) if decided.count(r) > 1]
     found += [f"{d['revision']}: only a good mark names a cut in fix; a weak or bad reason says what is wrong"
               for d in result["decisions"] if d["fix"] is not None and d["mark"] != "good"]
+    found += [f"{d['revision']}: the prose adds what no claim states ({'; '.join(d['unclaimed'])}); name the cut in fix"
+              for d in result["decisions"] if d.get("unclaimed") and d["mark"] == "good" and d["fix"] is None]
     for d in result["decisions"]:
         if "tier" not in d:
             continue  # a task file from before tiers

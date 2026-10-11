@@ -125,6 +125,12 @@ def test_a_places_own_wikidata_image_is_queued_imported_and_accepted_with_no_mod
         state = conn.execute("SELECT state FROM psst.items WHERE type = 'photo'").fetchone()["state"]
     assert state == "accepted"
     assert Worker(database, HAIKU).lease("check_photo") is None
+    with database.connect("system") as conn:
+        conn.execute("SELECT psst.plan_audits(%s, true)", (worker.token,))
+    with database.connect("admin") as conn:
+        batched = conn.execute("SELECT count(*) AS n FROM psst.audit_batches WHERE type = 'photo'").fetchone()["n"]
+        published = conn.execute("SELECT count(*) AS n FROM psst.publishable WHERE type = 'photo'").fetchone()["n"]
+    assert batched == 0 and published == 1  # no model audits a place's own Wikidata image
 
 
 def test_only_a_free_credited_wikidata_image_is_taken(monkeypatch):

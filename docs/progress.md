@@ -4,7 +4,7 @@ Where the build stands. Updated before every milestone and whenever the plan cha
 
 ## Questions for the editor
 
-1. London budget (asked 2026-10-11): London has spent 7.94 of its 8 USD. About 229 revisions (listing cuts in code among them) and their reviews wait, about 1 USD with review and revise run eight at a time. Raise London to 9 USD to finish them, with no new research? Total spend is about 9.9 of 18 USD.
+1. Budget (asked 2026-10-11). Spend is 17.01 of the 18 USD cap and London has reached its 15 USD; the OpenRouter account has 3.05 USD left against its 2 USD reserve. Waiting: 59 audits (about 0.25 USD), after which cell 87194ad32ffffff publishes to the platform's channel and the website shows it; then the rest of that cell (about 850 leads, about 4 USD). Raise the cap and London's budget, and top up the account?
 
 ## Done
 

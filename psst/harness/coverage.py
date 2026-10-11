@@ -30,7 +30,7 @@ PLACE_SCHEMA: dict[str, Any] = {
                    "angle": {"type": "boolean"},
                    "place": {"type": "object", "required": ["name", "kind", "size", "ordinary"]},
                    "facts": research.EVIDENCE_SCHEMA["properties"]["facts"],
-                   "guide": {"type": "object", "required": ["body", "facts"]}},
+                   "guide": {"type": "object", "required": ["body"]}},
 }
 RECORD_GUIDE_SCHEMA: dict[str, Any] = {
     "type": "object", "required": ["places"],
@@ -147,8 +147,9 @@ def place_guide(ctx: tools.Context, document: dict[str, Any], leads: list[dict[s
     if problems:
         raise task_cli.NotSubmitted(problems)
     guide = entry["guide"]
-    if isinstance(guide.get("facts"), list):  # a fact dropped above leaves the guide; the checks hold its prose
-        guide["facts"] = [i for i in guide["facts"] if i in facts]
+    if not isinstance(guide.get("facts"), list) or not guide["facts"]:
+        guide["facts"] = list(facts)  # a guide that names none rests on its place's facts
+    guide["facts"] = [i for i in guide["facts"] if i in facts]  # a fact dropped above leaves the guide
     if isinstance(guide.get("body"), dict):
         allowed = rules.load().type("guide")["schema"]["properties"]
         guide["body"] = {k: v for k, v in guide["body"].items() if k in allowed}

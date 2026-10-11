@@ -323,10 +323,12 @@ def submit_one_place(document: dict[str, Any], payload: dict[str, Any]) -> Any:
     if document["type"] != "research_cell":
         raise config.ConfigError("places are submitted one by one only for research")
     found = results.problems(results.research_place(), payload)
-    if not found:
-        brief = {lead["lead"] for lead in document["data"]["leads"]}
-        found += [f"lead {lead} isn't in this cell's brief" for lead in payload["leads"] if lead not in brief]
     with db.connect("worker") as conn:
+        if not found:  # a lead of the cell still waiting, in this pass's brief or not (a terrace's other houses)
+            waiting = {r["id"] for r in conn.execute(
+                "SELECT id FROM psst.leads WHERE id = ANY(%s) AND cell = %s AND status IN ('open', 'later')",
+                (payload["leads"], document["data"]["cell"]))}
+            found += [f"lead {lead} isn't waiting in this cell" for lead in payload["leads"] if lead not in waiting]
         if not found:
             found += place_problems(conn, "place", payload["place"], cell_areas(document["data"]))
         if found:

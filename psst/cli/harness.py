@@ -29,6 +29,7 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     run.add_argument("--city", help="only tasks in this city (its slug)")
     run.add_argument("--limit", type=int, default=1, help="how many tasks at most (default 1)")
     run.add_argument("--max-places", type=int, default=12, help="places one research pass writes at most")
+    run.add_argument("--max-leads", type=int, help="leads one research pass takes at most (a trial run)")
     run.set_defaults(run=run_tasks)
     calibrate = commands.add_parser("calibrate", help="measure a model against the editor's golden set")
     calibrate.add_argument("--model", required=True)
@@ -54,7 +55,7 @@ def run_tasks(args: argparse.Namespace) -> int:
     done: list[dict[str, Any]] = []
     with db.open_connection(db.conninfo("worker")) as conn, \
             session(conn, "worker", f"harness {args.task_type}", args.model) as token:
-        executor = Executor(token, args.model, getattr(args, "max_places", 12))
+        executor = Executor(token, args.model, getattr(args, "max_places", 12), getattr(args, "max_leads", None))
         city = None
         if args.city:
             row = conn.execute("SELECT id FROM psst.cities WHERE slug = %s", (args.city,)).fetchone()

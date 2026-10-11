@@ -59,6 +59,7 @@ STEP_LIMITS = {
     "triage": Limits(tool_calls=0, fixes=1, tokens=200_000, reply_tokens=32000, reasoning="off"),
     "evidence": Limits(tool_calls=0, fixes=2, tokens=60_000, reply_tokens=8000, reasoning="off"),
     "write": Limits(tool_calls=0, fixes=2, tokens=40_000, reply_tokens=8000, reasoning="off"),
+    "record_guide": Limits(tool_calls=0, fixes=2, tokens=80_000, reply_tokens=8000, reasoning="off"),
 }
 STEP_TOOLS = {
     "tier_check": [],
@@ -69,6 +70,7 @@ STEP_TOOLS = {
     "triage": [],
     "evidence": [],
     "write": [],
+    "record_guide": [],
 }
 
 
@@ -161,8 +163,8 @@ def parse_json(text: str) -> dict[str, Any] | None:
 
 
 class Executor:
-    def __init__(self, token: str, model: str, max_places: int = 12) -> None:
-        self.token, self.model, self.max_places = token, model, max_places
+    def __init__(self, token: str, model: str, max_places: int = 12, max_leads: int | None = None) -> None:
+        self.token, self.model, self.max_places, self.max_leads = token, model, max_places, max_leads
         # A panel (vote:) marks together; a rotation (rotate:) takes turns writing, one model per place.
         self.mode = model.partition(":")[0] if model.startswith(("vote:", "rotate:")) else "one"
         self.members = model.partition(":")[2].split("+") if self.mode != "one" else []

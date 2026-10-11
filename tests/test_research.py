@@ -648,3 +648,80 @@ def test_a_fact_naming_a_place_its_quotes_dont_is_dropped():
     assert harness_research.unquoted(fact, "Temple Bar Memorial")
     fact["text"] = "The Temple Bar Memorial stands in the centre of the road."
     assert not harness_research.unquoted(fact, "Temple Bar Memorial")
+
+
+def test_listed_houses_are_read_by_street_and_other_records_alone():
+    from psst.harness import coverage
+    assert coverage.street({"name": "10 and 12, Northampton Park"}) == "northampton park"
+    assert coverage.street({"name": "104-120, Shakespeare Walk N16"}) == "shakespeare walk"
+    assert coverage.street({"name": "1-39, Clissold Road N16"}) == "clissold road"
+    assert coverage.street({"name": "Church of St Mary"}) is None
+    assert coverage.first_number({"name": "104-120, Shakespeare Walk N16"}) == 104
+
+
+HOUSES = "Pair of houses. Built in 1841 by Ada Thorne in stock brick with stucco ground floors."
+
+
+def test_a_coverage_cell_writes_listed_houses_of_one_street_as_one_guide(database, city, monkeypatch):
+    from psst.harness import executor as harness
+    from psst.harness import providers
+    from psst.harness import research as harness_research
+    for role in ("worker", "system"):
+        monkeypatch.setenv(f"PSST_DATABASE_URL_{role.upper()}", database.url(role))
+    worker = Worker(database, "openrouter:test/writer")
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.settings SET value = '\"openrouter:test/writer\"' WHERE key IN "
+                     "('routing.research_cell', 'routing.research_cell_dense')")
+        conn.execute("""UPDATE psst.settings SET value = '{"testville": 1}' WHERE key = 'harness.city_budgets_usd'""")
+        conn.execute("UPDATE psst.settings SET value = 'null' WHERE key = 'routing.research_writer'")
+        cell = conn.execute("SELECT input ->> 'cell' AS c FROM psst.tasks WHERE type = 'research_cell' "
+                            "ORDER BY priority DESC LIMIT 1").fetchone()["c"]
+        conn.execute("UPDATE psst.settings SET value = %s WHERE key = 'harness.coverage_cells'", (json.dumps([cell]),))
+        record = _snapshot(conn, HOUSES,
+                           "https://historicengland.org.uk/listing/the-list/list-entry/1000002", "official_record")
+    with database.connect("system") as conn:
+        conn.execute("SELECT psst.record_leads(%s, %s, %s)", (city.token, cell, json.dumps([
+            {"key": "Q900021", "origin": "record", "name": "1 and 3, Mill Row", "wikidata": "Q900021", "fame": 0},
+            {"key": "Q900022", "origin": "record", "name": "5 and 7, Mill Row", "wikidata": "Q900022", "fame": 0}])))
+    monkeypatch.setattr(harness_research, "records", lambda qid, entities=None: [
+        {"url": "https://historicengland.org.uk/listing/the-list/list-entry/1000002", "title": "entry",
+         "publisher": "Historic England", "kind": "official_record", "language": "en"}] if qid else [])
+    monkeypatch.setattr(harness_research, "read_all", lambda executor, requests: [
+        {"snapshot": record, "url": requests[0]["url"], "kind": "official_record",
+         "text": HOUSES}] if requests else [])
+    monkeypatch.setattr(harness_research, "mark_records", lambda leads: None)
+    monkeypatch.setattr(coords, "resolve", lambda places: {
+        p["id"]: coords.Position(51.5, -0.05, "wikidata", p["wikidata"] or "Q900021") for p in places})
+    calls = []
+
+    def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
+        system = messages[0]["content"]
+        calls.append(system.splitlines()[0])
+        if "from its official records" in system:
+            answer = {"angle": False, "specific": [], "place": {"name": "1 to 7 Mill Row", "kind": "building",
+                                                                 "size": "medium", "ordinary": True},
+                      "facts": [{"id": "f1", "text": "The houses were built in 1841.", "kind": "date", "values": [],
+                                 "evidence": [{"snapshot": record, "quote": "Built in 1841 by Ada Thorne"}]},
+                                {"id": "f2", "text": "They are stock brick with stucco ground floors.",
+                                 "kind": "attribute", "values": [],
+                                 "evidence": [{"snapshot": record,
+                                               "quote": "in stock brick with stucco ground floors"}]}],
+                      "guide": {"body": {"identifier": "Stock brick terrace houses, 1841, by Ada Thorne",
+                                         "about": "Four houses in a row, built in 1841 to a design by Ada Thorne. "
+                                                  "Their walls are brick, rendered at street level."},
+                                "facts": ["f1", "f2"]}}
+        else:
+            leads = json.loads(messages[1]["content"])["data"]["leads"]
+            answer = {"decisions": [{"lead": lead["lead"], "action": "skip", "reason": "not one physical thing"}
+                                    for lead in leads], "notes": "Nothing to write."}
+        return providers.Reply(text=json.dumps(answer), cost_usd=0.001)
+    monkeypatch.setattr(providers, "chat", chat)
+    task = worker.lease("research_cell")
+    harness.Executor(worker.token, "openrouter:test/writer").run(dict(task))
+    with database.connect("admin") as conn:
+        added = conn.execute("SELECT name, status, place_id, reason FROM psst.leads WHERE name LIKE '%%Mill Row' "
+                             "ORDER BY name").fetchall()
+        items = conn.execute("SELECT type FROM psst.items WHERE place_id = %s", (added[0]["place_id"],)).fetchall()
+    assert [a["status"] for a in added] == ["added", "added"] and added[0]["place_id"] == added[1]["place_id"]
+    assert [i["type"] for i in items] == ["guide"]
+    assert sum("from its official records" in c for c in calls) == 1

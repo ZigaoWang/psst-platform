@@ -51,15 +51,18 @@ def mark_records(leads: list[dict[str, Any]]) -> None:
             lead["record"] = found[0]["title"]
 
 
-def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], spend: Spend) -> dict[str, Any]:
+def triage(executor: Executor, task: dict[str, Any], document: dict[str, Any], spend: Spend,
+           most: int | None = None) -> dict[str, Any]:
     brief = document["data"]
+    if not brief["leads"]:
+        return {"decisions": [], "notes": "Nothing left to triage."}
     mark_records(brief["leads"])
     prompt = prompts.load("triage").text
     system = prompt  # compact on purpose (decision 34): one line per lead, no examples
     compact = [{k: lead[k] for k in ("lead", "name", "what", "record", "well_known") if lead.get(k)}
                for lead in brief["leads"]]
     nearby = [{"id": p["id"], "name": p["name"], "stories": p["stories"]} for p in brief["places_nearby"]]
-    most = min(MAX_WRITES, executor.max_places)
+    most = most or min(MAX_WRITES, executor.max_places)
     user = json.dumps({"data": {"leads": compact, "places_nearby": nearby, "max_writes": most},
                        "result_schema": TRIAGE_SCHEMA}, ensure_ascii=False, default=str)
     leads = {lead["lead"]: lead for lead in brief["leads"]}
@@ -495,12 +498,43 @@ def prose_writer(evidence_writer: Executor) -> Executor:
 def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, Any], spend: Spend) -> Any:
     """Triage, then write the chosen places in parallel (harness.parallel_places at once), each submitted as soon as
     it passes, then account for every lead."""
+    from . import coverage
+    if executor.max_leads:  # a trial pass over fewer leads
+        document = document | {"data": document["data"] | {"leads": document["data"]["leads"][:executor.max_leads]}}
     leads = {lead["lead"]: lead for lead in document["data"]["leads"]}
     # A rotation triages with its first model and hands each place to the next writer in turn.
     writers = [Executor(executor.token, m) for m in executor.members] if executor.mode == "rotate" else [executor]
-    plan = triage(writers[0], task, document, spend)
     accounted: list[dict[str, Any]] = []
-    chosen = [d for d in plan["decisions"] if d["action"] == "write" and d["lead"] in leads]
+    chosen: list[dict[str, Any]] = []
+    failed = groups = 0
+    to_triage = document
+    if document["data"]["cell"] in coverage.coverage_cells():
+        # Full coverage (decision 40): record leads are written as guides, houses of one street as one place; the
+        # rest are triaged with no limit on how many are written.
+        batch = coverage.groups(document["data"]["cell"], document["data"]["leads"])
+
+        def guide(group: list[dict[str, Any]]) -> dict[str, Any]:
+            try:
+                return coverage.record_guide(writers[0], task, document, group, Spend())
+            except (GaveUp, ValueError, TypeError, KeyError, OSError, psycopg.Error) as reason:
+                return {"failed": f"couldn't be written to the bar: {reason}"[:300]}
+        with ThreadPoolExecutor(max_workers=parallel_places()) as pool:
+            done = list(pool.map(guide, batch))
+        groups = len(batch)
+        for group, outcome in zip(batch, done, strict=True):
+            leads.update({lead["lead"]: lead for lead in group})
+            if "failed" in outcome or "skipped" in outcome:
+                failed += "failed" in outcome
+                accounted += [{"lead": lead["lead"], "status": "later",
+                               "reason": outcome.get("failed") or outcome["skipped"]} for lead in group]
+            chosen += [{"lead": i, "action": "write", "form": "story", "tier": "map",
+                        "angle": "what its own record says about this place"} for i in outcome.get("story", [])]
+        records = {lead["lead"] for group in batch for lead in group}
+        to_triage = document | {"data": document["data"] | {
+            "leads": [lead for lead in document["data"]["leads"] if lead["lead"] not in records]}}
+    plan = triage(writers[0], task, to_triage, spend,
+                  len(to_triage["data"]["leads"]) if to_triage is not document else None)
+    chosen += [d for d in plan["decisions"] if d["action"] == "write" and d["lead"] in leads]
     for d in plan["decisions"]:
         if d["lead"] not in leads or d["action"] == "write":
             continue
@@ -539,8 +573,8 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
     # Leads the place submissions already settled need no entry; the rest are accounted for here.
     final = {"places": [], "leads": [a for a in accounted if a["status"] != "added"],
              "notes": (plan.get("notes") or "Triaged and written by the harness.")[:600]}
-    failed = sum(w["reason"].startswith("couldn't be written") for w in written if w["status"] != "added")
-    return dict(task_cli.submit(document, final)) | {"chosen": len(chosen), "failed": failed}
+    failed += sum(w["reason"].startswith("couldn't be written") for w in written if w["status"] != "added")
+    return dict(task_cli.submit(document, final)) | {"chosen": len(chosen) + groups, "failed": failed}
 
 
 def parallel_places() -> int:

@@ -214,3 +214,8 @@ Alternatives: twelve places a pass (a dense cell takes weeks); a place per liste
 
 Each guide names one thing a passer-by can see that its record states: a date stone, an inscription, a sign, an odd detail. A listing whose record gives nothing like that gets no pin of its own: it joins one place for its street, "Listed buildings on <street>", whose guide covers them together. The writer and the guide call are told so, and the reviewer marks a guide that names nothing to see weak. An answer in words with no JSON is taken as the model's answer (a skip, or the task back) rather than a fix round, and a revision's spelling, values, and key facts are mended in code before it is checked.
 Alternatives: a pin for every listing (a map of identical pins saying nothing a reader can find); dropping such listings (the street loses its record of what is protected there).
+
+## 42. A place can publish with its guide alone
+
+The output required every place to carry at least one story, so the guide-only places of decisions 38 and 40, most of a dense cell, could never publish. A place now publishes with its audited guide, and with its stories when it has any; format 2 allows an empty `facts` list. No app reads the platform's output yet; the app redesign reads it knowing a place may have no story.
+Alternatives: keeping guide-only places off the map (the density the coverage work exists for); a separate list of guides (two kinds of place where readers see one).

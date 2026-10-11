@@ -122,14 +122,15 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
     for item in items:
         by_type[item["type"]].append(item)
 
-    # A place publishes only with a story and its guide information.
+    # A place publishes with its guide information, and with its stories when it has any: a place whose record holds
+    # no story is a guide-only place (decisions 38 and 42).
     stories_by_place: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for story in by_type["story"]:
         stories_by_place[story["place_id"]].append(story)
     guides = {g["place_id"]: g for g in by_type["guide"]}
     held += [{"place": p, "reason": "no guide information ready"}
              for p in sorted(stories_by_place) if p not in guides]
-    place_ids = sorted(p for p in stories_by_place if p in guides)
+    place_ids = sorted(guides)
     places = {p["id"]: p for p in _rows(conn, """
         SELECT p.id, p.kind, p.size, ST_Y(p.geom) AS lat, ST_X(p.geom) AS lon, p.coord_source, p.coord_ref,
                p.country_code, p.district_id, p.neighborhood_id, coalesce(p.city_id, p.region_id) AS group_id,
@@ -144,7 +145,7 @@ def build(conn: Connection, out_root: Path, now: datetime | None = None) -> Buil
     held += [{"place": p, "reason": "the place has no display name"} for p in sorted(places) if not places[p]["name"]]
     places = {p: place for p, place in places.items() if place["name"]}
     if not places:
-        raise BuildError("Nothing can publish yet: no place has both an audited story and guide information.")
+        raise BuildError("Nothing can publish yet: no place has audited guide information.")
 
     english = [i for i in items if i["type"] in ("story", "guide", "photo") and i["place_id"] in places
                or i["type"] == "trail"]

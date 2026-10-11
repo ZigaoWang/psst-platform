@@ -67,8 +67,8 @@ def test_a_drop_in_places_is_refused_unless_explained(database, city, site):
     audit_everything(database)
     run_publish(database, site)
     with database.connect("admin") as conn:
-        item = conn.execute("SELECT item_id FROM psst.revisions WHERE id = %s", (story,)).fetchone()["item_id"]
-        conn.execute("SELECT psst.retire(%s, %s, 'the place was demolished')", (city["admin"], item))
+        for item in conn.execute("SELECT id FROM psst.items WHERE place_id = %s", (other,)).fetchall():
+            conn.execute("SELECT psst.retire(%s, %s, 'the place was demolished')", (city["admin"], item["id"]))
     with pytest.raises(PublishError) as refused:
         run_publish(database, site)
     assert any("places would drop from 2 to 1" in p for p in refused.value.problems)
@@ -151,6 +151,18 @@ def test_a_live_revision_that_breaks_a_newer_rule_is_held_back(database, city, s
         "banned_phrases": [*rulebook.writing["banned_phrases"], "boiler beams"]})
     monkeypatch.setattr(build.rules, "load", lambda: stricter)
     version = production_city(site)[0]["contentVersion"]
-    with pytest.raises(Exception, match="Nothing can publish yet"):  # its only place is held back, not refused
+    # Its story is held back, not refused; the place stays as a guide, and staging refuses the drop in stories.
+    with pytest.raises(PublishError, match="Staging failed its checks"):
         run_publish(database, site)
     assert production_city(site)[0]["contentVersion"] == version
+
+
+def test_a_place_with_a_guide_and_no_story_publishes_as_guide_only(database, city, site):
+    ready(database, city)
+    with database.connect("admin") as conn:
+        other = sample.place(conn, city["admin"], wikidata="Q900002")
+    write_and_check(database, city, 1, kind="guide", place=other)
+    audit_everything(database)
+    run_publish(database, site)
+    places = {p["id"]: p for p in production_city(site)[1]["places"]}
+    assert places[other]["facts"] == [] and places[other]["guide"]["about"]

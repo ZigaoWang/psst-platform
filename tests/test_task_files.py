@@ -45,8 +45,8 @@ def test_the_reviewer_sees_the_prose_beside_its_claims_and_passages(database, ci
     document = leased(database, Worker(database, SONNET), "review")
     item = document["data"]["items"][0]
     assert item["body"]["headline"] and item["type"] == "story"
-    assert item["claims"][0]["passages"][0]["quote"] == "built in 1871 by the engineer Ada Thorne"
-    assert item["claims"][0]["passages"][0]["before"].endswith("was ")
+    assert item["claims"][0]["passages"][0]["quote"] == "on Mill Lane was built in 1871 by the engineer Ada Thorne"
+    assert item["claims"][0]["passages"][0]["before"].endswith("Pump House ")
     assert document["data"]["reference_stories"][0]["headline"] == "A library that pumped water"
     assert document["prompt_version"] == prompts.load("review").version
 

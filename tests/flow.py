@@ -62,7 +62,8 @@ def story_result(city, year="1871"):
     claims = [
         {"text": "The pump house was built in 1871, designed by Ada Thorne.", "kind": "date",
          "values": [{"value": "1871"}, {"value": "Ada Thorne"}],
-         "evidence": [{"snapshot": city["record"], "quote": "built in 1871 by the engineer Ada Thorne"}]},
+         "evidence": [{"snapshot": city["record"],
+                       "quote": "on Mill Lane was built in 1871 by the engineer Ada Thorne"}]},
         {"text": "It became a library in 1952.", "kind": "event", "values": [{"value": "1952"}],
          "evidence": [{"snapshot": city["record"], "quote": "until 1952, when it was turned into a library"}]},
         {"text": "Readers sit under the old boiler beams.", "kind": "attribute", "values": [],

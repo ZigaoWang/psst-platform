@@ -227,7 +227,7 @@ def test_the_check_never_changes_its_inputs():
 def test_a_name_no_cited_source_mentions_is_refused():
     result = check("story", story(long=LONG.replace("Ada Thorne designed", "Ada Thorne and Hugo Brandt designed")),
                    claims(), SNAPSHOTS)
-    assert "'Brandt', 'Hugo' isn't in any cited passage" in refusals(result)
+    assert "'Brandt', 'Hugo' isn't in any quoted passage" in refusals(result)
 
 
 def test_a_source_sentence_told_in_other_words_is_refused():
@@ -286,3 +286,12 @@ def test_a_new_places_own_name_and_city_may_be_used_in_its_prose():
     names = Context(names=["12 Mill Lane", "Testville"])
     result = check("story", body, claims(), SNAPSHOTS, names)
     assert not any("'12'" in r or "Testville" in r for r in refusals(result))
+
+
+def test_a_name_only_elsewhere_on_a_cited_page_is_refused():
+    page = Snapshot("sn_page0000000", "so_page0000000", "https://records.example.org/memorial", "official_record",
+                    "Memorial in centre of road. Unveiled in 1880.\n\nLocation: Holborn, Westminster")
+    body = story(look="Stand at the Holborn junction and look up at the memorial in the centre of the road.")
+    found = [Claim(1, "The memorial was unveiled in 1880.", "date", [{"value": "1880"}],
+                   [Evidence(page.id, "Memorial in centre of road. Unveiled in 1880", 1)])]
+    assert "look: 'Holborn' isn't in any quoted passage" in refusals(check("story", body, found, {page.id: page}))

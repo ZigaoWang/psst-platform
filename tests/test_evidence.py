@@ -89,7 +89,7 @@ def submit(database, service, story_changes=None, claim_changes=None):
     claims = [
         {"text": "Ada Thorne designed the pump house, built in 1871.", "kind": "date",
          "values": [{"value": "1871"}, {"value": "Ada Thorne"}],
-         "evidence": [{"snapshot": record, "quote": "built in 1871 by the engineer Ada Thorne"}]},
+         "evidence": [{"snapshot": record, "quote": "on Mill Lane was built in 1871 by the engineer Ada Thorne"}]},
         {"text": "It became a library in 1952.", "kind": "event", "values": [{"value": "1952"}],
          "evidence": [{"snapshot": record, "quote": "until 1952, when it was turned into a library"}]},
         {"text": "Readers sit under the old boiler beams.", "kind": "attribute", "values": [],

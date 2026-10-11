@@ -161,13 +161,15 @@ def _trace(report: Report, prose: dict[str, str], claims: list[Claim],
         for number in numbers(text):
             if not any(number in k for k in known):
                 report.refuse(where, f"'{number}' isn't among the claims' values; add the claim it belongs to")
-    pages = {snapshot.id: snapshot.text for found in quotes.values() for snapshot, _ in found}
-    cited = set(words(" ".join(pages.values()) + " " + " ".join(context.names)))
+    # A name must be in a quoted passage or be one of the place's own names and areas: anywhere else on a cited
+    # page (an aggregator's location line, a sidebar) is not evidence for it.
+    passages = [passage for found in quotes.values() for _, passage in found]
+    cited = set(words(" ".join(passages) + " " + " ".join(context.names)))
     for where, text in prose.items():
         missing = sorted({n for n in proper_names(text) if not set(words(n)) <= cited})
         if missing:
-            report.refuse(where, f"{', '.join(repr(n) for n in missing)} isn't in any cited passage; "
-                                 "cite where it comes from or leave it out")
+            report.refuse(where, f"{', '.join(repr(n) for n in missing)} isn't in any quoted passage; "
+                                 "quote where it comes from or leave it out")
     for claim in claims:
         passages = [p for _, p in quotes.get(claim.n, [])]
         for value in claim.values:

@@ -24,7 +24,11 @@ For each place give `leads` (its lead ids) and:
   never its listing or grade; for houses name them as a group, such as "Stock brick terrace houses, 1840s"), `about`
   (two or three sentences, never four, in your own words: what it is, when and by whom it was built, and what it is
   today when a fact says so; never its listing, grade, or listing date), and `key_facts` (empty); plus `facts`, the
-  ids it rests on. Plain US English, no dashes, no exclamation marks, no judgments such as fine, famous, or handsome.
+  ids it rests on. Every detail of the identifier and the About (each material, feature, date, use, and the thing to
+  see) is stated by one of the facts it lists: write the facts first, then the guide from the facts alone, never from
+  the record. A detail the record gives that no fact states stays out, and so does any judgment of your own (that it
+  was the first, the finest, that it opened the way for others). Plain US English, no dashes, no exclamation marks,
+  no judgments such as fine, famous, or handsome.
 - `angle`: true when its record says something a passer-by would stop for, as above; false when it only describes how
   the place looks and is built. A record that only describes is still a good guide.
 

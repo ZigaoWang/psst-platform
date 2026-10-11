@@ -316,8 +316,12 @@ def research_brief(conn: Connection, cell: str) -> dict[str, Any]:
         SELECT id AS lead, name, origin, wikidata_id AS wikidata, osm_ref AS osm, url, what, fame, status,
                place_id AS existing
         FROM psst.leads WHERE cell = %s AND status IN ('open', 'later')
-        ORDER BY status = 'later', origin <> 'legacy', fame DESC NULLS LAST, name LIMIT %s""",
-        (cell, spec["max_leads_per_pass"]))]  # places the previous app had come first, then the best known
+        ORDER BY status = 'later',
+                 -- a cell worked to full coverage takes its record leads first: each gets a guide (decision 40)
+                 (%s = ANY(SELECT jsonb_array_elements_text(psst.setting('harness.coverage_cells')))
+                  AND origin <> 'record'),
+                 origin <> 'legacy', fame DESC NULLS LAST, name LIMIT %s""",
+        (cell, cell, spec["max_leads_per_pass"]))]  # places the previous app had come first, then the best known
     waiting = conn.execute("SELECT count(*) AS n FROM psst.leads WHERE cell = %s AND status IN ('open', 'later')",
                            (cell,)).fetchone()
     places = [dict(r) for r in conn.execute("""

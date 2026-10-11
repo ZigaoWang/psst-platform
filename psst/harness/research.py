@@ -607,11 +607,14 @@ def parallel_places() -> int:
 def us_spelling(place: dict[str, Any]) -> None:
     """The words the rulebook lists as British take their US form in the prose (storeys becomes stories): a
     mechanical change that never alters a fact, made in code rather than paid for as a fix round."""
+    for part in [*place.get("stories", []), place.get("guide") or {}]:
+        us_spelling_body(part.get("body") or {})
+
+
+def us_spelling_body(body: dict[str, Any]) -> None:
     british = rules.load().writing["british_spellings"]
     pattern = re.compile(r"\b(" + "|".join(map(re.escape, sorted(british, key=len, reverse=True))) + r")\b")
-    for part in [*place.get("stories", []), place.get("guide") or {}]:
-        body = part.get("body") or {}
-        for key, value in body.items():
-            if isinstance(value, str):
-                body[key] = pattern.sub(lambda m: british[m.group(1)], value)
+    for key, value in body.items():
+        if isinstance(value, str):
+            body[key] = pattern.sub(lambda m: british[m.group(1)], value)
 

@@ -488,3 +488,15 @@ def test_an_answer_in_words_ends_the_task_without_a_fix_round(database, golden, 
     monkeypatch.setattr(providers, "chat", chat)
     outcome = harness.Executor(worker.token, MODEL).run(task)
     assert outcome["outcome"] == "returned" and "answered in words" in outcome["reason"] and len(calls) == 1
+
+
+def test_a_revision_is_mended_in_code_before_it_is_checked():
+    answer = {"body": {"about": "A colour photograph of the centre.",
+                       "key_facts": [{"property": "P571", "value": "1871", "claim": 1},
+                                     {"property": "P84", "value": "Hugo Brandt", "claim": 1}]},
+              "claims": [{"text": "Built in 1871.", "kind": "date", "values": [{"value": "1872"}],
+                          "evidence": [{"snapshot": "sn_1", "quote": "Built in 1871 by Ada Thorne"}]}]}
+    harness.mend_revision(answer)
+    assert answer["body"]["about"] == "A color photograph of the center."
+    assert {"value": "1871"} in answer["claims"][0]["values"] and {"value": "1872"} not in answer["claims"][0]["values"]
+    assert [k["value"] for k in answer["body"]["key_facts"]] == ["1871"]

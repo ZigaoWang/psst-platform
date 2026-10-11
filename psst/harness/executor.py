@@ -307,6 +307,7 @@ class Executor:
                     if step == "review":
                         self.confirm_featured(task, document, answer, spend)
                     if step == "revise":
+                        mend_revision(answer)
                         stats, repairs = quotes.repair(ctx.conn, answer, ctx.read | _snapshots_in(document))
                         ctx.conn.execute("SELECT psst.record_quote_repairs(%s, %s, %s, %s, %s, %s, %s)",
                                          (self.token, task["id"], task.get("place_id"), self.model,
@@ -416,6 +417,22 @@ class Executor:
 
 
 TOOL_MARKUP = re.compile(r"<(?:invoke|parameter|function_calls|tool_call)\b")
+def mend_revision(answer: dict[str, Any]) -> None:
+    """What code mends in a revision before it is checked, as in new writing: US spelling, each claim's values taken
+    from its quotes, and a guide's key facts kept only where their value is among those values."""
+    from .research import us_spelling_body, values_in
+    claims = [c for c in answer.get("claims") or [] if isinstance(c, dict) and isinstance(c.get("evidence"), list)]
+    for claim in claims:
+        claim["values"] = values_in(claim)
+    body = answer.get("body")
+    if isinstance(body, dict):
+        us_spelling_body(body)
+        if isinstance(body.get("key_facts"), list):
+            stated = [v["value"] for c in claims for v in c["values"]]
+            body["key_facts"] = [k for k in body["key_facts"] if isinstance(k, dict)
+                                 and any(str(k.get("value")) in s for s in stated)]
+
+
 PROSE_IS_SKIP = {"evidence", "record_guide"}  # steps where an answer in words means the lead is skipped
 VOTING = {"review": ("decisions", "revision"), "calibrate": ("marks", "golden")}
 

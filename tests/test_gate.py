@@ -153,3 +153,14 @@ def test_an_added_detail_is_caught_only_when_the_reviewer_names_it(database, cit
         row = conn.execute("SELECT sum(neg_marked) AS marked, sum(neg_caught) AS caught "
                            "FROM psst.calibrations").fetchone()
     assert row["marked"] > 0 and (row["caught"] == row["marked"]) == counted
+
+
+def test_a_change_to_the_golden_set_cancels_calibrations_waiting_for_the_old_one(database, city, golden):
+    refresh(database, city)
+    with database.connect("admin") as conn:
+        waiting = [r["id"] for r in conn.execute(
+            "SELECT id FROM psst.tasks WHERE type = 'calibrate' AND state = 'queued'")]
+        conn.execute("UPDATE psst.golden_stories SET reason = 'Reread.', mark = 'bad' "
+                     "WHERE id = (SELECT id FROM psst.golden_stories WHERE mark = 'weak' LIMIT 1)")
+        states = {r["state"] for r in conn.execute("SELECT state FROM psst.tasks WHERE id = ANY(%s)", (waiting,))}
+    assert waiting and states == {"cancelled"}

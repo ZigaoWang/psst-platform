@@ -63,6 +63,23 @@ def info(titles: list[str], preview_width: int = 640) -> dict[str, dict[str, Any
     return found
 
 
+def wikidata_images(qids: list[str]) -> dict[str, dict[str, Any]]:
+    """Each item's own image (P18), with its Commons record, where the file is free and names its author."""
+    files: dict[str, str] = {}
+    for start in range(0, len(qids), 50):
+        for qid, entity in http.wikidata_entities(qids[start:start + 50], props="claims").items():
+            for claim in entity.get("claims", {}).get("P18", [])[:1]:
+                value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
+                if isinstance(value, str):
+                    files[qid] = f"File:{value}"
+    titles = sorted(set(files.values()))
+    records: dict[str, dict[str, Any]] = {}
+    for start in range(0, len(titles), 40):
+        records |= info(titles[start:start + 40])
+    return {qid: records[title] for qid, title in files.items()
+            if title in records and records[title]["free"] and records[title]["author"]}
+
+
 def candidates(lat: float, lon: float, wikidata_id: str | None) -> list[dict[str, Any]]:
     """Free files that may show the place: its Wikidata image, files in its Commons category, and photos taken
     nearby, in that order, without repeats."""

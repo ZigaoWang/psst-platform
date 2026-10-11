@@ -109,3 +109,29 @@ def test_the_console_queues_photo_searches_for_places_with_stories(database, cit
                             (session, sample.CITY_ID)).fetchone()["n"] == 1
         assert conn.execute("SELECT psst.console_queue_photos(%s, %s, 10) AS n",
                             (session, sample.CITY_ID)).fetchone()["n"] == 0
+
+
+def test_a_places_own_wikidata_image_is_queued_imported_and_accepted_with_no_model(database, city, commons_stub):
+    worker = Worker(database, kind="system")
+    choice = {"key": KEY, "alt": "Former pumping station, 1871, by Ada Thorne", "focus": [0.5, 0.5], "kind": "photo"}
+    with database.connect("system") as conn:
+        assert conn.execute("SELECT psst.queue_wikidata_photo(%s, %s, %s) AS q",
+                            (worker.token, city["place"], json.dumps(choice))).fetchone()["q"]
+        assert not conn.execute("SELECT psst.queue_wikidata_photo(%s, %s, %s) AS q",
+                                (worker.token, city["place"], json.dumps(choice))).fetchone()["q"]  # once a place
+    runner = system(database, worker.token)
+    assert runner.step() and runner.step()  # the import, then the tool check
+    with database.connect("admin") as conn:
+        state = conn.execute("SELECT state FROM psst.items WHERE type = 'photo'").fetchone()["state"]
+    assert state == "accepted"
+    assert Worker(database, HAIKU).lease("check_photo") is None
+
+
+def test_only_a_free_credited_wikidata_image_is_taken(monkeypatch):
+    monkeypatch.setattr(commons.http, "wikidata_entities", lambda qids, props: {
+        "Q1": {"claims": {"P18": [{"mainsnak": {"datavalue": {"value": "Old Pump House front.jpg"}}}]}},
+        "Q2": {"claims": {"P18": [{"mainsnak": {"datavalue": {"value": "Shut.jpg"}}}]}},
+        "Q3": {"claims": {}}})
+    monkeypatch.setattr(commons, "info", lambda titles, preview_width=640: {
+        "File:Old Pump House front.jpg": record(), "File:Shut.jpg": record("All rights reserved")})
+    assert list(commons.wikidata_images(["Q1", "Q2", "Q3"])) == ["Q1"]

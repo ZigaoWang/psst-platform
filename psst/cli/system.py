@@ -41,6 +41,10 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     again.add_argument("--state", choices=["accepted", "retired"], default="accepted",
                        help="accepted work, or work a review retired that a revision could still fix")
     again.set_defaults(run=run_review_again)
+    photos = commands.add_parser(
+        "wikidata-photos", help="queue each place's own Wikidata image for a research cell, with no model")
+    photos.add_argument("--cell", required=True, help="the research cell, such as 87194ad32ffffff")
+    photos.set_defaults(run=run_wikidata_photos)
     audits = commands.add_parser("plan-audits", help="group accepted work into audit batches")
     audits.add_argument("--force", action="store_true", help="also batch groups smaller than the minimum")
     audits.set_defaults(run=run_plan_audits)
@@ -76,6 +80,39 @@ def run_review_again(args: argparse.Namespace) -> int:
             conn.commit()
             moved += bool(row and row["s"] != args.state)
     print(f"{moved} of {len(items)} {args.state} items of {args.cell} sent back to review")
+    return 0
+
+
+def run_wikidata_photos(args: argparse.Namespace) -> int:
+    """Queues, for each place of the cell with writing and no photo, its own Wikidata image when that is free and
+    credited on Commons. The alt text is the place's identifier, what the image shows; the system worker imports it."""
+    from psst.photos import commons
+    with db.open_connection(db.conninfo("system")) as conn, session(conn, "system", "wikidata photos") as token:
+        places = [dict(r) for r in conn.execute("""
+            SELECT p.id, p.wikidata_id,
+                   coalesce((SELECT r.body ->> 'identifier' FROM psst.items g JOIN psst.revisions r
+                             ON r.id = g.current_revision WHERE g.place_id = p.id AND g.type = 'guide'
+                             AND g.state <> 'retired' LIMIT 1),
+                            (SELECT name FROM psst.place_names WHERE place_id = p.id AND role = 'display')) AS alt
+            FROM psst.places p
+            WHERE p.h3_r7 = %s AND p.wikidata_id IS NOT NULL
+              AND EXISTS (SELECT 1 FROM psst.items i WHERE i.place_id = p.id AND i.type IN ('story', 'guide')
+                          AND i.state <> 'retired')
+              AND NOT EXISTS (SELECT 1 FROM psst.items i WHERE i.place_id = p.id AND i.type = 'photo'
+                              AND i.state <> 'retired')""", (args.cell,))]
+        images = commons.wikidata_images([p["wikidata_id"] for p in places])
+        queued = 0
+        for place in places:
+            image = images.get(place["wikidata_id"])
+            if image is None or len(place["alt"] or "") < 10:
+                continue
+            row = conn.execute("SELECT psst.queue_wikidata_photo(%s, %s, %s) AS q",
+                               (token, place["id"], Jsonb({"key": f"commons:{image['title']}", "alt": place["alt"],
+                                                           "focus": [0.5, 0.5], "kind": "photo"}))).fetchone()
+            conn.commit()
+            queued += bool(row and row["q"])
+    print(f"{queued} Wikidata photos queued of {len(places)} places without one; "
+          f"{len(places) - len(images)} have no free, credited image")
     return 0
 
 

@@ -99,6 +99,10 @@ def record_guide(executor: Executor, task: dict[str, Any], document: dict[str, A
     outcome: dict[str, Any] = {"added": [], "story": [], "skipped": {}, "failed": {}}
 
     def accept(answer: dict[str, Any]) -> dict[str, Any]:
+        if answer.get("skip") and not answer.get("places"):  # declined in words: every lead waits with the reason
+            outcome["skipped"] = {i: f"the record isn't enough for a guide: {answer['skip']}"[:300]
+                                  for i in by_lead if i not in set(outcome["added"]) | set(outcome["story"])}
+            return outcome
         found = results.problems(RECORD_GUIDE_SCHEMA, answer)
         if found:
             raise task_cli.NotSubmitted(found)

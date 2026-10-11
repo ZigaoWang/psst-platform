@@ -217,9 +217,13 @@ class Executor:
                 continue
             messages.append({"role": "assistant", "content": reply.text})
             answer = parse_json(reply.text)
-            if answer is None and step in PROSE_IS_SKIP and reply.text.strip() and not reply.cut_off \
+            if answer is None and reply.text.strip() and not reply.cut_off \
                     and not TOOL_MARKUP.search(reply.text):  # words that imitate a tool call are no answer
-                answer = {"skip": reply.text.strip()[:300]}  # a model declining in words is declining
+                # A reply in words with no JSON is a model declining; another round rarely changes that, so it is
+                # taken as the answer: a skip where a step can skip, otherwise the task goes back at once.
+                if step not in PROSE_IS_SKIP:
+                    raise GaveUp(f"answered in words, not JSON: {reply.text.strip()[:200]}")
+                answer = {"skip": reply.text.strip()[:300]}
             try:
                 if reply.cut_off:
                     raise task_cli.NotSubmitted(["your answer was cut off at the length limit; answer again more "
@@ -244,7 +248,8 @@ class Executor:
         call = {"task": task.get("id"), "city": task.get("city_id"), "step": step, "provider": self.provider,
                 "model": self.model, "prompt_version": prompt_version, "tools_version": tools.VERSION,
                 "request": {"messages": [m for m in messages if m["role"] != "system"][-6:]},
-                "response": {"text": reply.text, "tool_calls": [c.__dict__ for c in reply.tool_calls]}
+                "response": {"text": reply.text, "cut_off": reply.cut_off,
+                             "tool_calls": [c.__dict__ for c in reply.tool_calls]}
                 if reply else None,
                 "error": error, "tools": ran,
                 "input_tokens": reply.input_tokens if reply else 0,
@@ -411,7 +416,7 @@ class Executor:
 
 
 TOOL_MARKUP = re.compile(r"<(?:invoke|parameter|function_calls|tool_call)\b")
-PROSE_IS_SKIP = {"evidence"}  # steps where an answer in words instead of JSON means the place has no story
+PROSE_IS_SKIP = {"evidence", "record_guide"}  # steps where an answer in words means the lead is skipped
 VOTING = {"review": ("decisions", "revision"), "calibrate": ("marks", "golden")}
 
 

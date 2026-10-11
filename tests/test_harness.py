@@ -479,3 +479,12 @@ def test_a_restarted_service_ends_the_runs_it_left_open_and_requeues_their_tasks
     with database.connect("admin") as conn:
         state = conn.execute("SELECT state FROM psst.tasks WHERE id = %s", (task["id"],)).fetchone()["state"]
     assert state == "queued"
+
+
+def test_an_answer_in_words_ends_the_task_without_a_fix_round(database, golden, monkeypatch):
+    queue(database)
+    worker, task = lease(database)
+    chat, calls = scripted([providers.Reply(text="I can't mark these from what I was given.", cost_usd=0.001)])
+    monkeypatch.setattr(providers, "chat", chat)
+    outcome = harness.Executor(worker.token, MODEL).run(task)
+    assert outcome["outcome"] == "returned" and "answered in words" in outcome["reason"] and len(calls) == 1

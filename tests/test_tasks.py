@@ -352,3 +352,23 @@ def test_constructed_added_details_carry_the_word_to_name():
     for row in rows:
         assert row["marker"] in row["long"] and row["long"].count(".") == story["long"].count(".")
 
+
+def test_review_again_sends_accepted_work_back_without_the_review_it_passed(database, city):
+    from tests import sample
+    reviewer, _ = database.start_run("worker", "openrouter:test/reviewer")
+    _, system_token = database.start_run("system")
+    with database.connect("admin") as conn:
+        revision = sample.create_story(conn, city["admin"], city["place"], city["record"])
+        item = conn.execute("SELECT item_id FROM psst.revisions WHERE id = %s", (revision,)).fetchone()["item_id"]
+        conn.execute("""INSERT INTO psst.checks (revision_id, kind, verdict, note, details, run_id)
+                        VALUES (%s, 'review', 'pass', 'good', '{"mark": "good"}', %s)""", (revision, reviewer))
+        conn.execute("SELECT psst.transition(%s, 'accepted', %s, NULL, 'reviewed')", (item, city["admin"]))
+    with database.connect("system") as conn:
+        with pytest.raises(psycopg.errors.InvalidParameterValue, match="say why"):
+            conn.execute("SELECT psst.review_again(%s, %s, ' ')", (system_token, item))
+    with database.connect("system") as conn:
+        state = conn.execute("SELECT psst.review_again(%s, %s, 'review now checks every detail') AS s",
+                             (system_token, item)).fetchone()["s"]
+    with database.connect("admin") as conn:
+        waiting = conn.execute("SELECT psst.evaluate(%s) ->> 'missing' AS m", (revision,)).fetchone()["m"]
+    assert state == "checking" and waiting in ("review", "tool")

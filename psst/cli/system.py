@@ -34,6 +34,11 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     setting.add_argument("value", help="the new value as JSON, such as '\"openrouter:deepseek/deepseek-v4.1-flash\"'")
     setting.add_argument("--reason", required=True, help="why it changes; shown in the console and the reports")
     setting.set_defaults(run=run_set)
+    again = commands.add_parser("review-again",
+                                help="send a research cell's accepted stories and guides back to review")
+    again.add_argument("--cell", required=True, help="the research cell, such as 87194ad32ffffff")
+    again.add_argument("--reason", required=True, help="why they are reviewed again; recorded on each item")
+    again.set_defaults(run=run_review_again)
     audits = commands.add_parser("plan-audits", help="group accepted work into audit batches")
     audits.add_argument("--force", action="store_true", help="also batch groups smaller than the minimum")
     audits.set_defaults(run=run_plan_audits)
@@ -54,6 +59,19 @@ def run_set(args: argparse.Namespace) -> int:
         conn.execute("SELECT psst.change_setting(%s, %s, %s, %s)", (token, args.key, Jsonb(value), args.reason))
         conn.commit()
     print(f"{args.key}: {json.dumps(old['v'] if old else None)} -> {json.dumps(value)}")
+    return 0
+
+
+def run_review_again(args: argparse.Namespace) -> int:
+    with db.open_connection(db.conninfo("system")) as conn, session(conn, "system", "review again") as token:
+        items = [r["id"] for r in conn.execute("""
+            SELECT i.id FROM psst.items i JOIN psst.places p ON p.id = i.place_id
+            WHERE p.h3_r7 = %s AND i.state = 'accepted' AND i.type IN ('story', 'guide')
+            ORDER BY i.id""", (args.cell,))]
+        for item in items:
+            conn.execute("SELECT psst.review_again(%s, %s, %s)", (token, item, args.reason))
+            conn.commit()
+    print(f"{len(items)} items of {args.cell} sent back to review")
     return 0
 
 

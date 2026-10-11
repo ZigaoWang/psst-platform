@@ -19,6 +19,7 @@ from psst.cli import tasks as task_cli
 from psst.core import db, http
 from psst.evidence import fetch as reading
 from psst.evidence import urls
+from psst.harness import cuts
 from psst.tasks import prompts, results
 
 from . import quotes, tools
@@ -419,7 +420,11 @@ def write(executor: Executor, task: dict[str, Any], document: dict[str, Any], de
                 part["body"] = {k: v for k, v in part["body"].items() if k in allowed}
         place = assemble(gathered["place"], answer, facts)
         us_spelling(place)
-        # The tool checks hold every number to the claims' values and every name to the cited pages.
+        # A name the prose uses that a cited page states gets the sentence that states it as a claim (decision 39);
+        # the tool checks then hold every number to the claims' values and every name to their quotes.
+        known = [lead["name"], str(place.get("name") or ""), *task_cli.cell_areas(document["data"])]
+        for part in [*place.get("stories", []), *([place["guide"]] if place.get("guide") else [])]:
+            cuts.attach_quotes(ctx.conn, part["body"], part["claims"], known)
         return task_cli.submit_one_place(document, {"place": place, "leads": [lead["lead"]]})
     try:
         placed = dict(executor.converse("write", system, user, task, version(prompt), accept, ctx, spend))

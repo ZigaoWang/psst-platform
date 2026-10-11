@@ -357,17 +357,18 @@ def test_words_imitating_a_tool_call_are_not_taken_as_a_skip():
 def test_a_listing_cut_in_a_guide_is_made_in_code():
     from psst.harness import cuts
     claim = {"text": "Built in 1871.", "kind": "date", "values": [{"value": "1871"}],
-             "passages": [{"snapshot": "sn_record0000", "quote": "Built in 1871 to the design of Ada Thorne"}]}
+             "passages": [{"snapshot": "sn_record0000",
+                           "quote": "The pump house on Mill Lane was built in 1871 to the design of Ada Thorne"}]}
     about = ("A former pumping station on Mill Lane, designed by the engineer Ada Thorne in 1871. It supplied the "
              "town's water until 1952, when it became a library. It was listed at Grade II in 1972.")
     document = {"data": {"type": "guide", "problems": ["Cut the Grade II listing sentence from the About."],
                          "body": {"identifier": "Former pumping station, 1871", "about": about, "key_facts": []},
                          "claims": [claim]}}
-    cut = cuts.listing_cut(document)
+    cut = cuts.code_revision(None, document)
     assert cut and "Grade II" not in cut["body"]["about"] and cut["body"]["about"].endswith("became a library.")
     assert cut["claims"][0]["evidence"] == [{"snapshot": "sn_record0000", "quote": claim["passages"][0]["quote"]}]
     document["data"]["problems"] = ["Rewrite the About so it says what the station was for."]
-    assert cuts.listing_cut(document) is None
+    assert cuts.code_revision(None, document) is None
 
 
 def test_a_story_without_an_angle_is_dropped_and_its_place_keeps_the_guide(database, city, roles, monkeypatch):
@@ -393,3 +394,47 @@ def test_a_story_without_an_angle_is_dropped_and_its_place_keeps_the_guide(datab
         states = {r["type"]: r["state"] for r in conn.execute(
             "SELECT type, state FROM psst.items WHERE current_revision = ANY(%s)", ([story, guide],))}
     assert states == {"story": "retired", "guide": "accepted"}
+
+
+def test_a_name_on_a_cited_page_gets_its_sentence_quoted_and_a_label_line_does_not_count(database, city):
+    from psst.harness import cuts
+    from tests import sample
+    text = ("The memorial was unveiled in 1880. It stands where Fleet Street meets the Strand.\n"
+            "Location: Holborn, Westminster, London")
+    with database.connect("admin") as conn:
+        snapshot = sample.snapshot(conn, city["admin"], text, "https://records.example.org/temple-bar")
+    claims = [{"text": "Unveiled in 1880.", "kind": "date", "values": [{"value": "1880"}],
+               "evidence": [{"snapshot": snapshot, "quote": "The memorial was unveiled in 1880"}]}]
+    body = {"short": "The dragon stands where Fleet Street meets the Strand, unveiled in 1880.",
+            "look": "Stand at the corner and look up at the dragon."}
+    with database.connect("worker") as conn:
+        assert cuts.attach_quotes(conn, body, claims, []) == []
+        assert claims[-1]["evidence"][0]["quote"] == "It stands where Fleet Street meets the Strand."
+        body["look"] = "Stand at the Holborn corner and look up at the dragon."
+        assert cuts.attach_quotes(conn, body, claims, []) == ["Holborn"]
+
+
+def test_a_revision_made_in_code_keeps_a_good_mark_and_only_a_good_one(database, city):
+    from tests import sample
+    first_run, _ = database.start_run("worker", MODEL)
+    code_run, code_token = database.start_run("worker", MODEL)
+    with database.connect("admin") as conn:
+        first = sample.create_story(conn, first_run, city["place"], city["record"])
+        item = conn.execute("SELECT item_id FROM psst.revisions WHERE id = %s", (first,)).fetchone()["item_id"]
+        conn.execute("""INSERT INTO psst.checks (revision_id, kind, verdict, note, details, run_id)
+                        VALUES (%s, 'review', 'fail', 'cut the listing', '{"mark": "good", "tier": "map"}', %s)""",
+                     (first, first_run))
+        conn.execute("SELECT psst.transition(%s, 'draft', %s, NULL, 'sent back: cut the listing')", (item, first_run))
+        second = sample.create_story(conn, code_run, city["place"], city["record"], item)
+    with database.connect("worker") as conn:
+        assert conn.execute("SELECT psst.carry_review(%s, %s) AS c", (code_token, second)).fetchone()["c"]
+    with database.connect("admin") as conn:
+        kept = conn.execute("SELECT verdict, details FROM psst.checks WHERE revision_id = %s AND kind = 'review'",
+                            (second,)).fetchone()
+        conn.execute("""INSERT INTO psst.checks (revision_id, kind, verdict, note, details, run_id)
+                        VALUES (%s, 'review', 'fail', 'no angle', '{"mark": "weak"}', %s)""", (second, first_run))
+        conn.execute("SELECT psst.transition(%s, 'draft', %s, NULL, 'sent back: no angle')", (item, first_run))
+        third = sample.create_story(conn, code_run, city["place"], city["record"], item)
+    assert kept["verdict"] == "pass" and kept["details"]["mark"] == "good"
+    with database.connect("worker") as conn:
+        assert not conn.execute("SELECT psst.carry_review(%s, %s) AS c", (code_token, third)).fetchone()["c"]

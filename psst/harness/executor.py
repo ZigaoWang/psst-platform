@@ -282,8 +282,12 @@ class Executor:
             if step == "research_cell":
                 from .research import research_cell
                 outcome = research_cell(self, task, document, spend)
-            elif step == "revise" and (cut := cuts.listing_cut(document)) is not None:
-                outcome = task_cli.submit(document, cut)  # a cut code can make needs no model
+            elif step == "revise" and (made := self.code_revision(document)) is not None:
+                # A revision code can make needs no model, and keeps the good mark the review gave (decision 39).
+                outcome = task_cli.submit(document, made)
+                if isinstance(outcome, dict) and outcome.get("revision"):
+                    with db.connect("worker") as conn:
+                        conn.execute("SELECT psst.carry_review(%s, %s)", (self.token, outcome["revision"]))
             elif self.mode == "vote":
                 outcome = self.vote(task, document, spend)
             elif self.mode == "rotate":
@@ -383,6 +387,10 @@ class Executor:
                 ctx.conn.close()
             if verdict["tier"] != "featured":
                 d["tier"] = "map"
+
+    def code_revision(self, document: dict[str, Any]) -> dict[str, Any] | None:
+        with db.connect("worker") as conn:
+            return cuts.code_revision(conn, document)
 
     def give_back(self, document: dict[str, Any], reason: str) -> None:
         with db.connect("worker") as conn:

@@ -45,6 +45,7 @@ def register(groups: argparse._SubParsersAction[argparse.ArgumentParser]) -> Non
     trial.add_argument("--models", required=True, help="comma-separated, such as openrouter:z-ai/glm-5.3,...")
     trial.add_argument("--cell", required=True, help="the research cell whose waiting leads they write")
     trial.add_argument("--leads", type=int, default=20, help="how many of its leads (default 20)")
+    trial.add_argument("--origin", help="only leads of this origin, such as record (the listings written as guides)")
     trial.set_defaults(run=run_trial)
     status = commands.add_parser("status", help="spend against the budget, and the credit left")
     status.set_defaults(run=show_status)
@@ -116,7 +117,8 @@ def run_trial(args: argparse.Namespace) -> int:
         task = dict(task)
         document = json.loads(json.dumps(files.build(conn, task, files.Lookups(
             task_cli._lead, task_cli._key_facts, task_cli._photo_candidates, task_cli._photo_file)), default=str))
-        document["data"]["leads"] = document["data"]["leads"][:args.leads]
+        document["data"]["leads"] = [lead for lead in document["data"]["leads"]
+                                     if args.origin in (None, lead.get("origin"))][:args.leads]
         routed = conn.execute("SELECT psst.task_model('review', '{}') AS m").fetchone()
         assert routed
         reviewer = routed["m"]

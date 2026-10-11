@@ -412,3 +412,17 @@ def test_review_again_reopens_work_a_review_retired_that_a_revision_could_fix(da
                              ).fetchone()["s"]
     assert state == "checking"
 
+
+def test_a_detail_no_claim_states_is_cut_in_code_and_goes_back_to_review():
+    from psst.harness.cuts import code_revision
+    data = {"type": "guide", "problems": ["cut the slate roof and the railings"],
+            "unclaimed": ["under a slate roof", "railings"],
+            "body": {"identifier": "Brick hall, 1886",
+                     "about": "A brick hall built in 1886, under a slate roof, for the parish. Its front has a date "
+                              "stone and railings.", "key_facts": []},
+            "claims": [{"text": "Built in 1886.", "kind": "date", "values": [{"value": "1886"}],
+                        "passages": [{"snapshot": "sn_1", "quote": "built 1886"}]}]}
+    made = code_revision(None, {"data": data})
+    assert made is not None and made["carry"] is False
+    assert made["body"]["about"] == "A brick hall built in 1886, for the parish. Its front has a date stone."
+    assert code_revision(None, {"data": data | {"unclaimed": ["a copper dome"]}}) is None

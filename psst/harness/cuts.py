@@ -52,9 +52,13 @@ def attach_quotes(conn: Any, body: dict[str, Any], claims: list[dict[str, Any]],
 
 
 def code_revision(conn: Any, document: dict[str, Any]) -> dict[str, Any] | None:
-    """The revision code can make for a revise task, or None when a model is needed: every problem is a listing cut
-    in a guide's About or a name to quote, and each is done."""
+    """The revision code can make for a revise task, or None when a model is needed: the details review found no
+    claim states, each cut from the prose, or else every problem a listing cut in a guide's About or a name to quote,
+    and each done. A listing cut or a quote keeps the review's mark (`carry`); a detail cut goes back to review,
+    which judges what the cut left."""
     data = document["data"]
+    if data.get("unclaimed") and data.get("type") in ("story", "guide"):
+        return detail_cut(data)
     problems = data.get("problems") or []
     cut = [p for p in problems if ASKS_FOR_LISTING_CUT.search(p)]
     names = [p for p in problems if UNQUOTED_NAME.search(p)]
@@ -74,7 +78,56 @@ def code_revision(conn: Any, document: dict[str, Any]) -> dict[str, Any] | None:
         return None
     done = (["cut the About's sentences giving the listing"] if cut else []) + \
         (["quoted the sentences that state the names it uses"] if names else [])
-    return {"body": body, "claims": claims, "reason": f"Made in code: {' and '.join(done)}."}
+    return {"body": body, "claims": claims, "reason": f"Made in code: {' and '.join(done)}.", "carry": True}
+
+
+# What a detail no claim states usually sits in: a clause set off by commas, the last item of a list, or a sentence.
+CLAUSE = r",\s*{phrase}(?=[,.;])"
+LIST_LAST = r",\s*(?P<before>[^,.;]+?)\s+and\s+{phrase}(?=[,.;])"  # "brick, stone and slate": "brick and stone"
+PAIR_LAST = r"\s+and\s+{phrase}(?=[,.;])"  # "brick and slate": "brick"
+
+
+def detail_cut(data: dict[str, Any]) -> dict[str, Any] | None:
+    """The prose without each detail the review listed in `unclaimed`, or None when one of them isn't in the prose
+    word for word or can't be cut without rewriting the sentence around it."""
+    spec = rules.load().type(data["type"])
+    body = dict(data["body"])
+    for detail in data["unclaimed"]:
+        phrase = re.escape(detail.strip().rstrip(".,;"))
+        for field in spec["prose_fields"]:
+            text = body.get(field)
+            if not isinstance(text, str) or not re.search(phrase, text, re.I):
+                continue
+            cut = cut_detail(text, phrase)
+            if cut is None:
+                return None
+            body[field] = cut
+            break
+        else:
+            return None
+    if body == data["body"]:
+        return None
+    claims = [{"text": c["text"], "kind": c["kind"], "values": c["values"],
+               "evidence": [{"snapshot": p["snapshot"], "quote": p["quote"]} for p in c["passages"]]}
+              | ({"role": c["role"]} if c.get("role") else {}) for c in data["claims"]]
+    return {"body": body, "claims": claims, "carry": False,
+            "reason": f"Made in code: cut what no claim states ({'; '.join(data['unclaimed'])})."}
+
+
+def cut_detail(text: str, phrase: str) -> str | None:
+    found = re.search(LIST_LAST.format(phrase=phrase), text, re.I)
+    if found:
+        return (text[:found.start()] + " and " + found.group("before") + text[found.end():]).strip()
+    for pattern in (CLAUSE, PAIR_LAST):
+        found = re.search(pattern.format(phrase=phrase), text, re.I)
+        if found:
+            return (text[:found.start()] + text[found.end():]).strip()
+    sentences = SENTENCE.split(text.strip())
+    for index, sentence in enumerate(sentences):
+        rest = re.sub(phrase, "", sentence, flags=re.I)
+        if len(sentences) > 1 and re.search(phrase, sentence, re.I) and len(words(rest)) <= 3:
+            return " ".join(sentences[:index] + sentences[index + 1:])  # the sentence is the detail
+    return None
 
 
 def listing_cut(data: dict[str, Any]) -> str | None:

@@ -396,17 +396,18 @@ class Executor:
                 d["tier"] = "map"
 
     def submit_code_revision(self, document: dict[str, Any]) -> Any:
-        """Submits the revision code can make, keeping the good mark the review gave; None when code can't make one
-        that passes the checks, so a model revises."""
+        """Submits the revision code can make, keeping the good mark the review gave when it was a listing cut or a
+        quote; None when code can't make one that passes the checks, so a model revises."""
         with db.connect("worker") as conn:
             made = cuts.code_revision(conn, document)
         if made is None:
             return None
+        carry = made.pop("carry")
         try:
             outcome = task_cli.submit(document, made)
         except task_cli.NotSubmitted:
             return None
-        if isinstance(outcome, dict) and outcome.get("revision"):
+        if carry and isinstance(outcome, dict) and outcome.get("revision"):
             with db.connect("worker") as conn:
                 conn.execute("SELECT psst.carry_review(%s, %s)", (self.token, outcome["revision"]))
         return outcome

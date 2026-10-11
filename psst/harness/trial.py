@@ -41,11 +41,13 @@ def dry(placed: list[dict[str, Any]]) -> Iterator[None]:
         yield
 
 
-def write(token: str, model: str, task: dict[str, Any], document: dict[str, Any]) -> list[dict[str, Any]]:
+def write(token: str, model: str, task: dict[str, Any], document: dict[str, Any]
+          ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """The places the model wrote that pass every check, and the leads it didn't write, each with its reason."""
     placed: list[dict[str, Any]] = []
     with dry(placed):
-        research.research_cell(Executor(token, model), task, document, Spend())
-    return placed
+        outcome = research.research_cell(Executor(token, model), task, document, Spend())
+    return placed, list(outcome.get("leads") or [])
 
 
 def review_items(placed: list[dict[str, Any]]) -> list[dict[str, Any]]:

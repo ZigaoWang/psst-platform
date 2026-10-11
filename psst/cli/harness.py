@@ -125,7 +125,7 @@ def run_trial(args: argparse.Namespace) -> int:
         with db.open_connection(db.conninfo("worker")) as conn, \
                 session(conn, "worker", "harness trial", model) as token:
             started = datetime.now(UTC)
-            placed = trial.write(token, model, task, document | {"run_token": token})
+            placed, unwritten = trial.write(token, model, task, document | {"run_token": token})
             written = spent(conn, model, started)
         with db.open_connection(db.conninfo("worker")) as conn, \
                 session(conn, "worker", "harness trial review", reviewer) as token:
@@ -139,9 +139,10 @@ def run_trial(args: argparse.Namespace) -> int:
             "writing": written, "review": reviewed | {"per_item": round(reviewed["usd"] / len(items), 5)
                                                       if items else None},
             "usd_per_accepted_place": round((written["usd"] + reviewed["usd"]) / accepted, 4) if accepted else None,
-            "samples": trial.samples(placed, result["accepted_places"]), "marks_given": marks}
+            "samples": trial.samples(placed, result["accepted_places"]), "marks_given": marks,
+            "unwritten": unwritten}
         log.info("%s: %s", model, json.dumps({k: v for k, v in rows[model].items()
-                                               if k not in ("samples", "marks_given")}, default=str))
+                                               if k not in ("samples", "marks_given", "unwritten")}, default=str))
     print(trial.report(rows))
     return 0
 

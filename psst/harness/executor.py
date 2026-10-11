@@ -282,12 +282,8 @@ class Executor:
             if step == "research_cell":
                 from .research import research_cell
                 outcome = research_cell(self, task, document, spend)
-            elif step == "revise" and (made := self.code_revision(document)) is not None:
-                # A revision code can make needs no model, and keeps the good mark the review gave (decision 39).
-                outcome = task_cli.submit(document, made)
-                if isinstance(outcome, dict) and outcome.get("revision"):
-                    with db.connect("worker") as conn:
-                        conn.execute("SELECT psst.carry_review(%s, %s)", (self.token, outcome["revision"]))
+            elif step == "revise" and (outcome := self.submit_code_revision(document)) is not None:
+                pass  # made in code, with no model (decision 39)
             elif self.mode == "vote":
                 outcome = self.vote(task, document, spend)
             elif self.mode == "rotate":
@@ -388,9 +384,21 @@ class Executor:
             if verdict["tier"] != "featured":
                 d["tier"] = "map"
 
-    def code_revision(self, document: dict[str, Any]) -> dict[str, Any] | None:
+    def submit_code_revision(self, document: dict[str, Any]) -> Any:
+        """Submits the revision code can make, keeping the good mark the review gave; None when code can't make one
+        that passes the checks, so a model revises."""
         with db.connect("worker") as conn:
-            return cuts.code_revision(conn, document)
+            made = cuts.code_revision(conn, document)
+        if made is None:
+            return None
+        try:
+            outcome = task_cli.submit(document, made)
+        except task_cli.NotSubmitted:
+            return None
+        if isinstance(outcome, dict) and outcome.get("revision"):
+            with db.connect("worker") as conn:
+                conn.execute("SELECT psst.carry_review(%s, %s)", (self.token, outcome["revision"]))
+        return outcome
 
     def give_back(self, document: dict[str, Any], reason: str) -> None:
         with db.connect("worker") as conn:

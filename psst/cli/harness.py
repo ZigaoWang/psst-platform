@@ -8,7 +8,6 @@ import json
 import logging
 from typing import Any
 
-import psycopg
 from psycopg.types.json import Jsonb
 
 from psst.core import db
@@ -281,7 +280,7 @@ def work_one(executor: Any, task: dict[str, Any]) -> tuple[dict[str, Any] | None
     except BudgetReached as reason:
         executor.give_back({"task": task["id"]}, f"the harness stopped: {reason}")
         return None, str(reason)
-    except (psycopg.Error, OSError, ValueError, KeyError, TypeError) as error:
+    except Exception as error:  # noqa: BLE001  one task's failure, whatever it is, never stops the service
         executor.give_back({"task": task["id"]}, f"the harness failed on it: {error}")
         log.warning("gave back %s: %s", task["id"], str(error)[:300])
         return None, None

@@ -16,7 +16,7 @@ from psst.core import db
 from psst.tasks import prompts, results
 
 from . import cuts, research, tools
-from .executor import Executor, Spend, version
+from .executor import Executor, GaveUp, Spend, version
 
 # "10 and 12, Northampton Park", "104-120, Shakespeare Walk N16", "1-39, Clissold Road N16"
 HOUSES = re.compile(r"^\s*(?:Nos?\.?\s*)?(\d+[A-Za-z]?(?:\s*(?:-|–|,|&|and|And)\s*\d+[A-Za-z]?)*)\s*,?\s+"
@@ -24,14 +24,19 @@ HOUSES = re.compile(r"^\s*(?:Nos?\.?\s*)?(\d+[A-Za-z]?(?:\s*(?:-|–|,|&|and|And
 GROUP_MAX = 12  # entries read in one call; a longer street is split by its numbers
 RECORD_TEXT = 3000  # of each record page, the part that describes the place
 
-RECORD_GUIDE_SCHEMA: dict[str, Any] = {
-    "type": "object", "required": ["angle", "specific", "place", "facts", "guide"],
-    "properties": {"angle": {"type": "boolean"}, "specific": {"type": "array", "items": {"type": "string"}},
+PLACE_SCHEMA: dict[str, Any] = {
+    "type": "object", "required": ["leads", "angle", "place", "facts", "guide"],
+    "properties": {"leads": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+                   "angle": {"type": "boolean"},
                    "place": {"type": "object", "required": ["name", "kind", "size", "ordinary"]},
                    "facts": research.EVIDENCE_SCHEMA["properties"]["facts"],
                    "guide": {"type": "object", "required": ["body", "facts"]}},
 }
-
+RECORD_GUIDE_SCHEMA: dict[str, Any] = {
+    "type": "object", "required": ["places"],
+    "properties": {"places": {"type": "array", "items": PLACE_SCHEMA},
+                   "skipped": {"type": "array", "items": {"type": "object", "required": ["lead", "reason"]}}},
+}
 
 def coverage_cells() -> set[str]:
     with db.connect("worker") as conn:
@@ -75,62 +80,83 @@ def groups(cell: str, brief_leads: list[dict[str, Any]]) -> list[list[dict[str, 
 
 def record_guide(executor: Executor, task: dict[str, Any], document: dict[str, Any], group: list[dict[str, Any]],
                  spend: Spend) -> dict[str, Any]:
-    """Writes one group's guide in one call and submits it. Returns {"added": [lead ids], "story": [lead ids that go
-    on to the story route], "skipped": reason}."""
+    """Sorts one group's records into places and writes each place's guide in one call, submitting each place as it
+    passes. Returns {"added": [lead ids], "story": [lead ids that go on to the story route], "skipped": {id: reason},
+    "failed": {id: reason}}."""
+    by_lead = {lead["lead"]: lead for lead in group}
     pages = research.read_all(executor, [r for lead in group for r in research.records(lead.get("wikidata"))[:1]])
     if not pages:
-        return {"skipped": "its record couldn't be read"}
+        return {"skipped": {i: "its record couldn't be read" for i in by_lead}}
     passages = [{"snapshot": p["snapshot"], "url": p["url"], "kind": p["kind"],
                  "text": research.record_text(p["text"])[:RECORD_TEXT]} for p in pages]
     prompt = prompts.load("record_guide").text
     system = prompt + "\n\n## Lengths, in characters\n\n" + research.lengths()
-    user = json.dumps({"data": {"leads": [{"lead": lead["lead"], "name": lead["name"]} for lead in group],
+    user = json.dumps({"data": {"leads": [{"lead": i, "name": lead["name"]} for i, lead in by_lead.items()],
                                 "passages": passages}, "result_schema": RECORD_GUIDE_SCHEMA},
                       ensure_ascii=False, default=str)
-    ids = {lead["lead"] for lead in group}
-    anchor = group[0]
     ctx = tools.Context(conn=db.open_connection(db.conninfo("worker"), autocommit=True), token=executor.token)
     ctx.read.update(p["snapshot"] for p in pages)
-    outcome: dict[str, Any] = {}
+    outcome: dict[str, Any] = {"added": [], "story": [], "skipped": {}, "failed": {}}
 
     def accept(answer: dict[str, Any]) -> dict[str, Any]:
-        if answer.get("skip"):
-            outcome.update(skipped=f"the record isn't enough for a guide: {answer['skip']}"[:300])
-            return outcome
         found = results.problems(RECORD_GUIDE_SCHEMA, answer)
         if found:
             raise task_cli.NotSubmitted(found)
-        specific = [i for i in answer["specific"] if i in ids and len(group) > 1]
-        if len(group) == 1 and answer["angle"]:
-            outcome.update(story=[anchor["lead"]])  # a record with an angle goes the story route
-            return outcome
-        for fact in answer["facts"]:
-            fact["values"] = research.values_in(fact)
-        facts = {f["id"]: f for f in answer["facts"]
-                 if not research.reference_only(ctx.conn, f)
-                 and not research.unquoted(f, " ".join([*(lead["name"] for lead in group), answer["place"]["name"]]))}
-        problems = research.verify(ctx.conn, list(facts.values()), "guide")
+        settled = set(outcome["added"]) | set(outcome["story"])  # places submitted in an earlier round stay done
+        outcome["skipped"] = {s["lead"]: str(s["reason"])[:300] for s in answer.get("skipped") or []
+                              if s.get("lead") in by_lead}
+        problems = []
+        for n, entry in enumerate(answer["places"], 1):
+            leads = [i for i in dict.fromkeys(entry["leads"]) if i in by_lead and i not in settled]
+            if not leads:
+                continue
+            if len(leads) == 1 and entry["angle"]:
+                outcome["story"].append(leads[0])  # a record with an angle goes the story route
+                continue
+            try:
+                place_guide(ctx, document, [by_lead[i] for i in leads], entry)
+            except task_cli.NotSubmitted as refused:
+                problems += [f"place {n} ({entry['place'].get('name')}): {p}" for p in refused.found]
+                continue
+            outcome["added"] += leads
+        missing = [i for i in by_lead if i not in set(outcome["added"]) | set(outcome["story"])
+                   | set(outcome["skipped"])]
         if problems:
-            raise task_cli.NotSubmitted(problems)
-        guide = answer["guide"]
-        if isinstance(guide.get("facts"), list):  # a fact dropped above leaves the guide; the checks hold its prose
-            guide["facts"] = [i for i in guide["facts"] if i in facts]
-        if isinstance(guide.get("body"), dict):
-            allowed = rules.load().type("guide")["schema"]["properties"]
-            guide["body"] = {k: v for k, v in guide["body"].items() if k in allowed}
-            guide["body"].setdefault("key_facts", [])
-        identity = {k: answer["place"][k] for k in ("name", "kind", "size", "ordinary") if k in answer["place"]}
-        identity |= {k: anchor[k] for k in ("wikidata", "osm") if anchor.get(k)}  # the first house places it
-        place = research.assemble(identity, {"stories": [], "guide": guide}, facts)
-        research.us_spelling(place)
-        known = [lead["name"] for lead in group] + [identity.get("name", ""), *task_cli.cell_areas(document["data"])]
-        cuts.attach_quotes(ctx.conn, place["guide"]["body"], place["guide"]["claims"], known)
-        covered = [i for i in ids if i not in specific]
-        placed = task_cli.submit_one_place(document, {"place": place, "leads": covered})
-        outcome.update(added=covered, story=specific, place=placed.get("place"))
+            raise task_cli.NotSubmitted(problems + ["answer again with the places not yet accepted"])
+        outcome["failed"] = {i: "no place was written for it" for i in missing}
         return outcome
 
     try:
         return dict(executor.converse("record_guide", system, user, task, version(prompt), accept, ctx, spend))
+    except GaveUp as reason:
+        left = [i for i in by_lead if i not in set(outcome["added"]) | set(outcome["story"])]
+        return outcome | {"failed": {i: f"couldn't be written to the bar: {reason}"[:300] for i in left}}
     finally:
         ctx.conn.close()
+
+
+def place_guide(ctx: tools.Context, document: dict[str, Any], leads: list[dict[str, Any]],
+                entry: dict[str, Any]) -> None:
+    """Checks one place's facts and guide and submits it; raises NotSubmitted with what to fix."""
+    names = " ".join([*(lead["name"] for lead in leads), entry["place"].get("name", "")])
+    for fact in entry["facts"]:
+        fact["values"] = research.values_in(fact)
+    facts = {f["id"]: f for f in entry["facts"]
+             if not research.reference_only(ctx.conn, f) and not research.unquoted(f, names)}
+    problems = research.verify(ctx.conn, list(facts.values()), "guide")
+    if problems:
+        raise task_cli.NotSubmitted(problems)
+    guide = entry["guide"]
+    if isinstance(guide.get("facts"), list):  # a fact dropped above leaves the guide; the checks hold its prose
+        guide["facts"] = [i for i in guide["facts"] if i in facts]
+    if isinstance(guide.get("body"), dict):
+        allowed = rules.load().type("guide")["schema"]["properties"]
+        guide["body"] = {k: v for k, v in guide["body"].items() if k in allowed}
+        guide["body"].setdefault("key_facts", [])
+    identity = {k: entry["place"][k] for k in ("name", "kind", "size", "ordinary") if k in entry["place"]}
+    identity |= {k: leads[0][k] for k in ("wikidata", "osm") if leads[0].get(k)}  # the first house places it
+    place = research.assemble(identity, {"stories": [], "guide": guide}, facts)
+    research.us_spelling(place)
+    known = [lead["name"] for lead in leads] + [identity.get("name", ""), *task_cli.cell_areas(document["data"])]
+    cuts.attach_quotes(ctx.conn, place["guide"]["body"], place["guide"]["claims"], known)
+    task_cli.submit_one_place(document, {"place": place, "leads": [lead["lead"] for lead in leads]})

@@ -538,17 +538,16 @@ def research_cell(executor: Executor, task: dict[str, Any], document: dict[str, 
         def guide(group: list[dict[str, Any]]) -> dict[str, Any]:
             try:
                 return coverage.record_guide(writers[0], task, document, group, Spend())
-            except (GaveUp, ValueError, TypeError, KeyError, OSError, psycopg.Error) as reason:
-                return {"failed": f"couldn't be written to the bar: {reason}"[:300]}
+            except (ValueError, TypeError, KeyError, OSError, psycopg.Error) as reason:
+                return {"failed": {lead["lead"]: f"couldn't be written to the bar: {reason}"[:300] for lead in group}}
         with ThreadPoolExecutor(max_workers=parallel_places()) as pool:
             done = list(pool.map(guide, batch))
         groups = len(batch)
         for group, outcome in zip(batch, done, strict=True):
             leads.update({lead["lead"]: lead for lead in group})
-            if "failed" in outcome or "skipped" in outcome:
-                failed += "failed" in outcome
-                accounted += [{"lead": lead["lead"], "status": "later",
-                               "reason": outcome.get("failed") or outcome["skipped"]} for lead in group]
+            failed += bool(outcome.get("failed"))
+            accounted += [{"lead": i, "status": "later", "reason": reason}
+                          for i, reason in {**outcome.get("skipped", {}), **outcome.get("failed", {})}.items()]
             chosen += [{"lead": i, "action": "write", "form": "story", "tier": "map",
                         "angle": "what its own record says about this place"} for i in outcome.get("story", [])]
         records = {lead["lead"] for group in batch for lead in group}

@@ -451,7 +451,8 @@ def test_a_facts_values_come_from_its_quotes():
     fact = {"values": [{"value": "around 1800"}], "evidence": [
         {"snapshot": "sn_1", "quote": "House, c.1800, No.33 Peckham Road, listed at Grade: II in 1954"}]}
     values = [v["value"] for v in harness_research.values_in(fact)]
-    assert values == ["1800", "33", "1954", "House", "No", "Peckham Road", "Grade"]
+    assert {"1800", "33", "1954", "House", "No", "Peckham Road", "Grade"} <= set(values)
+    assert {"1800s", "19th", "1950s", "20th"} <= set(values) and "around 1800" not in values  # a year's decade, century
 
 
 def test_a_verified_fact_the_writer_forgot_to_name_is_attached():
@@ -584,8 +585,9 @@ def test_one_named_cell_can_be_queued(database, city, monkeypatch):
 def test_a_records_shorthand_gives_the_values_the_prose_will_use():
     from psst.harness import research as harness_research
     values = harness_research.values_in({"evidence": [{"quote": "rebuilt in the late C16, restored in 1907-8"}]})
-    assert values == [{"value": "16th", "source_form": "C16"}, {"value": "1907"},
-                      {"value": "1908", "source_form": "1907-8"}]
+    assert [{"value": "16th", "source_form": "C16"}, {"value": "1907"}, {"value": "1908", "source_form": "1907-8"},
+            {"value": "1900s", "source_form": "1907"}, {"value": "20th", "source_form": "1907"}] == [
+        v for v in values if v["value"] in ("16th", "1907", "1908", "1900s", "20th")]
 
 
 def test_a_fact_saying_more_than_its_quotes_is_dropped():
@@ -697,8 +699,9 @@ def test_a_coverage_cell_writes_listed_houses_of_one_street_as_one_guide(databas
     def chat(model, messages, tools=None, max_tokens=4000, json_only=False, timeout=300, reasoning=None):
         system = messages[0]["content"]
         calls.append(system.splitlines()[0])
-        if "from its official records" in system:
-            answer = {"angle": False, "specific": [], "place": {"name": "1 to 7 Mill Row", "kind": "building",
+        if "from their official records" in system:
+            leads = [lead["lead"] for lead in json.loads(messages[1]["content"])["data"]["leads"]]
+            answer = {"leads": leads, "angle": False, "place": {"name": "1 to 7 Mill Row", "kind": "building",
                                                                  "size": "medium", "ordinary": True},
                       "facts": [{"id": "f1", "text": "The houses were built in 1841.", "kind": "date", "values": [],
                                  "evidence": [{"snapshot": record, "quote": "Built in 1841 by Ada Thorne"}]},
@@ -710,6 +713,7 @@ def test_a_coverage_cell_writes_listed_houses_of_one_street_as_one_guide(databas
                                          "about": "Four houses in a row, built in 1841 to a design by Ada Thorne. "
                                                   "Their walls are brick, rendered at street level."},
                                 "facts": ["f1", "f2"]}}
+            answer = {"places": [answer]}
         else:
             leads = json.loads(messages[1]["content"])["data"]["leads"]
             answer = {"decisions": [{"lead": lead["lead"], "action": "skip", "reason": "not one physical thing"}
@@ -724,7 +728,7 @@ def test_a_coverage_cell_writes_listed_houses_of_one_street_as_one_guide(databas
         items = conn.execute("SELECT type FROM psst.items WHERE place_id = %s", (added[0]["place_id"],)).fetchall()
     assert [a["status"] for a in added] == ["added", "added"] and added[0]["place_id"] == added[1]["place_id"]
     assert [i["type"] for i in items] == ["guide"]
-    assert sum("from its official records" in c for c in calls) == 1
+    assert sum("from their official records" in c for c in calls) == 1
 
 
 def test_a_record_page_is_read_from_its_description_not_its_header():

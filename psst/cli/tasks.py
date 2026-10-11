@@ -302,7 +302,8 @@ def submit(document: dict[str, Any], result: dict[str, Any]) -> Any:
         result = result | {"rulebook": document["rulebook"], "bar": document.get("bar_version")}
     with db.connect("worker") as conn:
         outcome = conn.execute(f"SELECT psst.{function}(%s, %s, %s, %s) AS r",
-                               (token(), document["task"], Jsonb(result), document["prompt_version"])).fetchone()
+                               (document.get("run_token") or token(), document["task"], Jsonb(result),
+                                document["prompt_version"])).fetchone()
     assert outcome
     return outcome["r"]
 
@@ -334,7 +335,8 @@ def submit_one_place(document: dict[str, Any], payload: dict[str, Any]) -> Any:
         if found:
             raise NotSubmitted(found)
         outcome = conn.execute("SELECT psst.submit_research_place(%s, %s, %s, %s, %s, %s) AS r",
-                               (token(), document["task"], Jsonb(payload["place"]), Jsonb(payload["leads"]),
+                               (document.get("run_token") or token(), document["task"], Jsonb(payload["place"]),
+                                Jsonb(payload["leads"]),
                                 document["rulebook"], document.get("bar_version"))).fetchone()
     assert outcome
     return outcome["r"]

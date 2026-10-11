@@ -438,3 +438,31 @@ def test_a_revision_made_in_code_keeps_a_good_mark_and_only_a_good_one(database,
     assert kept["verdict"] == "pass" and kept["details"]["mark"] == "good"
     with database.connect("worker") as conn:
         assert not conn.execute("SELECT psst.carry_review(%s, %s) AS c", (code_token, third)).fetchone()["c"]
+
+
+def test_a_submission_acts_as_the_run_that_holds_the_task(monkeypatch):
+    from psst.cli import tasks as task_cli
+    seen = {}
+
+    class Conn:
+        def __init__(self, *args):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, sql, params):
+            seen["token"] = params[0]
+            return self
+
+        def fetchone(self):
+            return {"r": {}}
+    monkeypatch.setenv("PSST_RUN_TOKEN", "another-runs-token")
+    monkeypatch.setattr(task_cli, "problems", lambda document, result: [])
+    monkeypatch.setattr(task_cli.db, "connect", Conn)
+    task_cli.submit({"type": "review", "task": "tk_x", "run_token": "the-holders-token", "prompt_version": "v",
+                     "rulebook": "abc"}, {})
+    assert seen["token"] == "the-holders-token"

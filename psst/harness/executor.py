@@ -170,7 +170,7 @@ class Executor:
         self.members = model.partition(":")[2].split("+") if self.mode != "one" else []
         providers.check(model)
         self.provider = self.mode if self.members else providers.split(model)[0]
-        os.environ["PSST_RUN_TOKEN"] = token  # the command-line helpers the harness shares read it
+        os.environ.setdefault("PSST_RUN_TOKEN", token)  # for reading sources, which any run of the service may do
 
     # Model calls ---------------------------------------------------------------------------------------------
 
@@ -276,6 +276,9 @@ class Executor:
             document = files.build(conn, task, files.Lookups(task_cli._lead, task_cli._key_facts,
                                                              task_cli._photo_candidates, task_cli._photo_file))
         document = json.loads(json.dumps(document, default=str))
+        # Submissions act as the run holding the lease; the service runs several runs at once, so the token travels
+        # with the task, not in the process environment.
+        document["run_token"] = self.token
         spend = Spend()
         step = document["type"]
         try:

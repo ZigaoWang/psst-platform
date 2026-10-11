@@ -14,6 +14,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from psst import rules
+from psst.checks.tools import proper_names
 from psst.cli import tasks as task_cli
 from psst.core import db, http
 from psst.evidence import fetch as reading
@@ -241,7 +242,8 @@ def evidence(executor: Executor, task: dict[str, Any], document: dict[str, Any],
             fact["values"] = values_in(fact)  # the exact numbers and names its quotes state, never the model's own
         # A fact resting only on a reference work, or saying more than its quotes, can't stand in a story: it is
         # dropped, not sent back.
-        answer["facts"] = [f for f in answer.get("facts") or [] if not reference_only(ctx.conn, f) and not unquoted(f)]
+        answer["facts"] = [f for f in answer.get("facts") or []
+                           if not reference_only(ctx.conn, f) and not unquoted(f, lead["name"])]
         found = verify(ctx.conn, answer["facts"], "guide")
         if found:
             raise task_cli.NotSubmitted(found)
@@ -286,10 +288,15 @@ def ordinal(n: int) -> str:
     return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
 
 
-def unquoted(fact: dict[str, Any]) -> bool:
-    """Whether the fact's own words state a number its quotes don't: the fact says more than its source."""
+def unquoted(fact: dict[str, Any], known: str = "") -> bool:
+    """Whether the fact's own words state a number or a name its quotes don't (the place's own name, `known`, aside):
+    the fact says more than its source."""
+    from psst.core.text import words
     stated = {v["value"] for v in fact.get("values", [])}
-    return any(n not in stated and not any(n in s for s in stated) for n in VALUE_NUMBER.findall(fact.get("text", "")))
+    if any(n not in stated and not any(n in s for s in stated) for n in VALUE_NUMBER.findall(fact.get("text", ""))):
+        return True
+    quoted = set(words(" ".join(e.get("quote", "") for e in fact.get("evidence", [])) + " " + known))
+    return any(not set(words(n)) <= quoted for n in proper_names(fact.get("text", "")) if n not in COMMON)
 
 
 def lengths() -> str:

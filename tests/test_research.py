@@ -637,3 +637,13 @@ def test_a_similar_name_nearby_is_a_different_place_when_its_wikidata_item_diffe
     monkeypatch.setattr("psst.places.resolve.http.wikidata_entities", lambda qids, props: {})
     with database.connect("system") as conn:
         assert resolve.resolve(conn, city.token, [other])["active"] == 1
+
+
+def test_a_fact_naming_a_place_its_quotes_dont_is_dropped():
+    from psst.harness import research as harness_research
+    fact = {"text": "The memorial stands at the Holborn and Fleet Street junction.",
+            "evidence": [{"quote": "Temple Bar Memorial in centre of road"}]}
+    fact["values"] = harness_research.values_in(fact)
+    assert harness_research.unquoted(fact, "Temple Bar Memorial")
+    fact["text"] = "The Temple Bar Memorial stands in the centre of the road."
+    assert not harness_research.unquoted(fact, "Temple Bar Memorial")

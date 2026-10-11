@@ -202,6 +202,9 @@ def run_work(args: argparse.Namespace) -> int:
     (decision 36)."""
     import threading
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    with db.open_connection(db.conninfo("system")) as conn, session(conn, "system", "harness service start") as token:
+        ended = conn.execute("SELECT psst.end_earlier_service_runs(%s) AS n", (token,)).fetchone()
+        log.info("ended %s runs an earlier start left open", ended["n"] if ended else 0)
     stop = threading.Event()
     judging = threading.Thread(target=work_lane, args=(PARALLEL, JUDGING_IDLE_SECONDS, stop, args.once), daemon=True)
     judging.start()

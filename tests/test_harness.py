@@ -466,3 +466,16 @@ def test_a_submission_acts_as_the_run_that_holds_the_task(monkeypatch):
     task_cli.submit({"type": "review", "task": "tk_x", "run_token": "the-holders-token", "prompt_version": "v",
                      "rulebook": "abc"}, {})
     assert seen["token"] == "the-holders-token"
+
+
+def test_a_restarted_service_ends_the_runs_it_left_open_and_requeues_their_tasks(database, golden):
+    queue(database)
+    worker, task = lease(database)
+    with database.connect("admin") as conn:
+        conn.execute("UPDATE psst.runs SET notes = 'harness service' WHERE id = %s", (worker.run,))
+    _, system_token = database.start_run("system")
+    with database.connect("system") as conn:
+        assert conn.execute("SELECT psst.end_earlier_service_runs(%s) AS n", (system_token,)).fetchone()["n"] == 1
+    with database.connect("admin") as conn:
+        state = conn.execute("SELECT state FROM psst.tasks WHERE id = %s", (task["id"],)).fetchone()["state"]
+    assert state == "queued"
